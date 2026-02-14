@@ -1,0 +1,558 @@
+"""
+Conductor — THE BRAIN. State machine orchestrator for the lead pipeline.
+Routes leads through agents, enforces compliance, manages state transitions.
+
+CRITICAL PRINCIPLE: RESPOND FIRST, SYNC LATER.
+The SMS response MUST go out in <10 seconds. All CRM operations happen asynchronously AFTER.
+
+State machine:
+  new → intake_sent → qualifying → qualified → booking → booked → completed
+  Any state → opted_out (on STOP keyword)
+  qualifying/qualified → cold (on timeout/unresponsive)
+  cold → dead (after max followups exhausted)
+"""
+import logging
+import uuid
+from datetime import datetime
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from src.models.lead import Lead
+from src.models.client import Client
+from src.models.consent import ConsentRecord
+from src.models.conversation import Conversation
+from src.models.event_log import EventLog
+from src.schemas.lead_envelope import LeadEnvelope
+from src.schemas.client_config import ClientConfig
+from src.services.compliance import (
+    full_compliance_check,
+    is_stop_keyword,
+)
+from src.services.sms import send_sms, mask_phone
+from src.services.phone_validation import normalize_phone
+from src.utils.emergency import detect_emergency
+from src.utils.dedup import is_duplicate
+from src.utils.metrics import Timer
+from src.agents.intake import process_intake
+from src.agents.qualify import process_qualify
+from src.agents.book import process_booking
+
+logger = logging.getLogger(__name__)
+
+# Valid state transitions
+VALID_TRANSITIONS = {
+    "new": ["intake_sent", "opted_out"],
+    "intake_sent": ["qualifying", "opted_out"],
+    "qualifying": ["qualified", "booking", "cold", "opted_out"],
+    "qualified": ["booking", "cold", "opted_out"],
+    "booking": ["booked", "qualifying", "cold", "opted_out"],
+    "booked": ["completed", "opted_out"],
+    "cold": ["qualifying", "dead", "opted_out"],  # Can re-engage
+    "completed": ["opted_out"],
+    "dead": ["opted_out"],
+    "opted_out": [],  # Terminal — no transitions out
+}
+
+
+async def handle_new_lead(
+    db: AsyncSession,
+    envelope: LeadEnvelope,
+) -> dict:
+    """
+    Process a brand new lead from any source.
+    This is the entry point for the entire pipeline.
+
+    Returns: {"lead_id": str, "status": str, "response_ms": int}
+    """
+    timer = Timer().start()
+
+    # Normalize phone
+    phone = normalize_phone(envelope.lead.phone)
+    if not phone:
+        logger.warning("Invalid phone number: %s", envelope.lead.phone[:6] + "***")
+        return {"lead_id": None, "status": "invalid_phone", "response_ms": timer.elapsed_ms}
+
+    # Dedup check
+    is_dupe = await is_duplicate(envelope.client_id, phone, envelope.source)
+    if is_dupe:
+        return {"lead_id": None, "status": "duplicate", "response_ms": timer.elapsed_ms}
+
+    # Load client
+    client = await db.get(Client, uuid.UUID(envelope.client_id))
+    if not client:
+        logger.error("Client not found: %s", envelope.client_id)
+        return {"lead_id": None, "status": "client_not_found", "response_ms": timer.elapsed_ms}
+
+    config = ClientConfig(**client.config) if client.config else ClientConfig()
+
+    # Create consent record
+    consent = ConsentRecord(
+        phone=phone,
+        client_id=client.id,
+        consent_type=envelope.consent_type,
+        consent_method=envelope.consent_method,
+        consent_text=f"Lead submitted via {envelope.source}",
+        raw_consent_data=envelope.metadata.model_dump() if envelope.metadata else {},
+    )
+    db.add(consent)
+    await db.flush()
+
+    # Create lead record
+    lead = Lead(
+        client_id=client.id,
+        phone=phone,
+        first_name=envelope.lead.first_name,
+        last_name=envelope.lead.last_name,
+        email=envelope.lead.email,
+        address=envelope.lead.address,
+        zip_code=envelope.lead.zip_code,
+        city=envelope.lead.city,
+        state_code=envelope.lead.state_code,
+        source=envelope.source,
+        source_lead_id=envelope.metadata.source_lead_id if envelope.metadata else None,
+        state="new",
+        service_type=envelope.lead.service_type,
+        urgency=envelope.lead.urgency,
+        property_type=envelope.lead.property_type,
+        problem_description=envelope.lead.problem_description,
+        consent_id=consent.id,
+        raw_payload=envelope.metadata.raw_payload if envelope.metadata else None,
+        current_agent="intake",
+    )
+
+    # Check for emergency in the message
+    message_text = envelope.lead.problem_description or envelope.inbound_message or ""
+    emergency = detect_emergency(message_text, config.emergency_keywords)
+    if emergency["is_emergency"]:
+        lead.is_emergency = True
+        lead.emergency_type = emergency["emergency_type"]
+        lead.urgency = "emergency"
+        lead.score = 95
+
+    db.add(lead)
+    await db.flush()
+
+    # Log lead creation
+    db.add(EventLog(
+        lead_id=lead.id,
+        client_id=client.id,
+        action="lead_created",
+        message=f"New lead from {envelope.source}",
+        data={"source": envelope.source, "is_emergency": lead.is_emergency},
+    ))
+
+    # Record inbound message if present
+    if envelope.inbound_message:
+        inbound_conv = Conversation(
+            lead_id=lead.id,
+            client_id=client.id,
+            direction="inbound",
+            content=envelope.inbound_message,
+            from_phone=phone,
+            to_phone=client.twilio_phone or "",
+            delivery_status="received",
+        )
+        db.add(inbound_conv)
+        lead.total_messages_received = 1
+        lead.last_inbound_at = datetime.utcnow()
+
+    # Run compliance check before responding
+    compliance = full_compliance_check(
+        has_consent=True,
+        consent_type=consent.consent_type,
+        is_opted_out=False,
+        state_code=lead.state_code,
+        is_emergency=lead.is_emergency,
+        message="",  # Will check actual message content after generation
+        is_first_message=True,
+        business_name=client.business_name,
+    )
+
+    if not compliance:
+        logger.warning(
+            "Compliance blocked new lead response: %s (lead=%s)",
+            compliance.reason, str(lead.id)[:8],
+        )
+        lead.state = "new"
+        await db.commit()
+        return {
+            "lead_id": str(lead.id),
+            "status": f"compliance_blocked:{compliance.rule}",
+            "response_ms": timer.elapsed_ms,
+        }
+
+    # Generate intake response (template-based, <2ms)
+    intake_response = await process_intake(
+        first_name=lead.first_name,
+        service_type=lead.service_type,
+        source=envelope.source,
+        business_name=client.business_name,
+        rep_name=config.persona.rep_name,
+        message_text=message_text,
+        custom_emergency_keywords=config.emergency_keywords,
+    )
+
+    # Content compliance check on the actual message
+    from src.services.compliance import check_content_compliance
+    content_check = check_content_compliance(
+        intake_response.message, is_first_message=True, business_name=client.business_name
+    )
+    if not content_check:
+        logger.error("Template failed content compliance: %s", content_check.reason)
+        await db.commit()
+        return {
+            "lead_id": str(lead.id),
+            "status": "template_compliance_error",
+            "response_ms": timer.elapsed_ms,
+        }
+
+    # SEND THE SMS — this is the critical path
+    sms_result = await send_sms(
+        to=phone,
+        body=intake_response.message,
+        from_phone=client.twilio_phone,
+        messaging_service_sid=None,
+    )
+
+    response_ms = timer.stop()
+
+    # Record outbound message
+    outbound_conv = Conversation(
+        lead_id=lead.id,
+        client_id=client.id,
+        direction="outbound",
+        content=intake_response.message,
+        from_phone=client.twilio_phone or "",
+        to_phone=phone,
+        agent_id="intake",
+        sms_provider=sms_result.get("provider"),
+        sms_sid=sms_result.get("sid"),
+        delivery_status=sms_result.get("status", "sent"),
+        segment_count=sms_result.get("segments", 1),
+        sms_cost_usd=sms_result.get("cost_usd", 0.0),
+    )
+    db.add(outbound_conv)
+
+    # Update lead state
+    lead.state = "intake_sent"
+    lead.current_agent = "qualify"
+    lead.first_response_ms = response_ms
+    lead.total_messages_sent = 1
+    lead.total_sms_cost_usd = sms_result.get("cost_usd", 0.0)
+    lead.last_outbound_at = datetime.utcnow()
+
+    # Log response event
+    db.add(EventLog(
+        lead_id=lead.id,
+        client_id=client.id,
+        action="intake_response_sent",
+        duration_ms=response_ms,
+        cost_usd=sms_result.get("cost_usd", 0.0),
+        message=f"First response in {response_ms}ms via {sms_result.get('provider')}",
+        data={
+            "template": intake_response.template_id,
+            "provider": sms_result.get("provider"),
+            "segments": sms_result.get("segments"),
+            "is_emergency": intake_response.is_emergency,
+        },
+    ))
+
+    await db.commit()
+
+    logger.info(
+        "Lead %s: intake sent in %dms via %s (emergency=%s)",
+        str(lead.id)[:8], response_ms, sms_result.get("provider"), lead.is_emergency,
+    )
+
+    return {
+        "lead_id": str(lead.id),
+        "status": "intake_sent",
+        "response_ms": response_ms,
+    }
+
+
+async def handle_inbound_reply(
+    db: AsyncSession,
+    lead: Lead,
+    client: Client,
+    message_text: str,
+) -> dict:
+    """
+    Process an inbound SMS reply from an existing lead.
+    Routes to the appropriate agent based on lead state.
+    """
+    timer = Timer().start()
+    config = ClientConfig(**client.config) if client.config else ClientConfig()
+
+    # Check for opt-out FIRST — this overrides everything
+    if is_stop_keyword(message_text):
+        return await _handle_opt_out(db, lead, client, message_text, timer)
+
+    # Check for emergency
+    emergency = detect_emergency(message_text, config.emergency_keywords)
+    if emergency["is_emergency"]:
+        lead.is_emergency = True
+        lead.emergency_type = emergency["emergency_type"]
+        lead.urgency = "emergency"
+        lead.score = max(lead.score, 90)
+
+    # Record inbound message
+    inbound_conv = Conversation(
+        lead_id=lead.id,
+        client_id=client.id,
+        direction="inbound",
+        content=message_text,
+        from_phone=lead.phone,
+        to_phone=client.twilio_phone or "",
+        delivery_status="received",
+    )
+    db.add(inbound_conv)
+    lead.total_messages_received += 1
+    lead.last_inbound_at = datetime.utcnow()
+    lead.conversation_turn += 1
+
+    # Re-engage cold leads
+    if lead.state in ("cold", "dead"):
+        lead.state = "qualifying"
+        lead.current_agent = "qualify"
+        lead.score = max(lead.score, 50)
+
+    # Route to appropriate agent
+    if lead.state in ("intake_sent", "qualifying"):
+        response = await _route_to_qualify(db, lead, client, config, message_text)
+    elif lead.state in ("qualified", "booking"):
+        response = await _route_to_book(db, lead, client, config, message_text)
+    else:
+        # Default: qualify
+        response = await _route_to_qualify(db, lead, client, config, message_text)
+
+    response_ms = timer.stop()
+
+    if response and response.get("message"):
+        # Compliance check before sending
+        compliance = full_compliance_check(
+            has_consent=True,
+            consent_type="pec",
+            is_opted_out=False,
+            state_code=lead.state_code,
+            is_emergency=lead.is_emergency,
+            is_reply_to_inbound=True,
+            message=response["message"],
+            is_first_message=False,
+            business_name=client.business_name,
+        )
+
+        if compliance:
+            sms_result = await send_sms(
+                to=lead.phone,
+                body=response["message"],
+                from_phone=client.twilio_phone,
+            )
+
+            outbound_conv = Conversation(
+                lead_id=lead.id,
+                client_id=client.id,
+                direction="outbound",
+                content=response["message"],
+                from_phone=client.twilio_phone or "",
+                to_phone=lead.phone,
+                agent_id=response.get("agent_id", "qualify"),
+                sms_provider=sms_result.get("provider"),
+                sms_sid=sms_result.get("sid"),
+                delivery_status=sms_result.get("status", "sent"),
+                segment_count=sms_result.get("segments", 1),
+                sms_cost_usd=sms_result.get("cost_usd", 0.0),
+                ai_cost_usd=response.get("ai_cost", 0.0),
+                ai_latency_ms=response.get("ai_latency_ms"),
+            )
+            db.add(outbound_conv)
+
+            lead.total_messages_sent += 1
+            lead.total_sms_cost_usd += sms_result.get("cost_usd", 0.0)
+            lead.total_ai_cost_usd += response.get("ai_cost", 0.0)
+            lead.last_outbound_at = datetime.utcnow()
+            lead.last_agent_response = response["message"]
+        else:
+            logger.warning("Compliance blocked reply: %s", compliance.reason)
+
+    await db.commit()
+    return {"lead_id": str(lead.id), "status": lead.state, "response_ms": response_ms}
+
+
+async def _route_to_qualify(
+    db: AsyncSession, lead: Lead, client: Client, config: ClientConfig, message: str
+) -> dict:
+    """Route lead to the qualify agent."""
+    # Build conversation history
+    conversations = []
+    for conv in lead.conversations:
+        conversations.append({
+            "direction": conv.direction,
+            "content": conv.content,
+        })
+
+    result = await process_qualify(
+        lead_message=message,
+        conversation_history=conversations,
+        current_qualification=lead.qualification_data or {},
+        business_name=client.business_name,
+        rep_name=config.persona.rep_name,
+        trade_type=client.trade_type,
+        services=config.services.model_dump() if config.services else {},
+        conversation_turn=lead.conversation_turn,
+    )
+
+    # Update lead with qualification data
+    if result.qualification:
+        qual_data = lead.qualification_data or {}
+        if result.qualification.service_type:
+            qual_data["service_type"] = result.qualification.service_type
+            lead.service_type = result.qualification.service_type
+        if result.qualification.urgency:
+            qual_data["urgency"] = result.qualification.urgency
+            lead.urgency = result.qualification.urgency
+        if result.qualification.property_type:
+            qual_data["property_type"] = result.qualification.property_type
+            lead.property_type = result.qualification.property_type
+        if result.qualification.preferred_date:
+            qual_data["preferred_date"] = result.qualification.preferred_date
+        lead.qualification_data = qual_data
+
+    # Apply score adjustment
+    lead.score = max(0, min(100, lead.score + result.score_adjustment))
+
+    # State transition based on agent's recommendation
+    if result.next_action == "ready_to_book":
+        lead.state = "qualified"
+        lead.current_agent = "book"
+    elif result.next_action == "mark_cold":
+        lead.state = "cold"
+        lead.current_agent = "followup"
+    elif result.next_action == "escalate_emergency":
+        lead.is_emergency = True
+        lead.urgency = "emergency"
+    else:
+        lead.state = "qualifying"
+
+    return {
+        "message": result.message,
+        "agent_id": "qualify",
+        "ai_cost": 0.0,
+    }
+
+
+async def _route_to_book(
+    db: AsyncSession, lead: Lead, client: Client, config: ClientConfig, message: str
+) -> dict:
+    """Route lead to the booking agent."""
+    conversations = [
+        {"direction": c.direction, "content": c.content}
+        for c in lead.conversations
+    ]
+
+    result = await process_booking(
+        lead_message=message,
+        first_name=lead.first_name or "there",
+        service_type=lead.service_type or "service",
+        preferred_date=(lead.qualification_data or {}).get("preferred_date"),
+        business_name=client.business_name,
+        rep_name=config.persona.rep_name,
+        scheduling_config=config.scheduling.model_dump() if config.scheduling else {},
+        team_members=[t.model_dump() for t in config.team] if config.team else [],
+        hours_config=config.hours.model_dump() if config.hours else {},
+        conversation_history=conversations,
+    )
+
+    if result.booking_confirmed:
+        lead.state = "booked"
+        lead.current_agent = None
+
+        # Create booking record (CRM sync happens asynchronously)
+        from src.models.booking import Booking
+        booking = Booking(
+            lead_id=lead.id,
+            client_id=client.id,
+            appointment_date=datetime.strptime(result.appointment_date, "%Y-%m-%d").date() if result.appointment_date else datetime.utcnow().date(),
+            service_type=lead.service_type or "service",
+            tech_name=result.tech_name,
+            crm_sync_status="pending",
+        )
+        db.add(booking)
+
+        db.add(EventLog(
+            lead_id=lead.id,
+            client_id=client.id,
+            action="booking_confirmed",
+            message=f"Appointment booked for {result.appointment_date}",
+        ))
+    elif result.needs_human_handoff:
+        lead.state = "booking"
+        db.add(EventLog(
+            lead_id=lead.id,
+            client_id=client.id,
+            action="human_handoff_needed",
+            message="Booking agent needs human assistance",
+        ))
+    else:
+        lead.state = "booking"
+
+    return {
+        "message": result.message,
+        "agent_id": "book",
+        "ai_cost": 0.0,
+    }
+
+
+async def _handle_opt_out(
+    db: AsyncSession, lead: Lead, client: Client, message: str, timer: Timer
+) -> dict:
+    """Process STOP/opt-out. Immediately cease all messaging."""
+    lead.state = "opted_out"
+    lead.previous_state = lead.state
+    lead.current_agent = None
+
+    # Update consent record
+    if lead.consent_id:
+        consent = await db.get(ConsentRecord, lead.consent_id)
+        if consent:
+            consent.opted_out = True
+            consent.opted_out_at = datetime.utcnow()
+            consent.opt_out_method = "sms_stop"
+            consent.is_active = False
+
+    # Record the inbound STOP message
+    db.add(Conversation(
+        lead_id=lead.id,
+        client_id=client.id,
+        direction="inbound",
+        content=message,
+        from_phone=lead.phone,
+        to_phone=client.twilio_phone or "",
+        delivery_status="received",
+    ))
+
+    db.add(EventLog(
+        lead_id=lead.id,
+        client_id=client.id,
+        action="opt_out",
+        message=f"Lead opted out via SMS: '{message}'",
+    ))
+
+    # Cancel any pending followups
+    from src.models.followup import FollowupTask
+    from sqlalchemy import update
+    await db.execute(
+        update(FollowupTask)
+        .where(FollowupTask.lead_id == lead.id, FollowupTask.status == "pending")
+        .values(status="cancelled", skip_reason="Lead opted out")
+    )
+
+    await db.commit()
+
+    logger.info("Lead %s opted out via '%s'", str(lead.id)[:8], message)
+    return {
+        "lead_id": str(lead.id),
+        "status": "opted_out",
+        "response_ms": timer.elapsed_ms,
+    }
