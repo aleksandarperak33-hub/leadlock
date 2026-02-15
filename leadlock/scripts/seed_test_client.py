@@ -20,50 +20,39 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TEST_CLIENT_CONFIG = {
-    "business_name": "Austin Comfort HVAC",
-    "industry": "hvac",
     "service_area": {
-        "cities": ["Austin", "Round Rock", "Cedar Park", "Pflugerville", "Georgetown"],
-        "state": "TX",
+        "center": {"lat": 30.2672, "lng": -97.7431},  # Austin, TX
         "radius_miles": 30,
+        "valid_zips": [],
     },
-    "services": [
-        "AC Repair",
-        "AC Installation",
-        "Heating Repair",
-        "Heating Installation",
-        "Duct Cleaning",
-        "Maintenance Plans",
-    ],
-    "business_hours": {"start": "07:00", "end": "19:00", "days": [0, 1, 2, 3, 4, 5]},
-    "saturday_hours": {"start": "08:00", "end": "14:00"},
-    "emergency_after_hours": True,
+    "hours": {
+        "business": {"start": "07:00", "end": "19:00", "days": ["mon", "tue", "wed", "thu", "fri", "sat"]},
+        "saturday": {"start": "08:00", "end": "14:00", "days": ["sat"]},
+        "after_hours_handling": "ai_responds_books_next_available",
+        "emergency_handling": "ai_responds_plus_owner_alert",
+    },
     "persona": {
         "rep_name": "Sarah",
-        "tone": "warm_professional",
-        "greeting_style": "friendly",
+        "tone": "friendly_professional",
+        "languages": ["en"],
+        "emergency_contact_phone": "+15125550100",
+    },
+    "services": {
+        "primary": ["AC Repair", "AC Installation", "Heating Repair", "Heating Installation"],
+        "secondary": ["Duct Cleaning", "Maintenance Plans"],
+        "do_not_quote": [],
     },
     "team": [
-        {"name": "Mike Rodriguez", "role": "Senior Tech", "active": True},
-        {"name": "Carlos Martinez", "role": "Tech", "active": True},
-        {"name": "Jake Thompson", "role": "Apprentice", "active": True},
+        {"name": "Mike Rodriguez", "specialty": ["ac_repair", "ac_install"], "active": True},
+        {"name": "Carlos Martinez", "specialty": ["heating_repair", "heating_install"], "active": True},
+        {"name": "Jake Thompson", "specialty": ["maintenance"], "active": True},
     ],
+    "emergency_keywords": ["no heat", "gas leak", "carbon monoxide", "pipe burst", "flooding", "no ac", "fire"],
     "scheduling": {
         "slot_duration_minutes": 120,
         "buffer_minutes": 30,
         "max_daily_bookings": 8,
-        "days_ahead": 14,
-    },
-    "qualification": {
-        "required_fields": ["service_type", "urgency"],
-        "max_qualify_messages": 4,
-    },
-    "followup": {
-        "cold_nurture_enabled": True,
-        "cold_nurture_max": 3,
-        "cold_nurture_delays_hours": [24, 72, 168],
-        "review_request_enabled": True,
-        "review_request_delay_days": 3,
+        "advance_booking_days": 14,
     },
 }
 
