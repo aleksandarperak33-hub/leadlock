@@ -12,6 +12,7 @@ COPY pyproject.toml ./
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
+COPY scripts/ ./scripts/
 
 # Install Python deps
 RUN pip install --no-cache-dir .
