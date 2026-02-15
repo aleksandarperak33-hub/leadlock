@@ -5,10 +5,7 @@ Prevents duplicate lead processing from webhook retries or multiple form submiss
 import hashlib
 import logging
 from typing import Optional
-from src.config import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # Dedup window in seconds (30 minutes)
 DEDUP_WINDOW_SECONDS = 1800
@@ -22,8 +19,9 @@ async def get_redis():
     global _redis_client
     if _redis_client is None:
         import redis.asyncio as aioredis
+        from src.config import get_settings
         _redis_client = aioredis.from_url(
-            settings.redis_url,
+            get_settings().redis_url,
             decode_responses=True,
         )
     return _redis_client

@@ -6,10 +6,7 @@ Cost: $0.008 per lookup.
 import logging
 import re
 from typing import Optional
-from src.config import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 def normalize_phone(phone: str) -> Optional[str]:
@@ -69,7 +66,8 @@ async def lookup_phone(phone: str) -> dict:
 
     try:
         from twilio.rest import Client as TwilioClient
-
+        from src.config import get_settings
+        settings = get_settings()
         client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
         result = client.lookups.v2.phone_numbers(normalized).fetch(
             fields="line_type_intelligence"

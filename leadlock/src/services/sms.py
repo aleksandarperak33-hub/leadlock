@@ -6,10 +6,7 @@ Tracks delivery status, segment count, and cost.
 import logging
 import math
 from typing import Optional
-from src.config import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # SMS segment limits (GSM-7 encoding)
 GSM_SINGLE_SEGMENT = 160
@@ -81,6 +78,8 @@ async def send_sms(
         logger.warning("Twilio failed for %s: %s. Trying Telnyx...", masked, str(e))
 
     # Failover to Telnyx
+    from src.config import get_settings
+    settings = get_settings()
     if settings.telnyx_api_key:
         try:
             result = await _send_telnyx(to, body)
@@ -122,7 +121,8 @@ async def _send_twilio(
 ) -> dict:
     """Send via Twilio REST API."""
     from twilio.rest import Client as TwilioClient
-
+    from src.config import get_settings
+    settings = get_settings()
     client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
 
     kwargs = {"to": to, "body": body}
@@ -140,7 +140,8 @@ async def _send_twilio(
 async def _send_telnyx(to: str, body: str) -> dict:
     """Send via Telnyx API."""
     import httpx
-
+    from src.config import get_settings
+    settings = get_settings()
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
             "https://api.telnyx.com/v2/messages",

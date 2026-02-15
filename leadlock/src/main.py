@@ -9,20 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config import get_settings
 from src.api.router import api_router
 
-settings = get_settings()
-
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger("leadlock")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
+    settings = get_settings()
     logger.info("LeadLock starting up (env=%s)", settings.app_env)
 
     # Initialize Sentry if configured
@@ -43,25 +36,41 @@ async def lifespan(app: FastAPI):
     logger.info("LeadLock shutting down")
 
 
-app = FastAPI(
-    title="LeadLock",
-    description="AI Speed-to-Lead Platform for Home Services",
-    version="2.0.0",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    """Application factory."""
+    settings = get_settings()
 
-# CORS — allow dashboard origin
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        settings.app_base_url,
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-# Include all routes
-app.include_router(api_router)
+    application = FastAPI(
+        title="LeadLock",
+        description="AI Speed-to-Lead Platform for Home Services",
+        version="2.0.0",
+        lifespan=lifespan,
+    )
+
+    # CORS — allow dashboard origin
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://localhost:5173",
+            settings.app_base_url,
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Include all routes
+    application.include_router(api_router)
+
+    return application
+
+
+app = create_app()

@@ -7,10 +7,7 @@ import json
 import logging
 import time
 from typing import Optional
-from src.config import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 # Cost per million tokens (input/output)
 COST_TABLE = {
@@ -69,6 +66,8 @@ async def generate_response(
         logger.warning("Anthropic failed: %s. Trying OpenAI fallback...", str(e))
 
     # Fallback to OpenAI
+    from src.config import get_settings
+    settings = get_settings()
     if settings.openai_api_key:
         try:
             result = await _generate_openai(
@@ -100,6 +99,8 @@ async def _generate_anthropic(
 ) -> dict:
     """Generate response using Anthropic Claude API."""
     import anthropic
+    from src.config import get_settings
+    settings = get_settings()
 
     model = settings.anthropic_model_fast if model_tier == "fast" else settings.anthropic_model_smart
     tokens = max_tokens or (
@@ -146,6 +147,8 @@ async def _generate_openai(
 ) -> dict:
     """Generate response using OpenAI API (fallback)."""
     from openai import AsyncOpenAI
+    from src.config import get_settings
+    settings = get_settings()
 
     model = settings.openai_model_fast if model_tier == "fast" else settings.openai_model_smart
     tokens = max_tokens or (

@@ -55,6 +55,7 @@ URGENT_KEYWORDS = [
     "frozen pipes",
     "frozen pipe",
     "pipes frozen",
+    "pipes are frozen",
 ]
 
 
@@ -150,7 +151,7 @@ def _categorize_emergency(keyword: str) -> str:
         return "sewage"
     if any(w in keyword_lower for w in ["flood", "burst pipe", "broken pipe", "pipe burst"]):
         return "flooding"
-    if any(w in keyword_lower for w in ["frozen pipe"]):
+    if any(w in keyword_lower for w in ["frozen pipe", "frozen", "pipes are frozen", "pipes frozen"]):
         return "frozen_pipes"
     if any(w in keyword_lower for w in ["no heat", "heat not", "heater not", "furnace not"]):
         return "no_heat"

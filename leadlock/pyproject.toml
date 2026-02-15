@@ -2,7 +2,7 @@
 name = "leadlock"
 version = "2.0.0"
 description = "AI Speed-to-Lead Platform for Home Services"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
