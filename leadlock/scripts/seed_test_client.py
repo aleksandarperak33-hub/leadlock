@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
+import bcrypt
 from src.config import get_settings
 from src.models.client import Client
 
@@ -82,7 +83,7 @@ async def seed():
             owner_name="David Chen",
             owner_email="david@austincomforthvac.com",
             owner_phone="+15125550100",
-            twilio_phone="+15125550199",
+            twilio_phone=settings.twilio_phone_number or "+15125550199",
             twilio_phone_sid="PN_TEST_000000000000000000000000",
             crm_type="google_sheets",
             crm_config={"spreadsheet_id": "test_spreadsheet_id_abc123"},
@@ -91,7 +92,7 @@ async def seed():
             onboarding_status="live",
             is_active=True,
             dashboard_email="david@austincomforthvac.com",
-            dashboard_password_hash="$2b$12$test_hash_not_real_bcrypt_placeholder",
+            dashboard_password_hash=bcrypt.hashpw(b"LeadLock2026!", bcrypt.gensalt()).decode(),
         )
         session.add(client)
         await session.commit()
