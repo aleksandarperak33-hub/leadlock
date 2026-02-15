@@ -60,7 +60,7 @@ class Conversation(Base):
     ai_output_tokens: Mapped[Optional[int]] = mapped_column(Integer)
 
     # Metadata
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

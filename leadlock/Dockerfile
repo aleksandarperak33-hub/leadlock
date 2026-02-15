@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
+# Copy project files needed for install
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir . && pip install --no-cache-dir gunicorn
-
-# Copy app code
+COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
-COPY src/ ./src/
+
+# Install Python deps
+RUN pip install --no-cache-dir .
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

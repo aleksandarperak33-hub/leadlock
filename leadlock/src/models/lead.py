@@ -91,7 +91,7 @@ class Lead(Base):
 
     # Metadata
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

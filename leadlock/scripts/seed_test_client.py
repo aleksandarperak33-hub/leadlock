@@ -76,8 +76,8 @@ async def seed():
     async with async_session() as session:
         # Check if test client already exists
         result = await session.execute(
-            text("SELECT id FROM clients WHERE slug = :slug"),
-            {"slug": "austin-comfort-hvac"},
+            text("SELECT id FROM clients WHERE business_name = :name"),
+            {"name": "Austin Comfort HVAC"},
         )
         existing = result.scalar_one_or_none()
 
@@ -87,18 +87,19 @@ async def seed():
 
         client = Client(
             business_name="Austin Comfort HVAC",
-            slug="austin-comfort-hvac",
+            trade_type="hvac",
+            tier="growth",
+            monthly_fee=997.00,
             owner_name="David Chen",
             owner_email="david@austincomforthvac.com",
             owner_phone="+15125550100",
             twilio_phone="+15125550199",
-            twilio_sid="ACTEST000000000000000000000000TEST",
-            twilio_token="test_auth_token_not_real",
+            twilio_phone_sid="PN_TEST_000000000000000000000000",
             crm_type="google_sheets",
             crm_config={"spreadsheet_id": "test_spreadsheet_id_abc123"},
-            client_config=TEST_CLIENT_CONFIG,
-            plan="growth",
-            monthly_price_cents=99700,
+            config=TEST_CLIENT_CONFIG,
+            billing_status="active",
+            onboarding_status="live",
             is_active=True,
             dashboard_email="david@austincomforthvac.com",
             dashboard_password_hash="$2b$12$test_hash_not_real_bcrypt_placeholder",
