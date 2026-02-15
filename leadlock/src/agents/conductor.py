@@ -164,8 +164,8 @@ async def handle_new_lead(
         is_opted_out=False,
         state_code=lead.state_code,
         is_emergency=lead.is_emergency,
-        message="",  # Will check actual message content after generation
-        is_first_message=True,
+        message="",  # Content checked after template generation (line ~198)
+        is_first_message=False,  # Skip content check here; real check is post-generation
         business_name=client.business_name,
     )
 
