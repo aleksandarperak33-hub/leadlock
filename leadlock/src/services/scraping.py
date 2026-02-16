@@ -2,6 +2,7 @@
 Scraping service — local business discovery via Brave Search API.
 Two-step process: web search for location IDs → POI details for business data.
 """
+import hashlib
 import logging
 import re
 from typing import Optional
@@ -112,8 +113,9 @@ async def search_local_businesses(
                             review_count = rating_obj["ratingCount"]
                         break
 
-            # Place ID — generate from URL since Brave doesn't provide stable IDs
-            place_id = f"brave_{hash(name + phone + full_address) & 0xFFFFFFFF}"
+            # Place ID — deterministic hash for stable dedup across runs
+            hash_input = f"{name}|{phone}|{full_address}".lower()
+            place_id = f"brave_{hashlib.sha256(hash_input.encode()).hexdigest()[:12]}"
 
             # Categories
             categories = poi.get("categories") or []

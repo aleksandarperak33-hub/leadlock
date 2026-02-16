@@ -8,6 +8,16 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set("leadlock:worker_health:health_monitor", datetime.utcnow().isoformat(), ex=600)
+    except Exception:
+        pass
+
+
 async def run_health_monitor():
     """Monitor system health. Runs every 5 minutes."""
     logger.info("Health monitor started")
@@ -17,6 +27,7 @@ async def run_health_monitor():
             await check_health()
         except Exception as e:
             logger.error("Health monitor error: %s", str(e))
+        await _heartbeat()
         await asyncio.sleep(300)
 
 

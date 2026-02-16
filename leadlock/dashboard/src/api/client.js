@@ -140,4 +140,19 @@ export const api = {
   getSalesMetrics: (period = '30d') => salesRequest(`/metrics?period=${period}`),
   getScrapeJobs: (page = 1) => salesRequest(`/scrape-jobs?page=${page}`),
   triggerScrapeJob: (data) => salesRequest('/scrape-jobs', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Prospects
+  getProspects: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return salesRequest(`/prospects?${qs}`);
+  },
+  getProspect: (id) => salesRequest(`/prospects/${id}`),
+  updateProspect: (id, data) => salesRequest(`/prospects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProspect: (id) => salesRequest(`/prospects/${id}`, { method: 'DELETE' }),
+  createProspect: (data) => salesRequest('/prospects', { method: 'POST', body: JSON.stringify(data) }),
+  blacklistProspect: (id) => salesRequest(`/prospects/${id}/blacklist`, { method: 'POST' }),
+  getProspectEmails: (id) => salesRequest(`/prospects/${id}/emails`),
+
+  // Worker status
+  getWorkerStatus: () => salesRequest('/worker-status'),
 };

@@ -13,6 +13,7 @@ from src.models.outreach import Outreach
 from src.models.scrape_job import ScrapeJob
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
+from src.models.email_blacklist import EmailBlacklist
 
 __all__ = [
     "Client",
@@ -27,4 +28,5 @@ __all__ = [
     "ScrapeJob",
     "OutreachEmail",
     "SalesEngineConfig",
+    "EmailBlacklist",
 ]

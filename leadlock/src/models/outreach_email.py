@@ -40,6 +40,8 @@ class OutreachEmail(Base):
     opened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     clicked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     bounced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    bounce_type: Mapped[Optional[str]] = mapped_column(String(30))  # bounce, blocked, deferred
+    bounce_reason: Mapped[Optional[str]] = mapped_column(Text)
 
     ai_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
 

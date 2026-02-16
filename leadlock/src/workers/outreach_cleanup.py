@@ -17,6 +17,16 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 4 * 60 * 60  # 4 hours
 
 
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set("leadlock:worker_health:outreach_cleanup", datetime.utcnow().isoformat(), ex=18000)
+    except Exception:
+        pass
+
+
 async def run_outreach_cleanup():
     """Main loop — clean up exhausted outreach sequences every 4 hours."""
     logger.info("Outreach cleanup worker started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -27,6 +37,7 @@ async def run_outreach_cleanup():
         except Exception as e:
             logger.error("Outreach cleanup error: %s", str(e))
 
+        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -43,6 +54,8 @@ async def cleanup_cycle():
         delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
 
         # Find prospects that have completed all steps with no reply
+        # IMPORTANT: must check last_email_sent_at IS NOT NULL to avoid marking
+        # never-contacted prospects as "lost"
         stmt = (
             update(Outreach)
             .where(
@@ -50,6 +63,7 @@ async def cleanup_cycle():
                     Outreach.outreach_sequence_step >= config.max_sequence_steps,
                     Outreach.status.in_(["cold", "contacted"]),
                     Outreach.last_email_replied_at.is_(None),
+                    Outreach.last_email_sent_at.isnot(None),
                     Outreach.last_email_sent_at <= delay_cutoff,
                 )
             )

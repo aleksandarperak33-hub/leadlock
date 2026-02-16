@@ -1,8 +1,11 @@
 """
 Cold email service — SendGrid outbound with CAN-SPAM compliance.
 Every email gets a CAN-SPAM footer, List-Unsubscribe header, and custom_args for webhook tracking.
+Includes retry logic with exponential backoff for transient SendGrid errors.
 """
+import asyncio
 import logging
+import re
 from typing import Optional
 from src.config import get_settings
 
@@ -36,6 +39,8 @@ async def send_cold_email(
     unsubscribe_url: str,
     company_address: str,
     custom_args: Optional[dict] = None,
+    in_reply_to: Optional[str] = None,
+    references: Optional[str] = None,
 ) -> dict:
     """
     Send a cold outreach email via SendGrid with CAN-SPAM compliance.
@@ -80,17 +85,34 @@ async def send_cold_email(
 
         full_html = body_html + footer_html
 
+        # Strip HTML tags for plaintext version
+        plain_body = re.sub(r"<[^>]+>", "", body_html)
+        plain_body = re.sub(r"\s+", " ", plain_body).strip()
+        full_text = plain_body + footer_text
+
+        # Build Mail — text/plain MUST be added before text/html per SendGrid
         message = Mail(
             from_email=Email(from_email, from_name),
             to_emails=To(to_email, to_name),
             subject=subject,
-            html_content=Content("text/html", full_html),
         )
+        message.content = [
+            Content("text/plain", full_text),
+            Content("text/html", full_html),
+        ]
         message.reply_to = ReplyTo(reply_to)
 
-        # List-Unsubscribe header for email clients
-        message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
-        message.header = Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+        # Headers (use dict to set all at once, avoiding overwrite)
+        headers = {
+            "List-Unsubscribe": f"<{unsubscribe_url}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+        # Email threading headers for follow-ups
+        if in_reply_to:
+            headers["In-Reply-To"] = f"<{in_reply_to}>"
+        if references:
+            headers["References"] = references
+        message.headers = headers
 
         # Custom args for webhook tracking
         if custom_args:
@@ -104,7 +126,25 @@ async def send_cold_email(
         }
 
         sg = SendGridAPIClient(api_key=settings.sendgrid_api_key)
-        response = sg.send(message)
+
+        # Retry with exponential backoff on transient errors
+        max_retries = 3
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = sg.send(message)
+                break
+            except Exception as send_err:
+                status_code = getattr(send_err, "status_code", None)
+                retryable = status_code in (429, 500, 502, 503) if status_code else True
+                if not retryable or attempt == max_retries - 1:
+                    raise
+                wait_seconds = 2 ** (attempt + 1)  # 2s, 4s, 8s
+                logger.warning(
+                    "SendGrid send attempt %d failed (status=%s), retrying in %ds",
+                    attempt + 1, status_code, wait_seconds,
+                )
+                await asyncio.sleep(wait_seconds)
 
         message_id = response.headers.get("X-Message-Id", "")
         logger.info(

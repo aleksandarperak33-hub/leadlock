@@ -14,6 +14,8 @@ from src.models.scrape_job import ScrapeJob
 from src.models.sales_config import SalesEngineConfig
 from src.services.scraping import search_local_businesses, parse_address_components
 from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
+from src.services.phone_validation import normalize_phone
+from src.utils.email_validation import validate_email
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,16 @@ TRADE_QUERIES = {
 }
 
 
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set("leadlock:worker_health:scraper", datetime.utcnow().isoformat(), ex=7200)
+    except Exception:
+        pass
+
+
 async def run_scraper():
     """Main loop — scrape for new prospects every 6 hours."""
     logger.info("Lead scraper started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -41,6 +53,7 @@ async def run_scraper():
         except Exception as e:
             logger.error("Scraper cycle error: %s", str(e))
 
+        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -150,7 +163,8 @@ async def scrape_location_trade(
         # Process results
         for biz in all_results:
             place_id = biz.get("place_id", "")
-            phone = biz.get("phone", "")
+            raw_phone = biz.get("phone", "")
+            phone = normalize_phone(raw_phone) if raw_phone else ""
 
             if not place_id and not phone:
                 continue
@@ -197,6 +211,18 @@ async def scrape_location_trade(
                 if patterns:
                     email = patterns[0]  # Use info@domain as best guess
                     email_source = "pattern_guess"
+
+            # Validate email before storing
+            if email:
+                email_check = await validate_email(email)
+                if not email_check["valid"]:
+                    logger.info(
+                        "Skipping invalid email for %s: %s (%s)",
+                        biz.get("name", ""), email[:20] + "***", email_check["reason"],
+                    )
+                    email = None
+                    email_source = None
+                    email_verified = False
 
             # Create outreach prospect
             prospect = Outreach(

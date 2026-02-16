@@ -2,6 +2,7 @@
 Sales outreach agent — generates personalized cold emails for prospects.
 Uses Claude Haiku for fast, cost-effective email generation.
 3-step sequence: pain-point → follow-up → break-up.
+Also classifies inbound replies (interested, rejection, auto_reply, etc).
 """
 import json
 import logging
@@ -125,9 +126,73 @@ async def generate_outreach_email(
             "error": f"JSON parse error: {str(e)}",
         }
 
+    subject = email_data.get("subject", "").strip()
+    body_html = email_data.get("body_html", "").strip()
+    body_text = email_data.get("body_text", "").strip()
+
+    if not subject or not body_html:
+        logger.error("AI generated empty subject or body_html for step %d", step)
+        return {
+            "subject": "",
+            "body_html": "",
+            "body_text": "",
+            "ai_cost_usd": result.get("cost_usd", 0.0),
+            "error": "AI generated empty email content",
+        }
+
     return {
-        "subject": email_data.get("subject", ""),
-        "body_html": email_data.get("body_html", ""),
-        "body_text": email_data.get("body_text", ""),
+        "subject": subject,
+        "body_html": body_html,
+        "body_text": body_text,
+        "ai_cost_usd": result.get("cost_usd", 0.0),
+    }
+
+
+CLASSIFY_SYSTEM_PROMPT = """You classify email replies from sales prospects.
+Respond with ONLY one of these labels:
+- interested: They want to learn more, schedule a call, or ask questions
+- rejection: They explicitly say no, not interested, or go away
+- auto_reply: Automated out-of-office, vacation, or auto-responder
+- out_of_office: Specifically out of office / on vacation
+- unsubscribe: They want to stop receiving emails (stop, unsubscribe, remove me)
+
+Respond with a single word — the label only."""
+
+VALID_CLASSIFICATIONS = {"interested", "rejection", "auto_reply", "out_of_office", "unsubscribe"}
+
+
+async def classify_reply(reply_text: str) -> dict:
+    """
+    Classify an inbound email reply using AI.
+
+    Args:
+        reply_text: The reply email text
+
+    Returns:
+        {"classification": str, "ai_cost_usd": float}
+    """
+    if not reply_text or not reply_text.strip():
+        return {"classification": "auto_reply", "ai_cost_usd": 0.0}
+
+    result = await generate_response(
+        system_prompt=CLASSIFY_SYSTEM_PROMPT,
+        user_message=f"Classify this email reply:\n\n{reply_text[:500]}",
+        model_tier="fast",
+        max_tokens=10,
+        temperature=0.0,
+    )
+
+    if result.get("error"):
+        logger.warning("Reply classification failed: %s", result["error"])
+        return {"classification": "interested", "ai_cost_usd": result.get("cost_usd", 0.0)}
+
+    classification = result["content"].strip().lower().replace(" ", "_")
+
+    if classification not in VALID_CLASSIFICATIONS:
+        logger.warning("Unknown classification '%s', defaulting to 'interested'", classification)
+        classification = "interested"
+
+    return {
+        "classification": classification,
         "ai_cost_usd": result.get("cost_usd", 0.0),
     }

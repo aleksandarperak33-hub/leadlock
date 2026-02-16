@@ -13,13 +13,25 @@ from src.database import async_session_factory
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
+from src.models.email_blacklist import EmailBlacklist
 from src.agents.sales_outreach import generate_outreach_email
 from src.services.cold_email import send_cold_email
+from src.utils.email_validation import validate_email
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
+
+
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set("leadlock:worker_health:outreach_sequencer", datetime.utcnow().isoformat(), ex=3600)
+    except Exception:
+        pass
 
 
 async def run_outreach_sequencer():
@@ -32,6 +44,7 @@ async def run_outreach_sequencer():
         except Exception as e:
             logger.error("Outreach sequencer error: %s", str(e))
 
+        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -113,7 +126,7 @@ async def sequence_cycle():
 
         logger.info("Processing %d prospects for outreach", len(all_prospects))
 
-        for prospect in all_prospects:
+        for i, prospect in enumerate(all_prospects):
             try:
                 await send_sequence_email(db, config, settings, prospect)
             except Exception as e:
@@ -121,6 +134,10 @@ async def sequence_cycle():
                     "Failed to send outreach to %s: %s",
                     str(prospect.id)[:8], str(e),
                 )
+
+            # Rate limit: ~2 emails/min to avoid SendGrid burst limits
+            if i < len(all_prospects) - 1:
+                await asyncio.sleep(30)
 
         await db.commit()
 
@@ -132,6 +149,27 @@ async def send_sequence_email(
     prospect: Outreach,
 ):
     """Generate and send a single outreach email for a prospect."""
+    # Validate email before sending
+    email_check = await validate_email(prospect.prospect_email)
+    if not email_check["valid"]:
+        logger.info(
+            "Skipping prospect %s — invalid email (%s)",
+            str(prospect.id)[:8], email_check["reason"],
+        )
+        return
+
+    # Check blacklist (email and domain)
+    email_lower = prospect.prospect_email.lower().strip()
+    domain = email_lower.split("@")[1] if "@" in email_lower else ""
+    blacklist_check = await db.execute(
+        select(EmailBlacklist).where(
+            EmailBlacklist.value.in_([email_lower, domain])
+        ).limit(1)
+    )
+    if blacklist_check.scalar_one_or_none():
+        logger.info("Skipping blacklisted prospect %s", str(prospect.id)[:8])
+        return
+
     next_step = prospect.outreach_sequence_step + 1
 
     # Generate personalized email
@@ -158,6 +196,24 @@ async def send_sequence_email(
     base_url = settings.app_base_url.rstrip("/")
     unsubscribe_url = f"{base_url}/api/v1/sales/unsubscribe/{prospect.id}"
 
+    # Look up previous email for threading headers
+    in_reply_to = None
+    references = None
+    if next_step > 1:
+        prev_email_result = await db.execute(
+            select(OutreachEmail).where(
+                and_(
+                    OutreachEmail.outreach_id == prospect.id,
+                    OutreachEmail.direction == "outbound",
+                    OutreachEmail.sendgrid_message_id.isnot(None),
+                )
+            ).order_by(OutreachEmail.sequence_step.desc()).limit(1)
+        )
+        prev_email = prev_email_result.scalar_one_or_none()
+        if prev_email and prev_email.sendgrid_message_id:
+            in_reply_to = prev_email.sendgrid_message_id
+            references = f"<{prev_email.sendgrid_message_id}>"
+
     # Send email
     send_result = await send_cold_email(
         to_email=prospect.prospect_email,
@@ -173,6 +229,8 @@ async def send_sequence_email(
             "outreach_id": str(prospect.id),
             "step": str(next_step),
         },
+        in_reply_to=in_reply_to,
+        references=references,
     )
 
     if send_result.get("error"):
