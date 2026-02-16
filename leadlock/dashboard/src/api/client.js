@@ -1,5 +1,6 @@
 const API_BASE = '/api/v1/dashboard';
 const ADMIN_BASE = '/api/v1/admin';
+const SALES_BASE = '/api/v1/sales';
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('ll_token');
@@ -29,6 +30,35 @@ async function request(path, options = {}) {
 async function adminRequest(path, options = {}) {
   const token = localStorage.getItem('ll_token');
   const res = await fetch(`${ADMIN_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem('ll_token');
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+
+  if (res.status === 403) {
+    throw new Error('Admin access required');
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+async function salesRequest(path, options = {}) {
+  const token = localStorage.getItem('ll_token');
+  const res = await fetch(`${SALES_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -103,4 +133,11 @@ export const api = {
   deleteOutreach: (id) => adminRequest(`/outreach/${id}`, { method: 'DELETE' }),
   convertOutreach: (id) => adminRequest(`/outreach/${id}/convert`, { method: 'POST' }),
   createAdminClient: (data) => adminRequest('/clients', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Sales Engine
+  getSalesConfig: () => salesRequest('/config'),
+  updateSalesConfig: (data) => salesRequest('/config', { method: 'PUT', body: JSON.stringify(data) }),
+  getSalesMetrics: (period = '30d') => salesRequest(`/metrics?period=${period}`),
+  getScrapeJobs: (page = 1) => salesRequest(`/scrape-jobs?page=${page}`),
+  triggerScrapeJob: (data) => salesRequest('/scrape-jobs', { method: 'POST', body: JSON.stringify(data) }),
 };

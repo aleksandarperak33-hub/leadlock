@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     dashboard_jwt_secret: str = ""
     dashboard_jwt_expiry_hours: int = 24
 
+    # Sales Engine
+    serpapi_api_key: str = ""
+    hunter_api_key: str = ""
+    sales_engine_enabled: bool = False
+    sales_daily_email_limit: int = 50
+    sales_daily_scrape_limit: int = 100
+
     # Operational limits
     max_cold_followups: int = 3
     max_conversation_turns: int = 10

@@ -1,0 +1,133 @@
+"""
+Sales outreach agent — generates personalized cold emails for prospects.
+Uses Claude Haiku for fast, cost-effective email generation.
+3-step sequence: pain-point → follow-up → break-up.
+"""
+import json
+import logging
+from typing import Optional
+from src.services.ai import generate_response
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are a sales copywriter for LeadLock, an AI speed-to-lead platform for home services contractors.
+Your job is to write cold outreach emails to contractors (HVAC, plumbing, roofing, electrical, solar).
+
+RULES:
+- Write in a casual, peer-to-peer tone — NOT salesy or corporate
+- Reference specific details about their business (trade, city, reviews)
+- Focus on ONE pain point: slow lead response = lost revenue
+- No exclamation marks. No "game-changer" or "revolutionary"
+- No emojis
+- Keep it SHORT — contractors are busy
+- End with a soft CTA (reply or link to learn more)
+- Output valid JSON only
+
+You must output JSON with these fields:
+{"subject": "...", "body_html": "...", "body_text": "..."}
+
+body_html should use simple <p> tags. No complex HTML.
+body_text is the plain text version (no HTML tags)."""
+
+STEP_INSTRUCTIONS = {
+    1: """Write a STEP 1 email (first contact).
+Focus on a specific pain point for their trade in their city. Reference their Google rating/reviews if available.
+Under 150 words. Subject line under 50 chars.""",
+
+    2: """Write a STEP 2 email (follow-up, they didn't reply to step 1).
+Casual tone, mention you reached out before. Include a brief case study or stat about speed-to-lead.
+Under 100 words. Subject line under 50 chars.""",
+
+    3: """Write a STEP 3 email (break-up email, final attempt).
+Short and direct. Let them know this is your last email. No pressure.
+Under 80 words. Subject line under 40 chars.""",
+}
+
+
+async def generate_outreach_email(
+    prospect_name: str,
+    company_name: str,
+    trade_type: str,
+    city: str,
+    state: str,
+    rating: Optional[float] = None,
+    review_count: Optional[int] = None,
+    website: Optional[str] = None,
+    sequence_step: int = 1,
+) -> dict:
+    """
+    Generate a personalized outreach email for a prospect.
+
+    Args:
+        prospect_name: Contact name
+        company_name: Business name
+        trade_type: hvac, plumbing, roofing, electrical, solar
+        city: Business city
+        state: State code
+        rating: Google rating (optional)
+        review_count: Number of reviews (optional)
+        website: Business website (optional)
+        sequence_step: 1, 2, or 3
+
+    Returns:
+        {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
+    """
+    step = min(max(sequence_step, 1), 3)
+    step_instruction = STEP_INSTRUCTIONS[step]
+
+    prospect_details = f"""Prospect details:
+- Name: {prospect_name}
+- Company: {company_name}
+- Trade: {trade_type}
+- Location: {city}, {state}"""
+
+    if rating:
+        prospect_details += f"\n- Google Rating: {rating}/5"
+    if review_count:
+        prospect_details += f"\n- Reviews: {review_count}"
+    if website:
+        prospect_details += f"\n- Website: {website}"
+
+    user_message = f"{step_instruction}\n\n{prospect_details}"
+
+    result = await generate_response(
+        system_prompt=SYSTEM_PROMPT,
+        user_message=user_message,
+        model_tier="fast",
+        max_tokens=500,
+        temperature=0.7,
+    )
+
+    if result.get("error"):
+        logger.error("AI email generation failed: %s", result["error"])
+        return {
+            "subject": "",
+            "body_html": "",
+            "body_text": "",
+            "ai_cost_usd": result.get("cost_usd", 0.0),
+            "error": result["error"],
+        }
+
+    # Parse JSON response
+    try:
+        content = result["content"].strip()
+        # Handle markdown code blocks
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        email_data = json.loads(content)
+    except (json.JSONDecodeError, IndexError) as e:
+        logger.error("Failed to parse AI email response: %s", str(e))
+        return {
+            "subject": "",
+            "body_html": "",
+            "body_text": "",
+            "ai_cost_usd": result.get("cost_usd", 0.0),
+            "error": f"JSON parse error: {str(e)}",
+        }
+
+    return {
+        "subject": email_data.get("subject", ""),
+        "body_html": email_data.get("body_html", ""),
+        "body_text": email_data.get("body_text", ""),
+        "ai_cost_usd": result.get("cost_usd", 0.0),
+    }

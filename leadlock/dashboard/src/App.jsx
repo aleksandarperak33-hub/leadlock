@@ -13,6 +13,7 @@ import AdminClientDetail from './pages/admin/AdminClientDetail';
 import AdminLeads from './pages/admin/AdminLeads';
 import AdminRevenue from './pages/admin/AdminRevenue';
 import AdminOutreach from './pages/admin/AdminOutreach';
+import AdminSalesEngine from './pages/admin/AdminSalesEngine';
 
 function App() {
   const token = localStorage.getItem('ll_token');
@@ -37,6 +38,7 @@ function App() {
           <Route path="/leads" element={<AdminLeads />} />
           <Route path="/revenue" element={<AdminRevenue />} />
           <Route path="/outreach" element={<AdminOutreach />} />
+          <Route path="/sales-engine" element={<AdminSalesEngine />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />

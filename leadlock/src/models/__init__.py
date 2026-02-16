@@ -10,6 +10,9 @@ from src.models.followup import FollowupTask
 from src.models.event_log import EventLog
 from src.models.agency_partner import AgencyPartner
 from src.models.outreach import Outreach
+from src.models.scrape_job import ScrapeJob
+from src.models.outreach_email import OutreachEmail
+from src.models.sales_config import SalesEngineConfig
 
 __all__ = [
     "Client",
@@ -21,4 +24,7 @@ __all__ = [
     "EventLog",
     "AgencyPartner",
     "Outreach",
+    "ScrapeJob",
+    "OutreachEmail",
+    "SalesEngineConfig",
 ]
