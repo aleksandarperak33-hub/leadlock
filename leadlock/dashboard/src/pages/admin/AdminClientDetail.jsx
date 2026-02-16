@@ -100,9 +100,9 @@ export default function AdminClientDetail() {
         <h3 className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Client Information</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Twilio Phone', value: client.twilio_phone_number || '—' },
+            { label: 'Twilio Phone', value: client.twilio_phone || '—' },
             { label: '10DLC Status', value: client.ten_dlc_status || 'pending' },
-            { label: 'Timezone', value: client.timezone || '—' },
+            { label: 'CRM Type', value: client.crm_type || '—' },
             { label: 'Created', value: client.created_at ? new Date(client.created_at).toLocaleDateString() : '—' },
           ].map(({ label, value }) => (
             <div key={label}>
@@ -117,9 +117,9 @@ export default function AdminClientDetail() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {[
           { label: 'Total Leads', value: metrics.total_leads ?? '—', accent: '#7c5bf0' },
-          { label: 'Booked', value: metrics.booked ?? '—', accent: '#34d399' },
+          { label: 'Booked', value: metrics.total_booked ?? '—', accent: '#34d399' },
           { label: 'Conversion', value: metrics.conversion_rate != null ? `${(metrics.conversion_rate * 100).toFixed(1)}%` : '—', accent: '#5a72f0' },
-          { label: 'MRR', value: `$${metrics.mrr?.toLocaleString() || '0'}`, accent: '#fbbf24' },
+          { label: 'MRR', value: `$${client.monthly_fee?.toLocaleString() || '0'}`, accent: '#fbbf24' },
         ].map(({ label, value, accent }) => (
           <div
             key={label}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { Plus, X, Edit2, Check } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, UserCheck } from 'lucide-react';
 
 const STATUSES = ['cold', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'won', 'lost'];
 const STATUS_COLORS = {
@@ -27,6 +27,7 @@ export default function AdminOutreach() {
   const [view, setView] = useState('board');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null); // { type: 'delete'|'convert', prospect }
   const [form, setForm] = useState({
     prospect_name: '', prospect_company: '', prospect_email: '', prospect_phone: '',
     prospect_trade_type: 'hvac', status: 'cold', notes: '', estimated_mrr: '',
@@ -93,6 +94,29 @@ export default function AdminOutreach() {
     }
   };
 
+  const handleDelete = async (prospect) => {
+    try {
+      await api.deleteOutreach(prospect.id);
+      setConfirmAction(null);
+      fetchOutreach();
+    } catch (e) {
+      console.error('Failed to delete prospect:', e);
+    }
+  };
+
+  const handleConvert = async (prospect) => {
+    try {
+      await api.convertOutreach(prospect.id);
+      setConfirmAction(null);
+      fetchOutreach();
+    } catch (e) {
+      console.error('Failed to convert prospect:', e);
+    }
+  };
+
+  const canConvert = (prospect) =>
+    ['won', 'proposal_sent'].includes(prospect.status) && !prospect.converted_client_id;
+
   const grouped = STATUSES.reduce((acc, s) => {
     acc[s] = prospects.filter(p => p.status === s);
     return acc;
@@ -129,6 +153,42 @@ export default function AdminOutreach() {
           </button>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <h2 className="text-[15px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+              {confirmAction.type === 'delete' ? 'Delete Prospect' : 'Convert to Client'}
+            </h2>
+            <p className="text-[13px] mb-5" style={{ color: 'var(--text-secondary)' }}>
+              {confirmAction.type === 'delete'
+                ? `Are you sure you want to delete "${confirmAction.prospect.prospect_name}"? This cannot be undone.`
+                : `Convert "${confirmAction.prospect.prospect_name}" into a LeadLock client? This will create a new client account.`
+              }
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
+                style={{ color: 'var(--text-tertiary)', border: '1px solid var(--border)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmAction.type === 'delete'
+                  ? handleDelete(confirmAction.prospect)
+                  : handleConvert(confirmAction.prospect)
+                }
+                className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
+                style={{ background: confirmAction.type === 'delete' ? '#f87171' : '#34d399' }}
+              >
+                {confirmAction.type === 'delete' ? 'Delete' : 'Convert'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form Modal */}
       {showForm && (
@@ -232,14 +292,39 @@ export default function AdminOutreach() {
                 {(grouped[status] || []).map(prospect => (
                   <div
                     key={prospect.id}
-                    className="rounded-lg p-3 cursor-pointer transition-colors"
+                    className="rounded-lg p-3 transition-colors"
                     style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                    onClick={() => startEdit(prospect)}
                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-active)'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   >
-                    <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{prospect.prospect_name}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{prospect.prospect_company}</p>
+                    <div className="flex items-start justify-between">
+                      <div className="cursor-pointer flex-1" onClick={() => startEdit(prospect)}>
+                        <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{prospect.prospect_name}</p>
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{prospect.prospect_company}</p>
+                      </div>
+                      <div className="flex items-center gap-0.5 ml-1">
+                        {canConvert(prospect) && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'convert', prospect }); }}
+                            className="p-1 rounded transition-colors"
+                            style={{ color: '#34d399' }}
+                            title="Convert to client"
+                          >
+                            <UserCheck className="w-3 h-3" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'delete', prospect }); }}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: 'var(--text-tertiary)' }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                          title="Delete prospect"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-[11px] capitalize" style={{ color: 'var(--text-tertiary)' }}>{prospect.prospect_trade_type}</span>
                       {prospect.estimated_mrr && (
@@ -309,15 +394,37 @@ export default function AdminOutreach() {
                       {prospect.notes || '—'}
                     </td>
                     <td className="px-4 py-2.5">
-                      <button
-                        onClick={() => startEdit(prospect)}
-                        className="p-1 rounded transition-colors"
-                        style={{ color: 'var(--text-tertiary)' }}
-                        onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => startEdit(prospect)}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: 'var(--text-tertiary)' }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        {canConvert(prospect) && (
+                          <button
+                            onClick={() => setConfirmAction({ type: 'convert', prospect })}
+                            className="p-1 rounded transition-colors"
+                            style={{ color: '#34d399' }}
+                            title="Convert to client"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setConfirmAction({ type: 'delete', prospect })}
+                          className="p-1 rounded transition-colors"
+                          style={{ color: 'var(--text-tertiary)' }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                          title="Delete prospect"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

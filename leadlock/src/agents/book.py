@@ -18,6 +18,9 @@ The customer needs: {service_type}
 Customer name: {first_name}
 Preferred date/time: {preferred_date}
 
+CONVERSATION HISTORY:
+{conversation_history}
+
 AVAILABLE SLOTS:
 {available_slots}
 
@@ -28,6 +31,7 @@ RULES:
 - Once they confirm, set booking_confirmed to true.
 - If they need a time we don't have, set needs_human_handoff to true.
 - Include the technician name if assigned.
+- Use context from the conversation history — don't re-ask things the customer already told you.
 
 Respond with JSON:
 {{
@@ -85,6 +89,12 @@ async def process_booking(
     if not slots_text:
         slots_text = "No available slots found in the next 14 days."
 
+    # Format conversation history for the prompt (last 8 messages)
+    history_text = ""
+    for msg in conversation_history[-8:]:
+        direction = "Customer" if msg.get("direction") == "inbound" else rep_name
+        history_text += f"{direction}: {msg.get('content', '')}\n"
+
     # Build prompt
     system = BOOK_SYSTEM_PROMPT.format(
         rep_name=rep_name,
@@ -93,6 +103,7 @@ async def process_booking(
         first_name=first_name or "there",
         preferred_date=preferred_date or "not specified",
         available_slots=slots_text,
+        conversation_history=history_text or "No prior conversation.",
     )
 
     # Generate response
@@ -107,9 +118,15 @@ async def process_booking(
         logger.error("Book agent AI failed: %s", result["error"])
         return _fallback_booking(slots)
 
-    # Parse response
+    # Parse response — strip markdown fences if present
+    raw = result["content"].strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        raw = "\n".join(lines).strip()
+
     try:
-        parsed = json.loads(result["content"])
+        parsed = json.loads(raw)
         return BookResponse(
             message=parsed["message"],
             appointment_date=parsed.get("appointment_date"),

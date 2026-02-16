@@ -7,7 +7,7 @@ Usage:
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -16,7 +16,6 @@ from sqlalchemy.orm import sessionmaker
 import bcrypt
 from src.config import get_settings
 from src.models.client import Client
-from src.models.outreach import Outreach
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -131,73 +130,6 @@ async def seed():
             session.add(admin)
             await session.commit()
             logger.info("Seeded admin user: %s (id=%s)", admin.business_name, admin.id)
-
-    # Seed sample outreach records
-    async with async_session() as session:
-        result = await session.execute(text("SELECT count(*) FROM outreach"))
-        outreach_count = result.scalar() or 0
-
-        if outreach_count > 0:
-            logger.info("Outreach records already exist (%d). Skipping.", outreach_count)
-        else:
-            sample_prospects = [
-                Outreach(
-                    prospect_name="Mike Johnson",
-                    prospect_company="Johnson Plumbing Co",
-                    prospect_email="mike@johnsonplumbing.com",
-                    prospect_phone="+15125559001",
-                    prospect_trade_type="plumbing",
-                    status="demo_scheduled",
-                    estimated_mrr=997.0,
-                    demo_date=date(2026, 2, 20),
-                    notes="Referred by Austin Comfort HVAC. 15 trucks, ServiceTitan user.",
-                ),
-                Outreach(
-                    prospect_name="Sarah Williams",
-                    prospect_company="Williams Roofing",
-                    prospect_email="sarah@williamsroofing.com",
-                    prospect_phone="+15125559002",
-                    prospect_trade_type="roofing",
-                    status="contacted",
-                    estimated_mrr=1497.0,
-                    notes="Met at home services expo. Interested in growth tier.",
-                ),
-                Outreach(
-                    prospect_name="Carlos Rivera",
-                    prospect_company="Rivera Electric",
-                    prospect_email="carlos@riveraelectric.com",
-                    prospect_phone="+15125559003",
-                    prospect_trade_type="electrical",
-                    status="cold",
-                    estimated_mrr=497.0,
-                    notes="Found on Google. 5-person shop in south Austin.",
-                ),
-                Outreach(
-                    prospect_name="Tom Bradley",
-                    prospect_company="Bradley Solar Solutions",
-                    prospect_email="tom@bradleysolar.com",
-                    prospect_phone="+15125559004",
-                    prospect_trade_type="solar",
-                    status="proposal_sent",
-                    estimated_mrr=2497.0,
-                    notes="Enterprise tier prospect. 50+ installers. Wants full CRM integration.",
-                ),
-                Outreach(
-                    prospect_name="Lisa Park",
-                    prospect_company="Park HVAC Services",
-                    prospect_email="lisa@parkhvac.com",
-                    prospect_phone="+15125559005",
-                    prospect_trade_type="hvac",
-                    status="demo_completed",
-                    estimated_mrr=997.0,
-                    demo_date=date(2026, 2, 12),
-                    notes="Demo went well. Following up with proposal this week.",
-                ),
-            ]
-            for p in sample_prospects:
-                session.add(p)
-            await session.commit()
-            logger.info("Seeded %d sample outreach records.", len(sample_prospects))
 
     await engine.dispose()
 

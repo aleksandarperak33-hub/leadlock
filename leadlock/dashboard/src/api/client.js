@@ -100,4 +100,7 @@ export const api = {
   getAdminOutreach: () => adminRequest('/outreach'),
   createOutreach: (data) => adminRequest('/outreach', { method: 'POST', body: JSON.stringify(data) }),
   updateOutreach: (id, data) => adminRequest(`/outreach/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteOutreach: (id) => adminRequest(`/outreach/${id}`, { method: 'DELETE' }),
+  convertOutreach: (id) => adminRequest(`/outreach/${id}/convert`, { method: 'POST' }),
+  createAdminClient: (data) => adminRequest('/clients', { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -1,7 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
-import { Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+
+const inputStyle = {
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  color: 'var(--text-primary)',
+};
+
+const INITIAL_FORM = {
+  business_name: '', trade_type: 'hvac', tier: 'starter', monthly_fee: '497',
+  owner_name: '', owner_email: '', owner_phone: '',
+  dashboard_email: '', dashboard_password: '', crm_type: 'google_sheets',
+};
 
 export default function AdminClients() {
   const navigate = useNavigate();
@@ -11,25 +23,27 @@ export default function AdminClients() {
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchClients = async () => {
-      setLoading(true);
-      try {
-        const params = { page, per_page: 20 };
-        if (search) params.search = search;
-        const data = await api.getAdminClients(params);
-        setClients(data.clients || []);
-        setTotal(data.total || 0);
-        setPages(data.pages || 1);
-      } catch (e) {
-        console.error('Failed to fetch clients:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchClients();
-  }, [page, search]);
+  const fetchClients = async () => {
+    setLoading(true);
+    try {
+      const params = { page, per_page: 20 };
+      if (search) params.search = search;
+      const data = await api.getAdminClients(params);
+      setClients(data.clients || []);
+      setTotal(data.total || 0);
+      setPages(data.pages || 1);
+    } catch (e) {
+      console.error('Failed to fetch clients:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchClients(); }, [page, search]);
 
   const billingColor = (status) => {
     switch (status) {
@@ -40,12 +54,112 @@ export default function AdminClients() {
     }
   };
 
+  const handleCreate = async () => {
+    setSaving(true);
+    try {
+      await api.createAdminClient({
+        ...form,
+        monthly_fee: Number(form.monthly_fee) || 497,
+      });
+      setShowForm(false);
+      setForm(INITIAL_FORM);
+      fetchClients();
+    } catch (e) {
+      console.error('Failed to create client:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Clients</h1>
-        <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
+          <button
+            onClick={() => { setForm(INITIAL_FORM); setShowForm(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
+            style={{ background: 'var(--accent)' }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Client
+          </button>
+        </div>
       </div>
+
+      {/* New Client Modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>New Client</h2>
+              <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-tertiary)' }}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+              {[
+                { label: 'Business Name', key: 'business_name', type: 'text', placeholder: 'Austin Comfort HVAC', required: true },
+                { label: 'Owner Name', key: 'owner_name', type: 'text', placeholder: 'John Smith' },
+                { label: 'Owner Email', key: 'owner_email', type: 'email', placeholder: 'john@business.com' },
+                { label: 'Owner Phone', key: 'owner_phone', type: 'text', placeholder: '+15551234567' },
+                { label: 'Dashboard Email', key: 'dashboard_email', type: 'email', placeholder: 'john@business.com' },
+                { label: 'Dashboard Password', key: 'dashboard_password', type: 'password', placeholder: 'Set login password' },
+                { label: 'Monthly Fee', key: 'monthly_fee', type: 'number', placeholder: '497' },
+              ].map(({ label, key, type, placeholder, required }) => (
+                <div key={key}>
+                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {label}{required && ' *'}
+                  </label>
+                  <input
+                    type={type}
+                    value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
+                    style={inputStyle}
+                    placeholder={placeholder}
+                  />
+                </div>
+              ))}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Trade Type</label>
+                  <select value={form.trade_type} onChange={e => setForm(f => ({ ...f, trade_type: e.target.value }))} className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}>
+                    {['hvac', 'plumbing', 'electrical', 'roofing', 'solar', 'general'].map(t => (
+                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Tier</label>
+                  <select value={form.tier} onChange={e => setForm(f => ({ ...f, tier: e.target.value }))} className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}>
+                    {['starter', 'growth', 'scale', 'enterprise'].map(t => (
+                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>CRM</label>
+                  <select value={form.crm_type} onChange={e => setForm(f => ({ ...f, crm_type: e.target.value }))} className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}>
+                    {['google_sheets', 'service_titan', 'housecall_pro', 'jobber', 'gohighlevel'].map(t => (
+                      <option key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                onClick={handleCreate}
+                disabled={saving || !form.business_name || !form.trade_type}
+                className="w-full py-2.5 rounded-md text-[13px] font-medium text-white transition-all disabled:opacity-50"
+                style={{ background: 'var(--accent)' }}
+              >
+                {saving ? 'Creating...' : 'Create Client'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-4">
@@ -130,7 +244,7 @@ export default function AdminClients() {
                     {client.conversion_rate != null ? `${(client.conversion_rate * 100).toFixed(1)}%` : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-[12px] font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
-                    ${client.mrr?.toLocaleString() || '0'}
+                    ${client.monthly_fee?.toLocaleString() || '0'}
                   </td>
                 </tr>
               ))}

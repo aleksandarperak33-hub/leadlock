@@ -56,6 +56,42 @@ async def admin_clients(
     )
 
 
+@router.post("/clients")
+async def create_client(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
+):
+    """Create a new client."""
+    import bcrypt
+
+    client = Client(
+        business_name=payload["business_name"],
+        trade_type=payload["trade_type"],
+        tier=payload.get("tier", "starter"),
+        monthly_fee=payload.get("monthly_fee", 497.00),
+        twilio_phone=payload.get("twilio_phone"),
+        crm_type=payload.get("crm_type", "google_sheets"),
+        config=payload.get("config", {}),
+        owner_name=payload.get("owner_name"),
+        owner_email=payload.get("owner_email"),
+        owner_phone=payload.get("owner_phone"),
+        dashboard_email=payload.get("dashboard_email"),
+        billing_status=payload.get("billing_status", "trial"),
+    )
+
+    if payload.get("dashboard_password"):
+        client.dashboard_password_hash = bcrypt.hashpw(
+            payload["dashboard_password"].encode(), bcrypt.gensalt()
+        ).decode()
+
+    db.add(client)
+    await db.commit()
+    await db.refresh(client)
+
+    return {"id": str(client.id), "business_name": client.business_name}
+
+
 @router.get("/clients/{client_id}")
 async def admin_client_detail(
     client_id: str,
@@ -363,3 +399,77 @@ async def update_outreach(
     await db.flush()
 
     return {"status": "updated"}
+
+
+@router.delete("/outreach/{prospect_id}")
+async def delete_outreach(
+    prospect_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
+):
+    """Delete an outreach prospect."""
+    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    if not prospect:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+
+    await db.delete(prospect)
+    await db.commit()
+
+    return {"status": "deleted"}
+
+
+@router.post("/outreach/{prospect_id}/convert")
+async def convert_outreach(
+    prospect_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
+):
+    """Convert a won/proposal_sent outreach prospect into a real client."""
+    import bcrypt
+
+    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    if not prospect:
+        raise HTTPException(status_code=404, detail="Prospect not found")
+
+    if prospect.converted_client_id:
+        raise HTTPException(status_code=400, detail="Prospect already converted")
+
+    # Create new client from prospect data
+    client = Client(
+        business_name=prospect.prospect_company or prospect.prospect_name,
+        trade_type=prospect.prospect_trade_type or "general",
+        tier="starter",
+        monthly_fee=prospect.estimated_mrr or 497.00,
+        owner_name=prospect.prospect_name,
+        owner_email=prospect.prospect_email,
+        owner_phone=prospect.prospect_phone,
+        crm_type="google_sheets",
+        config={},
+        billing_status="trial",
+        onboarding_status="pending",
+        is_active=True,
+        dashboard_email=prospect.prospect_email,
+    )
+
+    # Set a temporary password based on prospect name
+    if prospect.prospect_email:
+        temp_password = f"LeadLock{prospect.prospect_name.split()[0]}2026!"
+        client.dashboard_password_hash = bcrypt.hashpw(
+            temp_password.encode(), bcrypt.gensalt()
+        ).decode()
+
+    db.add(client)
+    await db.flush()
+
+    # Link prospect to new client
+    prospect.converted_client_id = client.id
+    prospect.status = "won"
+    prospect.updated_at = datetime.utcnow()
+
+    await db.commit()
+
+    return {
+        "status": "converted",
+        "client_id": str(client.id),
+        "business_name": client.business_name,
+    }
