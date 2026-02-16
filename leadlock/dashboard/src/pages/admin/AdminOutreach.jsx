@@ -42,7 +42,7 @@ export default function AdminOutreach() {
       const params = { page, per_page: 50 };
       if (statusFilter) params.status = statusFilter;
       const data = await api.getAdminOutreach(params);
-      setProspects(data.prospects || data || []);
+      setProspects(data.prospects || []);
       setTotal(data.total || 0);
       setTotalPages(data.pages || 1);
     } catch (e) {

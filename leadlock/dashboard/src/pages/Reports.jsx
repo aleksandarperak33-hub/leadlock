@@ -49,9 +49,9 @@ export default function Reports() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { label: 'Total Leads', value: report.total_leads, accent: '#6366f1' },
-              { label: 'Booked', value: report.total_booked, sub: `${(report.conversion_rate * 100).toFixed(1)}% conversion`, accent: '#34d399' },
-              { label: 'Avg Response', value: `${(report.avg_response_time_ms / 1000).toFixed(1)}s`, accent: '#fbbf24' },
-              { label: 'Total Cost', value: `$${(report.total_ai_cost + report.total_sms_cost).toFixed(2)}`, sub: `AI: $${report.total_ai_cost.toFixed(2)} | SMS: $${report.total_sms_cost.toFixed(2)}`, accent: '#a78bfa' },
+              { label: 'Booked', value: report.total_booked ?? 0, sub: `${((report.conversion_rate ?? 0) * 100).toFixed(1)}% conversion`, accent: '#34d399' },
+              { label: 'Avg Response', value: `${((report.avg_response_time_ms ?? 0) / 1000).toFixed(1)}s`, accent: '#fbbf24' },
+              { label: 'Total Cost', value: `$${((report.total_ai_cost ?? 0) + (report.total_sms_cost ?? 0)).toFixed(2)}`, sub: `AI: $${(report.total_ai_cost ?? 0).toFixed(2)} | SMS: $${(report.total_sms_cost ?? 0).toFixed(2)}`, accent: '#a78bfa' },
             ].map(({ label, value, sub, accent }) => (
               <div key={label} className="glass-card gradient-border relative overflow-hidden p-4">
                 <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: `linear-gradient(180deg, ${accent}, transparent)`, opacity: 0.6 }} />

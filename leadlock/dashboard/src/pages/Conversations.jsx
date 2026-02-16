@@ -89,7 +89,7 @@ export default function Conversations() {
                   <LeadStatusBadge status={lead.state} />
                 </div>
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {lead.source?.replace('_', ' ')} &middot; {new Date(lead.created_at).toLocaleDateString()}
+                  {lead.source?.replace('_', ' ')} &middot; {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
                 </p>
               </button>
             ))}

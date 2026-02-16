@@ -157,7 +157,7 @@ export default function LeadFeed() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                    {new Date(lead.created_at).toLocaleDateString()}
+                    {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
