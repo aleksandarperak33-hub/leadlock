@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+import { Clock } from 'lucide-react';
 
 const BUCKET_COLORS = {
   '0-10s': '#10b981',
@@ -10,19 +11,22 @@ const BUCKET_COLORS = {
 const TOOLTIP_STYLE = {
   background: '#ffffff',
   border: '1px solid #e5e7eb',
-  borderRadius: '8px',
+  borderRadius: '10px',
   color: '#111827',
   fontSize: '12px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-  padding: '8px 12px',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+  padding: '10px 14px',
 };
 
 export default function ResponseTimeChart({ data = [] }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-      <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 text-gray-500">
-        Response Time Distribution
-      </h3>
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock className="w-3.5 h-3.5 text-indigo-500" strokeWidth={2} />
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          Response Time Distribution
+        </h3>
+      </div>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
@@ -42,9 +46,9 @@ export default function ResponseTimeChart({ data = [] }) {
               contentStyle={TOOLTIP_STYLE}
               cursor={{ fill: '#f9fafb' }}
             />
-            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="count" radius={[6, 6, 0, 0]}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#6366f1'} fillOpacity={0.85} />
+                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#6366f1'} fillOpacity={0.9} />
               ))}
             </Bar>
           </BarChart>

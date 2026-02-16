@@ -37,16 +37,16 @@ export default function AdminLayout() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 h-16 gradient-border-bottom">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center gradient-btn" style={{ boxShadow: 'none', padding: 0 }}>
-              <Zap className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600 shadow-md shadow-violet-500/20">
+              <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-bold tracking-tight text-gray-900">
+              <span className="text-[15px] font-bold tracking-tight text-gray-900">
                 Lead<span className="gradient-text">Lock</span>
               </span>
-              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100">
+              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm shadow-violet-500/20">
                 Admin
               </span>
             </div>
@@ -66,14 +66,13 @@ export default function AdminLayout() {
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `
                 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 cursor-pointer
-                ${isActive ? 'bg-violet-50 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
+                ${isActive ? 'bg-violet-50/80 text-gray-900 nav-item-active' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
               `}
             >
               {({ isActive }) => (
                 <>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-violet-100' : ''}`}>
-                    <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.5}
-                      style={{ color: isActive ? '#7c3aed' : undefined }} />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-violet-500/20' : ''}`}>
+                    <Icon className={`w-[18px] h-[18px] ${isActive ? 'text-white' : 'text-gray-400'}`} strokeWidth={isActive ? 2 : 1.5} />
                   </div>
                   {label}
                 </>
@@ -83,11 +82,11 @@ export default function AdminLayout() {
         </nav>
 
         {/* System status */}
-        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
+        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-violet-50 to-violet-50/50 border border-violet-100">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-live-pulse" />
-              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-glow-ring" />
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             </div>
             <span className="text-[11px] font-semibold text-gray-500">System Active</span>
           </div>
@@ -122,7 +121,7 @@ export default function AdminLayout() {
           </span>
         </div>
 
-        <div className="p-5 lg:p-8 max-w-[1200px] mx-auto">
+        <div className="p-5 lg:p-8 max-w-[1200px] mx-auto bg-gradient-mesh min-h-full">
           <Outlet />
         </div>
       </main>

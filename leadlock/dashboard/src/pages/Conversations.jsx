@@ -58,9 +58,9 @@ export default function Conversations() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
+    <div className="animate-page-in">
       {/* Header */}
-      <h1 className="text-lg font-semibold tracking-tight text-gray-900 mb-6">
+      <h1 className="text-xl font-bold tracking-tight text-gray-900 mb-6">
         Conversations
       </h1>
 

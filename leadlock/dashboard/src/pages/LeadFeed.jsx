@@ -58,13 +58,13 @@ export default function LeadFeed() {
   }, [page, stateFilter, search]);
 
   return (
-    <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
+    <div className="animate-page-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold tracking-tight text-gray-900">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900">
           Leads
         </h1>
-        <span className="text-xs font-mono text-gray-400">
+        <span className="text-xs font-mono tabular-nums text-gray-400 bg-gray-100 px-2.5 py-1 rounded-lg">
           {total} total
         </span>
       </div>
@@ -104,7 +104,7 @@ export default function LeadFeed() {
       </div>
 
       {/* Table card */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden card-accent-top">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
