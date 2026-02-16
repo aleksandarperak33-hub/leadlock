@@ -83,11 +83,13 @@ async def lifespan(app: FastAPI):
         from src.workers.scraper import run_scraper
         from src.workers.outreach_sequencer import run_outreach_sequencer
         from src.workers.outreach_cleanup import run_outreach_cleanup
+        from src.workers.task_processor import run_task_processor
 
         worker_tasks.append(asyncio.create_task(run_scraper()))
         worker_tasks.append(asyncio.create_task(run_outreach_sequencer()))
         worker_tasks.append(asyncio.create_task(run_outreach_cleanup()))
-        logger.info("Sales engine workers started (scraper, sequencer, cleanup)")
+        worker_tasks.append(asyncio.create_task(run_task_processor()))
+        logger.info("Sales engine workers started (scraper, sequencer, cleanup, task_processor)")
     else:
         logger.info("Sales engine workers disabled (SALES_ENGINE_ENABLED=false)")
 

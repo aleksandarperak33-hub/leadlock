@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, MessageSquare, BarChart3,
-  Settings, LogOut, Menu, X, Shield, Zap
+  Settings, LogOut, Menu, X, Shield, Zap, Calendar
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
   { to: '/leads', icon: Users, label: 'Leads' },
   { to: '/conversations', icon: MessageSquare, label: 'Conversations' },
+  { to: '/bookings', icon: Calendar, label: 'Bookings' },
   { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/compliance', icon: Shield, label: 'Compliance' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

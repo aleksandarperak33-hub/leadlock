@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # Sales Engine
     brave_api_key: str = ""
-    hunter_api_key: str = ""
+    hunter_api_key: str = ""  # DEPRECATED: Hunter.io removed, using website scraping + pattern guessing
     sales_engine_enabled: bool = False
     sales_daily_email_limit: int = 50
     sales_daily_scrape_limit: int = 100

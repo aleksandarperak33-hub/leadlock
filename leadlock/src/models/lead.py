@@ -89,6 +89,11 @@ class Lead(Base):
     last_inbound_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     next_followup_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    # Phase 2: Lead actions
+    tags: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
     # Metadata
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSONB)
     extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)

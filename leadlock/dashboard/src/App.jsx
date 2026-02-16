@@ -6,6 +6,8 @@ import LeadFeed from './pages/LeadFeed';
 import Conversations from './pages/Conversations';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Bookings from './pages/Bookings';
+import Compliance from './pages/Compliance';
 import Login from './pages/Login';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminClients from './pages/admin/AdminClients';
@@ -14,6 +16,9 @@ import AdminLeads from './pages/admin/AdminLeads';
 import AdminRevenue from './pages/admin/AdminRevenue';
 import AdminOutreach from './pages/admin/AdminOutreach';
 import AdminSalesEngine from './pages/admin/AdminSalesEngine';
+import AdminCampaigns from './pages/admin/AdminCampaigns';
+import AdminInsights from './pages/admin/AdminInsights';
+import AdminTemplates from './pages/admin/AdminTemplates';
 
 function App() {
   const token = localStorage.getItem('ll_token');
@@ -39,6 +44,9 @@ function App() {
           <Route path="/revenue" element={<AdminRevenue />} />
           <Route path="/outreach" element={<AdminOutreach />} />
           <Route path="/sales-engine" element={<AdminSalesEngine />} />
+          <Route path="/campaigns" element={<AdminCampaigns />} />
+          <Route path="/insights" element={<AdminInsights />} />
+          <Route path="/templates" element={<AdminTemplates />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -52,7 +60,9 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/leads" element={<LeadFeed />} />
         <Route path="/conversations/:leadId?" element={<Conversations />} />
+        <Route path="/bookings" element={<Bookings />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/compliance" element={<Compliance />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="/login" element={<Login />} />

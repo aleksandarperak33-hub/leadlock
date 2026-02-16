@@ -1,13 +1,15 @@
 """
 Lead scraper worker — discovers home services contractors via Brave Search API.
-Runs every 6 hours. Uses query rotation (6 variants per trade) so re-scrapes
-always return fresh results instead of duplicates. Each query fetches ALL
-location IDs from Brave (up to 100 POIs via batch requests).
-Deduplicates by place_id and phone number.
+Runs every 15 minutes (configurable). Uses query rotation (6 variants per trade)
+so re-scrapes always return fresh results instead of duplicates. Each query
+fetches ALL location IDs from Brave (up to 100 POIs via batch requests).
+Processes 1 location+trade combo per cycle (round-robin via Redis).
+7-day cooldown on exhausted variants. Deduplicates by place_id and phone number.
 """
 import asyncio
 import logging
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,14 +18,15 @@ from src.models.outreach import Outreach
 from src.models.scrape_job import ScrapeJob
 from src.models.sales_config import SalesEngineConfig
 from src.services.scraping import search_local_businesses, parse_address_components
-from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
+from src.services.enrichment import enrich_prospect_email, extract_domain
 from src.services.phone_validation import normalize_phone
 from src.utils.email_validation import validate_email
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours
+DEFAULT_POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
+DEFAULT_VARIANT_COOLDOWN_DAYS = 7
 
 # Multiple query variations per trade — each produces different Brave results.
 # Rotated across scrape cycles so we always discover new businesses.
@@ -99,23 +102,23 @@ async def get_next_variant_and_offset(
     city: str,
     state: str,
     trade: str,
+    cooldown_days: int = DEFAULT_VARIANT_COOLDOWN_DAYS,
 ) -> tuple[int, int]:
     """
     Determine the next query_variant to use for a location+trade.
-    Looks at all completed scrape jobs for this combo and picks the next unused variant.
-
-    Brave's offset parameter doesn't work with result_filter=locations, so rotation
-    is purely by query variant. Each variant now fetches ALL location IDs (up to 100
-    POIs via batch requests), so a single variant covers far more businesses than before.
+    Looks at completed scrape jobs for this combo and picks the next unused variant.
+    Variants older than cooldown_days are considered fresh again (businesses change).
 
     Returns:
-        (query_variant_index, 0) or (-1, -1) if all variants exhausted.
+        (query_variant_index, 0) or (-1, -1) if all variants exhausted within cooldown.
     """
     num_variants = len(get_query_variants(trade))
     if num_variants == 0:
         return -1, -1
 
-    # Get all completed scrape jobs for this location+trade
+    cooldown_cutoff = datetime.utcnow() - timedelta(days=cooldown_days)
+
+    # Get variants used within cooldown period
     result = await db.execute(
         select(ScrapeJob.query_variant).where(
             and_(
@@ -123,6 +126,7 @@ async def get_next_variant_and_offset(
                 ScrapeJob.state_code == state,
                 ScrapeJob.trade_type == trade,
                 ScrapeJob.status == "completed",
+                ScrapeJob.completed_at >= cooldown_cutoff,
             )
         )
     )
@@ -133,26 +137,64 @@ async def get_next_variant_and_offset(
         if variant not in used_variants:
             return variant, 0
 
-    # All variants exhausted
+    # All variants exhausted within cooldown window
     return -1, -1
 
 
+async def _get_poll_interval() -> int:
+    """Get scraper poll interval from config, with fallback."""
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(select(SalesEngineConfig).limit(1))
+            config = result.scalar_one_or_none()
+            if config and hasattr(config, "scraper_interval_minutes") and config.scraper_interval_minutes:
+                return config.scraper_interval_minutes * 60
+    except Exception:
+        pass
+    return DEFAULT_POLL_INTERVAL_SECONDS
+
+
 async def run_scraper():
-    """Main loop — scrape for new prospects every 6 hours."""
-    logger.info("Lead scraper started (poll every %ds)", POLL_INTERVAL_SECONDS)
+    """Main loop — scrape for new prospects on configurable interval with jitter."""
+    interval = await _get_poll_interval()
+    logger.info("Lead scraper started (poll every %ds)", interval)
 
     while True:
         try:
-            await scrape_cycle()
+            # Check if scraper is paused
+            async with async_session_factory() as db:
+                result = await db.execute(select(SalesEngineConfig).limit(1))
+                config = result.scalar_one_or_none()
+                if config and hasattr(config, "scraper_paused") and config.scraper_paused:
+                    logger.debug("Scraper is paused, skipping cycle")
+                else:
+                    await scrape_cycle()
         except Exception as e:
             logger.error("Scraper cycle error: %s", str(e))
 
         await _heartbeat()
-        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+        interval = await _get_poll_interval()
+        # Add jitter (0-5 min) to prevent thundering herd
+        jitter = random.randint(0, 300)
+        await asyncio.sleep(interval + jitter)
+
+
+async def _get_round_robin_position(total_combos: int) -> int:
+    """Get and increment the round-robin scraper position via Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        position = await redis.incr("leadlock:scraper:position")
+        return (position - 1) % total_combos
+    except Exception:
+        return 0
 
 
 async def scrape_cycle():
-    """Execute one full scrape cycle across all configured locations and trades."""
+    """
+    Execute one scrape cycle. Processes 1 location+trade combo per cycle
+    in round-robin fashion. Continuous scraping with smart throttling.
+    """
     async with async_session_factory() as db:
         # Load config
         result = await db.execute(select(SalesEngineConfig).limit(1))
@@ -187,34 +229,39 @@ async def scrape_cycle():
             logger.info("Daily scrape limit reached (%d)", config.daily_scrape_limit)
             return
 
-        for loc in locations:
-            city = loc.get("city", "")
-            state = loc.get("state", "")
-            location_str = f"{city}, {state}"
+        # Build all location+trade combos for round-robin
+        combos = [
+            (loc.get("city", ""), loc.get("state", ""), trade)
+            for loc in locations
+            for trade in trade_types
+        ]
+        if not combos:
+            return
 
-            for trade in trade_types:
-                if today_scrapes >= config.daily_scrape_limit:
-                    logger.info("Daily scrape limit reached during cycle")
-                    return
+        # Pick one combo via round-robin
+        position = await _get_round_robin_position(len(combos))
+        city, state, trade = combos[position]
+        location_str = f"{city}, {state}"
 
-                # Find the next unused query variant + offset for this location+trade
-                variant_idx, offset = await get_next_variant_and_offset(db, city, state, trade)
+        cooldown_days = getattr(config, "variant_cooldown_days", DEFAULT_VARIANT_COOLDOWN_DAYS)
+        variant_idx, offset = await get_next_variant_and_offset(
+            db, city, state, trade, cooldown_days=cooldown_days,
+        )
 
-                if variant_idx == -1:
-                    logger.info(
-                        "All %d query variants exhausted for %s in %s. Skipping.",
-                        len(get_query_variants(trade)), trade, location_str,
-                    )
-                    continue
+        if variant_idx == -1:
+            logger.info(
+                "All variants in cooldown for %s in %s. Skipping.",
+                trade, location_str,
+            )
+            return
 
-                variants = get_query_variants(trade)
-                query = variants[variant_idx]
+        variants = get_query_variants(trade)
+        query = variants[variant_idx]
 
-                await scrape_location_trade(
-                    db, config, settings, city, state, location_str,
-                    trade, query, variant_idx, offset,
-                )
-                today_scrapes += 1
+        await scrape_location_trade(
+            db, config, settings, city, state, location_str,
+            trade, query, variant_idx, offset,
+        )
 
         await db.commit()
 
@@ -289,26 +336,25 @@ async def scrape_location_trade(
             # Parse address
             addr_parts = parse_address_components(biz.get("address", ""))
 
-            # Try to find email
+            # Try to find email via website scraping + pattern guessing
             email = None
             email_source = None
             email_verified = False
             website = biz.get("website", "")
-            domain = extract_domain(website) if website else None
 
-            if domain and settings.hunter_api_key:
-                hunter_result = await find_email_hunter(domain, biz["name"], settings.hunter_api_key)
-                total_cost += hunter_result.get("cost_usd", 0)
-                if hunter_result.get("email"):
-                    email = hunter_result["email"]
-                    email_source = "hunter"
-                    email_verified = hunter_result.get("confidence", 0) >= 80
-
-            # Fallback: guess email pattern
-            if not email and domain:
+            if website:
+                enrichment = await enrich_prospect_email(website, biz.get("name", ""))
+                if enrichment.get("email"):
+                    email = enrichment["email"]
+                    email_source = enrichment["source"]
+                    email_verified = enrichment.get("verified", False)
+            elif extract_domain(website):
+                # No website but have domain somehow — pattern guess only
+                from src.services.enrichment import guess_email_patterns
+                domain = extract_domain(website)
                 patterns = guess_email_patterns(domain)
                 if patterns:
-                    email = patterns[0]  # Use info@domain as best guess
+                    email = patterns[0]
                     email_source = "pattern_guess"
 
             # Validate email before storing

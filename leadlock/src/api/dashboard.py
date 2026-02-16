@@ -1,12 +1,16 @@
 """
 Dashboard API — all endpoints for the React client dashboard.
 All endpoints require JWT authentication via Bearer token.
+Includes lead actions, bookings, compliance, and CSV export (Phase 2).
 """
+import csv
+import io
 import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
@@ -444,4 +448,246 @@ async def get_compliance_summary(
         cold_outreach_violations=0,
         pending_followups=pending_followups,
         last_audit=datetime.utcnow(),
+    )
+
+
+# === LEAD ACTIONS (Phase 2) ===
+
+@router.put("/api/v1/dashboard/leads/{lead_id}/status")
+async def update_lead_status(
+    lead_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Change lead status (close, re-engage, etc)."""
+    lead = await db.get(Lead, uuid.UUID(lead_id))
+    if not lead or lead.client_id != client.id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    new_status = payload.get("status", "").strip()
+    valid_statuses = {"new", "qualifying", "qualified", "booking", "booked", "completed", "cold", "dead", "opted_out"}
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+
+    lead.state = new_status
+    lead.updated_at = datetime.utcnow()
+    return {"status": "updated", "new_state": new_status}
+
+
+@router.put("/api/v1/dashboard/leads/{lead_id}/archive")
+async def archive_lead(
+    lead_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Archive or unarchive a lead."""
+    lead = await db.get(Lead, uuid.UUID(lead_id))
+    if not lead or lead.client_id != client.id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    archived = payload.get("archived", True)
+    if hasattr(lead, "archived"):
+        lead.archived = archived
+    lead.updated_at = datetime.utcnow()
+    return {"status": "updated", "archived": archived}
+
+
+@router.put("/api/v1/dashboard/leads/{lead_id}/tags")
+async def update_lead_tags(
+    lead_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Add or remove tags from a lead."""
+    lead = await db.get(Lead, uuid.UUID(lead_id))
+    if not lead or lead.client_id != client.id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    tags = payload.get("tags", [])
+    if not isinstance(tags, list):
+        raise HTTPException(status_code=400, detail="tags must be a list")
+
+    if hasattr(lead, "tags"):
+        lead.tags = tags
+    lead.updated_at = datetime.utcnow()
+    return {"status": "updated", "tags": tags}
+
+
+@router.put("/api/v1/dashboard/leads/{lead_id}/notes")
+async def update_lead_notes(
+    lead_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Add internal notes to a lead."""
+    lead = await db.get(Lead, uuid.UUID(lead_id))
+    if not lead or lead.client_id != client.id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    notes = payload.get("notes", "")
+    if hasattr(lead, "notes"):
+        lead.notes = notes
+    lead.updated_at = datetime.utcnow()
+    return {"status": "updated"}
+
+
+# === BOOKINGS (Phase 2) ===
+
+@router.get("/api/v1/dashboard/bookings")
+async def get_bookings(
+    start: Optional[str] = Query(default=None),
+    end: Optional[str] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Get bookings filtered by date range."""
+    conditions = [Booking.client_id == client.id]
+
+    if start:
+        try:
+            start_date = datetime.fromisoformat(start)
+            conditions.append(Booking.appointment_date >= start_date.date())
+        except ValueError:
+            pass
+
+    if end:
+        try:
+            end_date = datetime.fromisoformat(end)
+            conditions.append(Booking.appointment_date <= end_date.date())
+        except ValueError:
+            pass
+
+    result = await db.execute(
+        select(Booking)
+        .where(and_(*conditions))
+        .order_by(desc(Booking.appointment_date))
+    )
+    bookings = result.scalars().all()
+
+    return {
+        "bookings": [
+            {
+                "id": str(b.id),
+                "lead_id": str(b.lead_id) if b.lead_id else None,
+                "appointment_date": str(b.appointment_date),
+                "time_window_start": str(b.time_window_start) if b.time_window_start else None,
+                "time_window_end": str(b.time_window_end) if b.time_window_end else None,
+                "service_type": b.service_type,
+                "tech_name": b.tech_name,
+                "status": b.status,
+                "crm_sync_status": b.crm_sync_status,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+            for b in bookings
+        ],
+        "total": len(bookings),
+    }
+
+
+# === CUSTOM REPORTS & CSV EXPORT (Phase 2) ===
+
+@router.get("/api/v1/dashboard/reports/custom")
+async def get_custom_report(
+    start: str = Query(...),
+    end: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Get custom date range report data."""
+    try:
+        start_date = datetime.fromisoformat(start)
+        end_date = datetime.fromisoformat(end)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO 8601.")
+
+    # Total leads in range
+    lead_count = (await db.execute(
+        select(func.count(Lead.id)).where(
+            and_(Lead.client_id == client.id, Lead.created_at >= start_date, Lead.created_at <= end_date)
+        )
+    )).scalar() or 0
+
+    # Leads by state
+    state_result = await db.execute(
+        select(Lead.state, func.count()).where(
+            and_(Lead.client_id == client.id, Lead.created_at >= start_date, Lead.created_at <= end_date)
+        ).group_by(Lead.state)
+    )
+    by_state = {row[0]: row[1] for row in state_result.all()}
+
+    # Bookings in range
+    booking_count = (await db.execute(
+        select(func.count(Booking.id)).where(
+            and_(Booking.client_id == client.id, Booking.created_at >= start_date, Booking.created_at <= end_date)
+        )
+    )).scalar() or 0
+
+    # Avg response time
+    avg_response = (await db.execute(
+        select(func.avg(Lead.first_response_ms)).where(
+            and_(
+                Lead.client_id == client.id,
+                Lead.created_at >= start_date,
+                Lead.created_at <= end_date,
+                Lead.first_response_ms.isnot(None),
+            )
+        )
+    )).scalar()
+
+    return {
+        "start": start,
+        "end": end,
+        "total_leads": lead_count,
+        "by_state": by_state,
+        "bookings": booking_count,
+        "avg_response_ms": round(float(avg_response)) if avg_response else None,
+    }
+
+
+@router.get("/api/v1/dashboard/leads/export")
+async def export_leads_csv(
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Export all leads as streaming CSV."""
+    result = await db.execute(
+        select(Lead)
+        .where(Lead.client_id == client.id)
+        .order_by(desc(Lead.created_at))
+    )
+    leads = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "first_name", "last_name", "phone", "source", "state",
+        "score", "service_type", "urgency", "first_response_ms",
+        "total_messages", "created_at",
+    ])
+
+    for lead in leads:
+        writer.writerow([
+            str(lead.id),
+            lead.first_name,
+            lead.last_name,
+            lead.phone[:6] + "***" if lead.phone else "",
+            lead.source,
+            lead.state,
+            lead.score,
+            lead.service_type,
+            lead.urgency,
+            lead.first_response_ms,
+            (lead.total_messages_sent or 0) + (lead.total_messages_received or 0),
+            lead.created_at.isoformat() if lead.created_at else "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads_export.csv"},
     )

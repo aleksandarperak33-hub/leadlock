@@ -33,7 +33,15 @@ async def run_outreach_cleanup():
 
     while True:
         try:
-            await cleanup_cycle()
+            # Check if cleanup is paused
+            async with async_session_factory() as db:
+                from sqlalchemy import select as sel
+                result = await db.execute(sel(SalesEngineConfig).limit(1))
+                config = result.scalar_one_or_none()
+                if config and hasattr(config, "cleanup_paused") and config.cleanup_paused:
+                    logger.debug("Outreach cleanup is paused, skipping cycle")
+                else:
+                    await cleanup_cycle()
         except Exception as e:
             logger.error("Outreach cleanup error: %s", str(e))
 

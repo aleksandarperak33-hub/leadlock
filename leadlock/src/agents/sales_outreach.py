@@ -30,6 +30,32 @@ You must output JSON with these fields:
 body_html should use simple <p> tags. No complex HTML.
 body_text is the plain text version (no HTML tags)."""
 
+async def _get_learning_context(trade_type: str, state: str) -> str:
+    """
+    Fetch learning insights to include in AI prompt context.
+    Returns a short string with best-performing patterns, or empty string.
+    """
+    try:
+        from src.services.learning import get_open_rate_by_dimension, get_best_send_time
+
+        parts = []
+
+        open_rate = await get_open_rate_by_dimension("trade", trade_type)
+        if open_rate > 0:
+            parts.append(f"Avg open rate for {trade_type}: {open_rate:.0%}")
+
+        best_time = await get_best_send_time(trade_type, state)
+        if best_time:
+            parts.append(f"Best send time: {best_time}")
+
+        if parts:
+            return "Performance insights:\n" + "\n".join(f"- {p}" for p in parts)
+    except Exception:
+        pass
+
+    return ""
+
+
 STEP_INSTRUCTIONS = {
     1: """Write a STEP 1 email (first contact).
 Focus on a specific pain point for their trade in their city. Reference their Google rating/reviews if available.
@@ -88,6 +114,11 @@ async def generate_outreach_email(
         prospect_details += f"\n- Reviews: {review_count}"
     if website:
         prospect_details += f"\n- Website: {website}"
+
+    # Enrich with learning insights
+    learning_context = await _get_learning_context(trade_type, state)
+    if learning_context:
+        prospect_details += f"\n\n{learning_context}"
 
     user_message = f"{step_instruction}\n\n{prospect_details}"
 

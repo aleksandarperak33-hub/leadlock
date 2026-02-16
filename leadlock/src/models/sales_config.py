@@ -50,6 +50,23 @@ class SalesEngineConfig(Base):
     # Custom email templates (overrides AI generation)
     email_templates: Mapped[Optional[dict]] = mapped_column(JSONB)
 
+    # --- Phase 1B: Continuous scraper config ---
+    scraper_interval_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    variant_cooldown_days: Mapped[int] = mapped_column(Integer, default=7)
+
+    # --- Phase 1C: Business hours gating ---
+    send_hours_start: Mapped[str] = mapped_column(String(5), default="08:00")
+    send_hours_end: Mapped[str] = mapped_column(String(5), default="18:00")
+    send_timezone: Mapped[str] = mapped_column(String(50), default="America/Chicago")
+    send_weekdays_only: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # --- Phase 3: Worker controls & budget ---
+    scraper_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    sequencer_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    cleanup_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    monthly_budget_usd: Mapped[Optional[float]] = mapped_column(Float)
+    budget_alert_threshold: Mapped[float] = mapped_column(Float, default=0.8)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow

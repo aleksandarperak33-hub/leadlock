@@ -72,6 +72,11 @@ class Outreach(Base):
     email_unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
     unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    # Campaign association (Phase 3)
+    campaign_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
     # Raw enrichment data
     enrichment_data: Mapped[Optional[dict]] = mapped_column(JSONB)
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, DollarSign,
-  Target, Zap, Activity, LogOut, Menu, X
+  Target, Zap, Activity, LogOut, Menu, X, Send, LineChart
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { to: '/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/outreach', icon: Target, label: 'Outreach' },
   { to: '/sales-engine', icon: Zap, label: 'Sales Engine' },
+  { to: '/campaigns', icon: Send, label: 'Campaigns' },
+  { to: '/insights', icon: LineChart, label: 'Insights' },
 ];
 
 export default function AdminLayout() {

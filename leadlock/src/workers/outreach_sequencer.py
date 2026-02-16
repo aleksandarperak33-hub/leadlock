@@ -1,11 +1,13 @@
 """
 Outreach sequencer worker — sends personalized cold email sequences.
-Runs every 30 minutes. Respects daily email limits and sequence delays.
+Runs every 30 minutes. Respects daily email limits, sequence delays,
+and business hours gating (configurable timezone + weekdays).
 Email first, SMS only after a prospect replies (TCPA compliance).
 """
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +26,123 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
 
+def is_within_send_window(config: SalesEngineConfig) -> bool:
+    """
+    Check if the current time is within the configured send window.
+    Uses config timezone for local time awareness.
+
+    Returns:
+        True if sending is allowed right now, False otherwise.
+    """
+    try:
+        tz_name = getattr(config, "send_timezone", None) or "America/Chicago"
+        tz = ZoneInfo(tz_name)
+    except (KeyError, Exception):
+        logger.warning("Invalid timezone '%s', falling back to America/Chicago", tz_name)
+        tz = ZoneInfo("America/Chicago")
+
+    now_local = datetime.now(tz)
+
+    # Check weekdays only
+    weekdays_only = getattr(config, "send_weekdays_only", True)
+    if weekdays_only and now_local.weekday() >= 5:  # Saturday=5, Sunday=6
+        return False
+
+    # Parse send hours
+    start_str = getattr(config, "send_hours_start", None) or "08:00"
+    end_str = getattr(config, "send_hours_end", None) or "18:00"
+
+    try:
+        start_hour, start_min = map(int, start_str.split(":"))
+        end_hour, end_min = map(int, end_str.split(":"))
+    except (ValueError, AttributeError):
+        start_hour, start_min = 8, 0
+        end_hour, end_min = 18, 0
+
+    current_minutes = now_local.hour * 60 + now_local.minute
+    start_minutes = start_hour * 60 + start_min
+    end_minutes = end_hour * 60 + end_min
+
+    return start_minutes <= current_minutes < end_minutes
+
+
+async def _check_smart_timing(prospect, config) -> bool:
+    """
+    Check if now is the optimal send time for this prospect.
+    If a better time bucket exists and we have enough data, defer by creating
+    a task queue entry for the optimal hour.
+
+    Returns True if the email was deferred, False if it should be sent now.
+    """
+    try:
+        from src.services.learning import get_best_send_time, _time_bucket
+
+        trade = prospect.prospect_trade_type or "general"
+        state = prospect.state_code or ""
+
+        best_bucket = await get_best_send_time(trade, state)
+        if not best_bucket:
+            # Not enough data to make a recommendation — send now
+            return False
+
+        # Check if we're already in the best time bucket
+        try:
+            tz_name = getattr(config, "send_timezone", None) or "America/Chicago"
+            tz = ZoneInfo(tz_name)
+        except (KeyError, Exception):
+            tz = ZoneInfo("America/Chicago")
+
+        now_local = datetime.now(tz)
+        current_bucket = _time_bucket(now_local.hour)
+
+        if current_bucket == best_bucket:
+            return False  # Already optimal — send now
+
+        # Calculate delay to the start of the optimal bucket
+        bucket_start_hours = {
+            "early_morning": 6,
+            "9am-12pm": 9,
+            "12pm-3pm": 12,
+            "3pm-6pm": 15,
+            "evening": 18,
+        }
+        target_hour = bucket_start_hours.get(best_bucket, 9)
+
+        # If target is later today, delay until then
+        # If target is earlier today, delay until tomorrow at that time
+        target_time = now_local.replace(hour=target_hour, minute=0, second=0, microsecond=0)
+        if target_time <= now_local:
+            target_time = target_time + timedelta(days=1)
+
+        delay_seconds = int((target_time - now_local).total_seconds())
+
+        # Don't defer for more than 24 hours
+        if delay_seconds > 86400:
+            return False
+
+        # Create delayed task
+        from src.services.task_dispatch import enqueue_task
+
+        await enqueue_task(
+            task_type="send_sequence_email",
+            payload={
+                "outreach_id": str(prospect.id),
+            },
+            priority=5,
+            delay_seconds=delay_seconds,
+        )
+
+        logger.info(
+            "Smart timing: deferred prospect %s from %s to %s (delay=%ds)",
+            str(prospect.id)[:8], current_bucket, best_bucket, delay_seconds,
+        )
+        return True
+
+    except Exception as e:
+        logger.debug("Smart timing check failed (sending now): %s", str(e))
+        return False
+
+
 async def _heartbeat():
     """Store heartbeat timestamp in Redis."""
     try:
@@ -40,7 +159,14 @@ async def run_outreach_sequencer():
 
     while True:
         try:
-            await sequence_cycle()
+            # Check if sequencer is paused
+            async with async_session_factory() as db:
+                result = await db.execute(select(SalesEngineConfig).limit(1))
+                config = result.scalar_one_or_none()
+                if config and hasattr(config, "sequencer_paused") and config.sequencer_paused:
+                    logger.debug("Outreach sequencer is paused, skipping cycle")
+                else:
+                    await sequence_cycle()
         except Exception as e:
             logger.error("Outreach sequencer error: %s", str(e))
 
@@ -49,13 +175,18 @@ async def run_outreach_sequencer():
 
 
 async def sequence_cycle():
-    """Execute one full outreach sequence cycle."""
+    """Execute one full outreach sequence cycle. Respects business hours gating."""
     async with async_session_factory() as db:
         # Load config
         result = await db.execute(select(SalesEngineConfig).limit(1))
         config = result.scalar_one_or_none()
 
         if not config or not config.is_active:
+            return
+
+        # Business hours gating — only send during configured window
+        if not is_within_send_window(config):
+            logger.info("Outside send window, deferring outreach to next cycle")
             return
 
         if not config.from_email or not config.company_address:
@@ -128,6 +259,15 @@ async def sequence_cycle():
 
         for i, prospect in enumerate(all_prospects):
             try:
+                # Smart send timing: check if now is the optimal time bucket
+                deferred = await _check_smart_timing(prospect, config)
+                if deferred:
+                    logger.debug(
+                        "Prospect %s deferred to optimal send time",
+                        str(prospect.id)[:8],
+                    )
+                    continue
+
                 await send_sequence_email(db, config, settings, prospect)
             except Exception as e:
                 logger.error(

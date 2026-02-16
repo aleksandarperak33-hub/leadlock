@@ -114,6 +114,30 @@ export const api = {
 
   getComplianceSummary: () => request('/compliance/summary'),
 
+  // Lead actions (Phase 2)
+  updateLeadStatus: (id, status) => request(`/leads/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  archiveLead: (id, archived) => request(`/leads/${id}/archive`, { method: 'PUT', body: JSON.stringify({ archived }) }),
+  updateLeadTags: (id, tags) => request(`/leads/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
+  updateLeadNotes: (id, notes) => request(`/leads/${id}/notes`, { method: 'PUT', body: JSON.stringify({ notes }) }),
+
+  // Bookings (Phase 2)
+  getBookings: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/bookings?${qs}`);
+  },
+
+  // Reports (Phase 2)
+  getCustomReport: (start, end) => request(`/reports/custom?start=${start}&end=${end}`),
+  exportLeadsCSV: () => {
+    const token = localStorage.getItem('ll_token');
+    return fetch(`${API_BASE}/leads/export?format=csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(r => {
+      if (!r.ok) throw new Error('Export failed');
+      return r.blob();
+    });
+  },
+
   // Admin endpoints
   getAdminOverview: () => adminRequest('/overview'),
   getAdminClients: (params = {}) => {
@@ -156,6 +180,31 @@ export const api = {
   blacklistProspect: (id) => salesRequest(`/prospects/${id}/blacklist`, { method: 'POST' }),
   getProspectEmails: (id) => salesRequest(`/prospects/${id}/emails`),
 
-  // Worker status
+  // Worker status & controls
   getWorkerStatus: () => salesRequest('/worker-status'),
+  pauseWorker: (name) => salesRequest(`/workers/${name}/pause`, { method: 'POST' }),
+  resumeWorker: (name) => salesRequest(`/workers/${name}/resume`, { method: 'POST' }),
+
+  // Campaigns (Phase 3)
+  getCampaigns: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return salesRequest(`/campaigns?${qs}`);
+  },
+  getCampaign: (id) => salesRequest(`/campaigns/${id}`),
+  createCampaign: (data) => salesRequest('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  updateCampaign: (id, data) => salesRequest(`/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  pauseCampaign: (id) => salesRequest(`/campaigns/${id}/pause`, { method: 'POST' }),
+  resumeCampaign: (id) => salesRequest(`/campaigns/${id}/resume`, { method: 'POST' }),
+
+  // Templates (Phase 3)
+  getTemplates: () => salesRequest('/templates'),
+  createTemplate: (data) => salesRequest('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  updateTemplate: (id, data) => salesRequest(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTemplate: (id) => salesRequest(`/templates/${id}`, { method: 'DELETE' }),
+
+  // Insights (Phase 3)
+  getInsights: () => salesRequest('/insights'),
+
+  // Bulk operations (Phase 3)
+  bulkUpdateProspects: (data) => salesRequest('/prospects/bulk', { method: 'POST', body: JSON.stringify(data) }),
 };

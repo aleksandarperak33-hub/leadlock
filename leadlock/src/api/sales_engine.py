@@ -26,6 +26,104 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/sales", tags=["sales-engine"])
 
 
+async def _record_email_signal(
+    signal_type: str,
+    prospect: Outreach,
+    email_record,
+    value: float,
+) -> None:
+    """Record a learning signal from an email event."""
+    try:
+        from src.services.learning import record_signal, _time_bucket
+
+        sent_hour = email_record.sent_at.hour if email_record.sent_at else 12
+        sent_day = email_record.sent_at.strftime("%A").lower() if email_record.sent_at else "unknown"
+
+        dimensions = {
+            "trade": prospect.prospect_trade_type or "general",
+            "city": prospect.city or "",
+            "state": prospect.state_code or "",
+            "step": str(email_record.sequence_step),
+            "time_bucket": _time_bucket(sent_hour),
+            "day_of_week": sent_day,
+        }
+
+        await record_signal(
+            signal_type=signal_type,
+            dimensions=dimensions,
+            value=value,
+            outreach_id=str(prospect.id),
+        )
+    except Exception as e:
+        logger.warning("Failed to record learning signal: %s", str(e))
+
+
+async def _trigger_sms_followup(
+    db: AsyncSession,
+    prospect: Outreach,
+) -> bool:
+    """
+    Trigger SMS follow-up for an interested prospect.
+    Only sends if config.sms_after_email_reply is enabled and prospect has phone.
+    Uses task queue for deferred delivery during quiet hours.
+
+    Returns True if SMS was sent or queued, False otherwise.
+    """
+    result = await db.execute(select(SalesEngineConfig).limit(1))
+    config = result.scalar_one_or_none()
+
+    if not config:
+        return False
+
+    if not getattr(config, "sms_after_email_reply", False):
+        return False
+
+    if not prospect.prospect_phone:
+        logger.debug("No phone for prospect %s, skipping SMS", str(prospect.id)[:8])
+        return False
+
+    from src.services.outreach_sms import (
+        is_within_sms_quiet_hours,
+        send_outreach_sms,
+        generate_followup_sms_body,
+    )
+
+    # Check quiet hours — if outside, queue for later via task queue
+    if not is_within_sms_quiet_hours(prospect.state_code):
+        try:
+            from src.services.task_dispatch import enqueue_task
+
+            await enqueue_task(
+                task_type="send_sms_followup",
+                payload={
+                    "outreach_id": str(prospect.id),
+                },
+                priority=7,
+                delay_seconds=3600,  # Retry in 1 hour
+            )
+            logger.info(
+                "SMS deferred (quiet hours) for prospect %s, queued for later",
+                str(prospect.id)[:8],
+            )
+            return True
+        except Exception as e:
+            logger.warning("Failed to queue deferred SMS: %s", str(e))
+            return False
+
+    # Generate and send SMS immediately
+    body = await generate_followup_sms_body(prospect)
+    sms_result = await send_outreach_sms(db, prospect, config, body)
+
+    if sms_result.get("error"):
+        logger.warning(
+            "SMS follow-up failed for %s: %s",
+            str(prospect.id)[:8], sms_result["error"],
+        )
+        return False
+
+    return True
+
+
 # === PUBLIC ENDPOINTS (webhooks, unsubscribe) ===
 
 @router.post("/inbound-email")
@@ -99,15 +197,35 @@ async def inbound_email_webhook(
             prospect.status = "lost"
         # auto_reply / out_of_office → no status change
 
+        # Record learning signal for reply
+        if classification in ("interested", "rejection"):
+            signal_value = 1.0 if classification == "interested" else 0.0
+            await _record_email_signal(
+                "email_replied", prospect, email_record, signal_value,
+            )
+
+        # SMS follow-up for interested prospects (Phase 4)
+        sms_sent = False
+        if classification == "interested":
+            try:
+                sms_sent = await _trigger_sms_followup(db, prospect)
+            except Exception as sms_err:
+                logger.warning(
+                    "SMS follow-up trigger failed for %s: %s",
+                    str(prospect.id)[:8], str(sms_err),
+                )
+
         logger.info(
-            "Inbound reply from prospect %s (%s) classified=%s",
-            str(prospect.id)[:8], from_email[:20] + "***", classification,
+            "Inbound reply from prospect %s (%s) classified=%s sms=%s",
+            str(prospect.id)[:8], from_email[:20] + "***",
+            classification, sms_sent,
         )
 
         return {
             "status": "processed",
             "prospect_id": str(prospect.id),
             "classification": classification,
+            "sms_sent": sms_sent,
         }
 
     except Exception as e:
@@ -172,12 +290,19 @@ async def email_events_webhook(
                     prospect = await db.get(Outreach, uuid.UUID(outreach_id))
                     if prospect:
                         prospect.last_email_opened_at = timestamp
+                        # Record learning signal
+                        await _record_email_signal(
+                            "email_opened", prospect, email_record, 1.0,
+                        )
             elif event_type == "click" and not email_record.clicked_at:
                 email_record.clicked_at = timestamp
                 if outreach_id:
                     prospect = await db.get(Outreach, uuid.UUID(outreach_id))
                     if prospect:
                         prospect.last_email_clicked_at = timestamp
+                        await _record_email_signal(
+                            "email_clicked", prospect, email_record, 1.0,
+                        )
             elif event_type in ("bounce", "blocked", "deferred"):
                 email_record.bounced_at = timestamp
                 email_record.bounce_type = event.get("type", event_type)
@@ -190,6 +315,9 @@ async def email_events_webhook(
                             prospect.email_verified = False
                             prospect.status = "lost"
                             prospect.updated_at = timestamp
+                            await _record_email_signal(
+                                "email_bounced", prospect, email_record, 0.0,
+                            )
             elif event_type == "spamreport":
                 # Treat spam report as unsubscribe
                 if outreach_id:
@@ -265,6 +393,17 @@ async def get_sales_config(
         "sms_after_email_reply": config.sms_after_email_reply,
         "sms_from_phone": config.sms_from_phone,
         "email_templates": config.email_templates,
+        "scraper_interval_minutes": config.scraper_interval_minutes,
+        "variant_cooldown_days": config.variant_cooldown_days,
+        "send_hours_start": config.send_hours_start,
+        "send_hours_end": config.send_hours_end,
+        "send_timezone": config.send_timezone,
+        "send_weekdays_only": config.send_weekdays_only,
+        "scraper_paused": config.scraper_paused,
+        "sequencer_paused": config.sequencer_paused,
+        "cleanup_paused": config.cleanup_paused,
+        "monthly_budget_usd": config.monthly_budget_usd,
+        "budget_alert_threshold": config.budget_alert_threshold,
     }
 
 
@@ -289,6 +428,10 @@ async def update_sales_config(
         "max_sequence_steps", "from_email", "from_name", "reply_to_email",
         "company_address", "sms_after_email_reply", "sms_from_phone",
         "email_templates",
+        "scraper_interval_minutes", "variant_cooldown_days",
+        "send_hours_start", "send_hours_end", "send_timezone", "send_weekdays_only",
+        "scraper_paused", "sequencer_paused", "cleanup_paused",
+        "monthly_budget_usd", "budget_alert_threshold",
     ]
 
     for field in allowed_fields:
@@ -489,7 +632,7 @@ async def _run_scrape_background(
     """Background task to run a manual scrape job with auto query rotation."""
     from src.config import get_settings
     from src.services.scraping import search_local_businesses, parse_address_components
-    from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
+    from src.services.enrichment import enrich_prospect_email, extract_domain
     from src.services.phone_validation import normalize_phone
     from src.utils.email_validation import validate_email
     from src.workers.scraper import get_next_variant_and_offset, get_query_variants
@@ -565,21 +708,13 @@ async def _run_scrape_background(
                 email_source = None
                 email_verified = False
                 website = biz.get("website", "")
-                domain = extract_domain(website) if website else None
 
-                if domain and settings.hunter_api_key:
-                    hunter = await find_email_hunter(domain, biz["name"], settings.hunter_api_key)
-                    total_cost += hunter.get("cost_usd", 0)
-                    if hunter.get("email"):
-                        email = hunter["email"]
-                        email_source = "hunter"
-                        email_verified = hunter.get("confidence", 0) >= 80
-
-                if not email and domain:
-                    patterns = guess_email_patterns(domain)
-                    if patterns:
-                        email = patterns[0]
-                        email_source = "pattern_guess"
+                if website:
+                    enrichment = await enrich_prospect_email(website, biz.get("name", ""))
+                    if enrichment.get("email"):
+                        email = enrichment["email"]
+                        email_source = enrichment["source"]
+                        email_verified = enrichment.get("verified", False)
 
                 if email:
                     email_check = await validate_email(email)
@@ -909,7 +1044,7 @@ async def get_worker_status(
         from src.utils.dedup import get_redis
         redis = await get_redis()
 
-        workers = ["scraper", "outreach_sequencer", "outreach_cleanup", "health_monitor"]
+        workers = ["scraper", "outreach_sequencer", "outreach_cleanup", "health_monitor", "task_processor"]
         status = {}
 
         for name in workers:
@@ -966,3 +1101,328 @@ async def get_worker_status(
     except Exception as e:
         logger.error("Worker status check failed: %s", str(e))
         return {"workers": {}, "alerts": {}, "error": str(e)}
+
+
+# === WORKER CONTROLS (Phase 3) ===
+
+@router.post("/workers/{worker_name}/pause")
+async def pause_worker(
+    worker_name: str,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Pause a worker by name."""
+    valid_workers = {"scraper": "scraper_paused", "sequencer": "sequencer_paused", "cleanup": "cleanup_paused"}
+    field = valid_workers.get(worker_name)
+    if not field:
+        raise HTTPException(status_code=400, detail=f"Unknown worker: {worker_name}")
+
+    result = await db.execute(select(SalesEngineConfig).limit(1))
+    config = result.scalar_one_or_none()
+    if config and hasattr(config, field):
+        setattr(config, field, True)
+        config.updated_at = datetime.utcnow()
+    return {"status": "paused", "worker": worker_name}
+
+
+@router.post("/workers/{worker_name}/resume")
+async def resume_worker(
+    worker_name: str,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Resume a paused worker."""
+    valid_workers = {"scraper": "scraper_paused", "sequencer": "sequencer_paused", "cleanup": "cleanup_paused"}
+    field = valid_workers.get(worker_name)
+    if not field:
+        raise HTTPException(status_code=400, detail=f"Unknown worker: {worker_name}")
+
+    result = await db.execute(select(SalesEngineConfig).limit(1))
+    config = result.scalar_one_or_none()
+    if config and hasattr(config, field):
+        setattr(config, field, False)
+        config.updated_at = datetime.utcnow()
+    return {"status": "resumed", "worker": worker_name}
+
+
+# === CAMPAIGNS (Phase 3) ===
+
+@router.get("/campaigns")
+async def list_campaigns(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """List campaigns with pagination."""
+    from src.models.campaign import Campaign
+
+    count_result = await db.execute(select(func.count()).select_from(Campaign))
+    total = count_result.scalar() or 0
+
+    result = await db.execute(
+        select(Campaign)
+        .order_by(desc(Campaign.created_at))
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    campaigns = result.scalars().all()
+
+    return {
+        "campaigns": [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "description": c.description,
+                "status": c.status,
+                "target_trades": c.target_trades or [],
+                "target_locations": c.target_locations or [],
+                "sequence_steps": c.sequence_steps or [],
+                "daily_limit": c.daily_limit,
+                "total_sent": c.total_sent,
+                "total_opened": c.total_opened,
+                "total_replied": c.total_replied,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in campaigns
+        ],
+        "total": total,
+        "page": page,
+    }
+
+
+@router.post("/campaigns")
+async def create_campaign(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Create a new campaign."""
+    from src.models.campaign import Campaign
+
+    name = payload.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    campaign = Campaign(
+        name=name,
+        description=payload.get("description"),
+        status="draft",
+        target_trades=payload.get("target_trades", []),
+        target_locations=payload.get("target_locations", []),
+        target_filters=payload.get("target_filters", {}),
+        sequence_steps=payload.get("sequence_steps", []),
+        daily_limit=payload.get("daily_limit", 25),
+    )
+    db.add(campaign)
+    await db.flush()
+    return {"status": "created", "id": str(campaign.id)}
+
+
+@router.put("/campaigns/{campaign_id}")
+async def update_campaign(
+    campaign_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Update a campaign."""
+    from src.models.campaign import Campaign
+
+    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    allowed = ["name", "description", "target_trades", "target_locations", "target_filters", "sequence_steps", "daily_limit"]
+    for field in allowed:
+        if field in payload:
+            setattr(campaign, field, payload[field])
+
+    campaign.updated_at = datetime.utcnow()
+    return {"status": "updated"}
+
+
+@router.post("/campaigns/{campaign_id}/pause")
+async def pause_campaign(
+    campaign_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Pause an active campaign."""
+    from src.models.campaign import Campaign
+
+    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    campaign.status = "paused"
+    campaign.updated_at = datetime.utcnow()
+    return {"status": "paused"}
+
+
+@router.post("/campaigns/{campaign_id}/resume")
+async def resume_campaign(
+    campaign_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Resume a paused campaign."""
+    from src.models.campaign import Campaign
+
+    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    campaign.status = "active"
+    campaign.updated_at = datetime.utcnow()
+    return {"status": "active"}
+
+
+# === TEMPLATES (Phase 3) ===
+
+@router.get("/templates")
+async def list_templates(
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """List all email templates."""
+    from src.models.email_template import EmailTemplate
+
+    result = await db.execute(
+        select(EmailTemplate).order_by(EmailTemplate.created_at)
+    )
+    templates = result.scalars().all()
+
+    return {
+        "templates": [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "step_type": t.step_type,
+                "subject_template": t.subject_template,
+                "body_template": t.body_template,
+                "ai_instructions": t.ai_instructions,
+                "is_ai_generated": t.is_ai_generated,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in templates
+        ],
+    }
+
+
+@router.post("/templates")
+async def create_template(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Create an email template."""
+    from src.models.email_template import EmailTemplate
+
+    name = payload.get("name", "").strip()
+    step_type = payload.get("step_type", "").strip()
+    if not name or not step_type:
+        raise HTTPException(status_code=400, detail="name and step_type are required")
+
+    template = EmailTemplate(
+        name=name,
+        step_type=step_type,
+        subject_template=payload.get("subject_template"),
+        body_template=payload.get("body_template"),
+        ai_instructions=payload.get("ai_instructions"),
+        is_ai_generated=payload.get("is_ai_generated", True),
+    )
+    db.add(template)
+    await db.flush()
+    return {"status": "created", "id": str(template.id)}
+
+
+@router.put("/templates/{template_id}")
+async def update_template(
+    template_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Update an email template."""
+    from src.models.email_template import EmailTemplate
+
+    template = await db.get(EmailTemplate, uuid.UUID(template_id))
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    allowed = ["name", "step_type", "subject_template", "body_template", "ai_instructions", "is_ai_generated"]
+    for field in allowed:
+        if field in payload:
+            setattr(template, field, payload[field])
+
+    return {"status": "updated"}
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Delete an email template."""
+    from src.models.email_template import EmailTemplate
+
+    template = await db.get(EmailTemplate, uuid.UUID(template_id))
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    await db.delete(template)
+    return {"status": "deleted"}
+
+
+# === INSIGHTS (Phase 3) ===
+
+@router.get("/insights")
+async def get_insights(
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Get learning insights summary for the dashboard."""
+    from src.services.learning import get_insights_summary
+    return await get_insights_summary()
+
+
+# === BULK OPERATIONS (Phase 3) ===
+
+@router.post("/prospects/bulk")
+async def bulk_update_prospects(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Bulk operations on prospects: status change, delete, assign to campaign."""
+    prospect_ids = payload.get("prospect_ids", [])
+    action = payload.get("action", "")
+
+    if not prospect_ids or not action:
+        raise HTTPException(status_code=400, detail="prospect_ids and action are required")
+
+    if len(prospect_ids) > 200:
+        raise HTTPException(status_code=400, detail="Maximum 200 prospects per bulk operation")
+
+    updated = 0
+    for pid in prospect_ids:
+        try:
+            prospect = await db.get(Outreach, uuid.UUID(pid))
+            if not prospect:
+                continue
+
+            if action == "delete":
+                await db.delete(prospect)
+            elif action.startswith("status:"):
+                new_status = action.split(":")[1]
+                prospect.status = new_status
+                prospect.updated_at = datetime.utcnow()
+            elif action.startswith("campaign:"):
+                campaign_id = action.split(":")[1]
+                prospect.campaign_id = uuid.UUID(campaign_id)
+                prospect.updated_at = datetime.utcnow()
+
+            updated += 1
+        except Exception as e:
+            logger.warning("Bulk op failed for %s: %s", pid[:8], str(e))
+
+    return {"status": "completed", "updated": updated, "total": len(prospect_ids)}
