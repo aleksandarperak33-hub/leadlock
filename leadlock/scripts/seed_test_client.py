@@ -74,32 +74,31 @@ async def seed():
 
         if existing:
             logger.info("Test client already exists (id=%s). Skipping.", existing)
-            return
-
-        client = Client(
-            business_name="Austin Comfort HVAC",
-            trade_type="hvac",
-            tier="growth",
-            monthly_fee=997.00,
-            owner_name="David Chen",
-            owner_email="david@austincomforthvac.com",
-            owner_phone="+15125550100",
-            twilio_phone=settings.twilio_phone_number or "+15125550199",
-            twilio_phone_sid="PN_TEST_000000000000000000000000",
-            crm_type="google_sheets",
-            crm_config={"spreadsheet_id": "test_spreadsheet_id_abc123"},
-            config=TEST_CLIENT_CONFIG,
-            billing_status="active",
-            onboarding_status="live",
-            is_active=True,
-            dashboard_email="david@austincomforthvac.com",
-            dashboard_password_hash=bcrypt.hashpw(b"LeadLock2026!", bcrypt.gensalt()).decode(),
-        )
-        session.add(client)
-        await session.commit()
-        logger.info(
-            "Seeded test client: %s (id=%s)", client.business_name, client.id
-        )
+        else:
+            client = Client(
+                business_name="Austin Comfort HVAC",
+                trade_type="hvac",
+                tier="growth",
+                monthly_fee=997.00,
+                owner_name="David Chen",
+                owner_email="david@austincomforthvac.com",
+                owner_phone="+15125550100",
+                twilio_phone=settings.twilio_phone_number or "+15125550199",
+                twilio_phone_sid="PN_TEST_000000000000000000000000",
+                crm_type="google_sheets",
+                crm_config={"spreadsheet_id": "test_spreadsheet_id_abc123"},
+                config=TEST_CLIENT_CONFIG,
+                billing_status="active",
+                onboarding_status="live",
+                is_active=True,
+                dashboard_email="david@austincomforthvac.com",
+                dashboard_password_hash=bcrypt.hashpw(b"LeadLock2026!", bcrypt.gensalt()).decode(),
+            )
+            session.add(client)
+            await session.commit()
+            logger.info(
+                "Seeded test client: %s (id=%s)", client.business_name, client.id
+            )
 
     # Seed admin user
     async with async_session() as session:
