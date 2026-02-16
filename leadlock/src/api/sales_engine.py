@@ -450,10 +450,11 @@ async def list_scrape_jobs(
 @router.post("/scrape-jobs")
 async def trigger_scrape_job(
     payload: dict,
-    db: AsyncSession = Depends(get_db),
     admin=Depends(get_current_admin),
 ):
-    """Manually trigger a scrape job. Returns immediately, runs in background."""
+    """Manually trigger a scrape job. Returns immediately, runs in background.
+    Automatically picks the next query variant + offset to avoid repeat results.
+    """
     from src.config import get_settings
 
     settings = get_settings()
@@ -467,33 +468,11 @@ async def trigger_scrape_job(
     if not city or not state:
         raise HTTPException(status_code=400, detail="city and state are required")
 
-    trade_queries = {
-        "hvac": "HVAC contractors",
-        "plumbing": "plumbing contractors",
-        "roofing": "roofing contractors",
-        "electrical": "electrical contractors",
-        "solar": "solar installation companies",
-        "general": "home services contractors",
-    }
-    query = trade_queries.get(trade, f"{trade} contractors")
-    location_str = f"{city}, {state}"
+    # Generate job ID upfront — background task creates the DB record
+    # in its own session to avoid race condition with handler's uncommitted tx
+    job_id = str(uuid.uuid4())
 
-    # Create job record (queued)
-    job = ScrapeJob(
-        platform="brave",
-        trade_type=trade,
-        location_query=f"{query} in {location_str}",
-        city=city,
-        state_code=state,
-        status="pending",
-        started_at=datetime.utcnow(),
-    )
-    db.add(job)
-    await db.flush()
-    job_id = str(job.id)
-
-    # Run scrape in background task
-    asyncio.create_task(_run_scrape_background(job_id, query, location_str, city, state, trade))
+    asyncio.create_task(_run_scrape_background(job_id, city, state, trade))
 
     return {
         "status": "queued",
@@ -503,34 +482,56 @@ async def trigger_scrape_job(
 
 async def _run_scrape_background(
     job_id: str,
-    query: str,
-    location_str: str,
     city: str,
     state: str,
     trade: str,
 ) -> None:
-    """Background task to run a manual scrape job."""
+    """Background task to run a manual scrape job with auto query rotation."""
     from src.config import get_settings
     from src.services.scraping import search_local_businesses, parse_address_components
     from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
     from src.services.phone_validation import normalize_phone
     from src.utils.email_validation import validate_email
+    from src.workers.scraper import get_next_variant_and_offset, get_query_variants
 
     settings = get_settings()
+    location_str = f"{city}, {state}"
     total_cost = 0.0
     new_count = 0
     dupe_count = 0
 
     async with async_session_factory() as db:
-        job = await db.get(ScrapeJob, uuid.UUID(job_id))
-        if not job:
-            return
+        # Pick next unused query variant + offset for this location+trade
+        variant_idx, offset = await get_next_variant_and_offset(db, city, state, trade)
 
-        job.status = "running"
+        if variant_idx == -1:
+            # All slots exhausted — fall back to variant 0, offset 0
+            variant_idx, offset = 0, 0
+            logger.info("All query variants exhausted for %s in %s, restarting from beginning", trade, location_str)
+
+        variants = get_query_variants(trade)
+        query = variants[variant_idx]
+
+        # Create job record in this session (avoids race with handler's tx)
+        job = ScrapeJob(
+            id=uuid.UUID(job_id),
+            platform="brave",
+            trade_type=trade,
+            location_query=f"{query} in {location_str}",
+            city=city,
+            state_code=state,
+            query_variant=variant_idx,
+            search_offset=offset,
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db.add(job)
         await db.flush()
 
         try:
-            search_results = await search_local_businesses(query, location_str, settings.brave_api_key)
+            search_results = await search_local_businesses(
+                query, location_str, settings.brave_api_key, offset=offset,
+            )
             total_cost += search_results.get("cost_usd", 0)
             all_results = search_results.get("results", [])
 
@@ -580,7 +581,6 @@ async def _run_scrape_background(
                         email = patterns[0]
                         email_source = "pattern_guess"
 
-                # Validate email
                 if email:
                     email_check = await validate_email(email)
                     if not email_check["valid"]:
@@ -617,6 +617,13 @@ async def _run_scrape_background(
             job.duplicates_skipped = dupe_count
             job.api_cost_usd = total_cost
             job.completed_at = datetime.utcnow()
+
+            logger.info(
+                "Manual scrape completed: %s in %s (variant=%d offset=%d query='%s') — "
+                "found=%d new=%d dupes=%d",
+                trade, location_str, variant_idx, offset, query,
+                len(all_results), new_count, dupe_count,
+            )
 
         except Exception as e:
             job.status = "failed"

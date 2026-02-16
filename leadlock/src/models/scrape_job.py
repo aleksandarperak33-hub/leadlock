@@ -31,6 +31,10 @@ class ScrapeJob(Base):
         String(20), default="pending", nullable=False
     )  # pending, running, completed, failed
 
+    # Query rotation tracking — enables "never repeat" scraping
+    query_variant: Mapped[int] = mapped_column(Integer, default=0)
+    search_offset: Mapped[int] = mapped_column(Integer, default=0)
+
     results_found: Mapped[int] = mapped_column(Integer, default=0)
     new_prospects_created: Mapped[int] = mapped_column(Integer, default=0)
     duplicates_skipped: Mapped[int] = mapped_column(Integer, default=0)

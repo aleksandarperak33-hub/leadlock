@@ -42,6 +42,44 @@ async def lifespan(app: FastAPI):
 
     # Sales engine workers — gated behind config flag
     if settings.sales_engine_enabled:
+        if not settings.brave_api_key:
+            logger.error(
+                "SALES_ENGINE_ENABLED=true but BRAVE_API_KEY is not set. "
+                "Scraper will not run until BRAVE_API_KEY is configured."
+            )
+
+        # Ensure SalesEngineConfig row exists (auto-seed if missing)
+        try:
+            from src.database import async_session_factory
+            from src.models.sales_config import SalesEngineConfig
+            from sqlalchemy import select
+
+            async with async_session_factory() as db:
+                result = await db.execute(select(SalesEngineConfig).limit(1))
+                config = result.scalar_one_or_none()
+                if not config:
+                    config = SalesEngineConfig(is_active=False)
+                    db.add(config)
+                    await db.commit()
+                    logger.info(
+                        "Auto-created SalesEngineConfig (inactive). "
+                        "Configure via dashboard or PUT /api/v1/sales/config"
+                    )
+                elif not config.is_active:
+                    logger.info(
+                        "SalesEngineConfig exists but is_active=False. "
+                        "Activate via dashboard or PUT /api/v1/sales/config"
+                    )
+                else:
+                    locs = len(config.target_locations or [])
+                    trades = len(config.target_trade_types or [])
+                    logger.info(
+                        "SalesEngineConfig active: %d locations, %d trades",
+                        locs, trades,
+                    )
+        except Exception as e:
+            logger.warning("Failed to verify SalesEngineConfig: %s", str(e))
+
         from src.workers.scraper import run_scraper
         from src.workers.outreach_sequencer import run_outreach_sequencer
         from src.workers.outreach_cleanup import run_outreach_cleanup
@@ -51,7 +89,7 @@ async def lifespan(app: FastAPI):
         worker_tasks.append(asyncio.create_task(run_outreach_cleanup()))
         logger.info("Sales engine workers started (scraper, sequencer, cleanup)")
     else:
-        logger.info("Sales engine workers disabled (sales_engine_enabled=False)")
+        logger.info("Sales engine workers disabled (SALES_ENGINE_ENABLED=false)")
 
     yield
 

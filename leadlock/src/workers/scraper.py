@@ -1,11 +1,13 @@
 """
 Lead scraper worker — discovers home services contractors via Brave Search API.
-Runs every 6 hours. Respects daily scrape limits and deduplicates by place_id/phone.
+Runs every 6 hours. Uses query rotation + offset pagination so re-scrapes
+always return fresh results instead of duplicates.
+Deduplicates by place_id and phone number.
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from sqlalchemy import select, and_, func
+from datetime import datetime
+from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
@@ -21,15 +23,59 @@ from src.config import get_settings
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours
-RESCRAPE_COOLDOWN_DAYS = 30
+MAX_BRAVE_OFFSET = 9  # Brave Search API max offset
 
-TRADE_QUERIES = {
-    "hvac": "HVAC contractors",
-    "plumbing": "plumbing contractors",
-    "roofing": "roofing contractors",
-    "electrical": "electrical contractors",
-    "solar": "solar installation companies",
-    "general": "home services contractors",
+# Multiple query variations per trade — each produces different Brave results.
+# Rotated across scrape cycles so we always discover new businesses.
+TRADE_QUERY_VARIANTS = {
+    "hvac": [
+        "HVAC contractors",
+        "air conditioning repair companies",
+        "heating and cooling services",
+        "AC installation companies",
+        "furnace repair contractors",
+        "HVAC maintenance services",
+    ],
+    "plumbing": [
+        "plumbing contractors",
+        "plumber near me",
+        "plumbing repair services",
+        "emergency plumbing companies",
+        "drain cleaning services",
+        "water heater installation",
+    ],
+    "roofing": [
+        "roofing contractors",
+        "roof repair companies",
+        "roof replacement services",
+        "commercial roofing contractors",
+        "residential roofers",
+        "roof inspection services",
+    ],
+    "electrical": [
+        "electrical contractors",
+        "electrician services",
+        "electrical repair companies",
+        "licensed electricians",
+        "commercial electrical contractors",
+        "electrical wiring services",
+    ],
+    "solar": [
+        "solar installation companies",
+        "solar panel installers",
+        "residential solar contractors",
+        "solar energy companies",
+        "solar power installation services",
+        "solar panel repair",
+    ],
+    "general": [
+        "home services contractors",
+        "home repair companies",
+        "general contractors",
+        "home improvement contractors",
+        "handyman services",
+        "home maintenance companies",
+    ],
 }
 
 
@@ -41,6 +87,56 @@ async def _heartbeat():
         await redis.set("leadlock:worker_health:scraper", datetime.utcnow().isoformat(), ex=7200)
     except Exception:
         pass
+
+
+def get_query_variants(trade: str) -> list[str]:
+    """Get query variations for a trade type."""
+    return TRADE_QUERY_VARIANTS.get(trade, [f"{trade} contractors"])
+
+
+async def get_next_variant_and_offset(
+    db: AsyncSession,
+    city: str,
+    state: str,
+    trade: str,
+) -> tuple[int, int]:
+    """
+    Determine the next query_variant + search_offset to use for a location+trade.
+    Looks at all completed scrape jobs for this combo and picks the next unused slot.
+
+    Rotation order:
+      variant=0 offset=0 → variant=1 offset=0 → ... → variant=N offset=0
+      → variant=0 offset=1 → variant=1 offset=1 → ... → variant=N offset=1
+      → ... up to MAX_BRAVE_OFFSET
+
+    Returns:
+        (query_variant_index, search_offset) or (-1, -1) if all exhausted.
+    """
+    num_variants = len(get_query_variants(trade))
+    if num_variants == 0:
+        return -1, -1
+
+    # Get all completed scrape jobs for this location+trade
+    result = await db.execute(
+        select(ScrapeJob.query_variant, ScrapeJob.search_offset).where(
+            and_(
+                ScrapeJob.city == city,
+                ScrapeJob.state_code == state,
+                ScrapeJob.trade_type == trade,
+                ScrapeJob.status == "completed",
+            )
+        )
+    )
+    used_slots = {(row[0], row[1]) for row in result.all()}
+
+    # Find the next unused slot: iterate offsets, then variants within each offset
+    for offset in range(MAX_BRAVE_OFFSET + 1):
+        for variant in range(num_variants):
+            if (variant, offset) not in used_slots:
+                return variant, offset
+
+    # All slots exhausted
+    return -1, -1
 
 
 async def run_scraper():
@@ -103,23 +199,25 @@ async def scrape_cycle():
                     logger.info("Daily scrape limit reached during cycle")
                     return
 
-                # Check if recently scraped
-                recent = await db.execute(
-                    select(ScrapeJob).where(
-                        and_(
-                            ScrapeJob.city == city,
-                            ScrapeJob.state_code == state,
-                            ScrapeJob.trade_type == trade,
-                            ScrapeJob.status == "completed",
-                            ScrapeJob.created_at >= datetime.utcnow() - timedelta(days=RESCRAPE_COOLDOWN_DAYS),
-                        )
-                    ).limit(1)
-                )
-                if recent.scalar_one_or_none():
-                    logger.debug("Skipping %s in %s — scraped within %d days", trade, location_str, RESCRAPE_COOLDOWN_DAYS)
+                # Find the next unused query variant + offset for this location+trade
+                variant_idx, offset = await get_next_variant_and_offset(db, city, state, trade)
+
+                if variant_idx == -1:
+                    logger.info(
+                        "All query variants exhausted for %s in %s "
+                        "(%d variants x %d offsets). Skipping.",
+                        trade, location_str,
+                        len(get_query_variants(trade)), MAX_BRAVE_OFFSET + 1,
+                    )
                     continue
 
-                await scrape_location_trade(db, config, settings, city, state, location_str, trade)
+                variants = get_query_variants(trade)
+                query = variants[variant_idx]
+
+                await scrape_location_trade(
+                    db, config, settings, city, state, location_str,
+                    trade, query, variant_idx, offset,
+                )
                 today_scrapes += 1
 
         await db.commit()
@@ -133,10 +231,11 @@ async def scrape_location_trade(
     state: str,
     location_str: str,
     trade: str,
+    query: str,
+    query_variant: int,
+    search_offset: int,
 ):
-    """Scrape a single location+trade combination."""
-    query = TRADE_QUERIES.get(trade, f"{trade} contractors")
-
+    """Scrape a single location+trade combination with specific query variant and offset."""
     # Create scrape job record
     job = ScrapeJob(
         platform="brave",
@@ -144,6 +243,8 @@ async def scrape_location_trade(
         location_query=f"{query} in {location_str}",
         city=city,
         state_code=state,
+        query_variant=query_variant,
+        search_offset=search_offset,
         status="running",
         started_at=datetime.utcnow(),
     )
@@ -155,8 +256,10 @@ async def scrape_location_trade(
     dupe_count = 0
 
     try:
-        # Search via Brave
-        search_results = await search_local_businesses(query, location_str, settings.brave_api_key)
+        # Search via Brave with offset for pagination
+        search_results = await search_local_businesses(
+            query, location_str, settings.brave_api_key, offset=search_offset,
+        )
         total_cost += search_results.get("cost_usd", 0)
         all_results = search_results.get("results", [])
 
@@ -257,8 +360,10 @@ async def scrape_location_trade(
         job.completed_at = datetime.utcnow()
 
         logger.info(
-            "Scrape completed: %s in %s — found=%d new=%d dupes=%d cost=$%.3f",
-            trade, location_str, len(all_results), new_count, dupe_count, total_cost,
+            "Scrape completed: %s in %s (variant=%d offset=%d query='%s') — "
+            "found=%d new=%d dupes=%d cost=$%.3f",
+            trade, location_str, query_variant, search_offset, query,
+            len(all_results), new_count, dupe_count, total_cost,
         )
 
     except Exception as e:

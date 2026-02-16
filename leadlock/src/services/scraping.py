@@ -19,6 +19,7 @@ async def search_local_businesses(
     query: str,
     location: str,
     api_key: str,
+    offset: int = 0,
 ) -> dict:
     """
     Search for local businesses via Brave Search API.
@@ -29,6 +30,7 @@ async def search_local_businesses(
         query: Search term, e.g. "HVAC contractors"
         location: Location string, e.g. "Austin, TX"
         api_key: Brave Search API key
+        offset: Pagination offset (0-9) for deeper results
 
     Returns:
         {"results": [...], "cost_usd": float}
@@ -48,6 +50,7 @@ async def search_local_businesses(
                 "q": f"{query} {location}",
                 "result_filter": "locations",
                 "count": 20,
+                "offset": min(offset, 9),  # Brave max offset is 9
             }
             response = await client.get(
                 BRAVE_SEARCH_URL, params=search_params, headers=headers
