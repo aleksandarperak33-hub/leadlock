@@ -1,41 +1,58 @@
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
+const ACCENT_COLORS = {
+  brand: '#5a72f0',
+  green: '#34d399',
+  yellow: '#fbbf24',
+  red: '#f87171',
+  purple: '#a78bfa',
+};
+
 export default function MetricCard({ title, value, subtitle, trend, trendLabel, icon: Icon, color = 'brand' }) {
-  const colorMap = {
-    brand: 'bg-brand-500/10 text-brand-400',
-    green: 'bg-emerald-500/10 text-emerald-400',
-    yellow: 'bg-amber-500/10 text-amber-400',
-    red: 'bg-red-500/10 text-red-400',
-    purple: 'bg-purple-500/10 text-purple-400',
-  };
+  const accent = ACCENT_COLORS[color] || ACCENT_COLORS.brand;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-slate-400 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-white mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
-        </div>
-        {Icon && (
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorMap[color]}`}>
-            <Icon className="w-5 h-5" />
+    <div
+      className="relative overflow-hidden rounded-card p-4 transition-all duration-200"
+      style={{
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border)',
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-active)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+    >
+      {/* Left accent bar */}
+      <div
+        className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
+        style={{ background: accent, opacity: 0.6 }}
+      />
+
+      <div className="pl-2.5">
+        <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+          {title}
+        </p>
+        <p className="text-2xl font-semibold tracking-tight mt-1 font-mono" style={{ color: 'var(--text-primary)' }}>
+          {value}
+        </p>
+        {subtitle && (
+          <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{subtitle}</p>
+        )}
+        {trend !== undefined && (
+          <div className="flex items-center gap-1 mt-2">
+            {trend >= 0 ? (
+              <ArrowUp className="w-3 h-3" style={{ color: '#34d399' }} />
+            ) : (
+              <ArrowDown className="w-3 h-3" style={{ color: '#f87171' }} />
+            )}
+            <span className="text-[11px] font-medium" style={{ color: trend >= 0 ? '#34d399' : '#f87171' }}>
+              {Math.abs(trend)}%
+            </span>
+            {trendLabel && (
+              <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{trendLabel}</span>
+            )}
           </div>
         )}
       </div>
-      {trend !== undefined && (
-        <div className="flex items-center gap-1.5 mt-3">
-          {trend >= 0 ? (
-            <ArrowUp className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <ArrowDown className="w-3.5 h-3.5 text-red-400" />
-          )}
-          <span className={`text-xs font-medium ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {Math.abs(trend)}%
-          </span>
-          {trendLabel && <span className="text-xs text-slate-500">{trendLabel}</span>}
-        </div>
-      )}
     </div>
   );
 }

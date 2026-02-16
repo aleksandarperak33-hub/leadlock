@@ -63,6 +63,9 @@ class Client(Base):
     dashboard_email: Mapped[Optional[str]] = mapped_column(String(255), unique=True)
     dashboard_password_hash: Mapped[Optional[str]] = mapped_column(String(255))
 
+    # Admin flag — True for LeadLock operators who see the admin dashboard
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Agency partner
     agency_partner_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True

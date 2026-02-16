@@ -6,7 +6,8 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
 
@@ -36,6 +37,7 @@ from src.services.reporting import get_dashboard_metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["dashboard"])
+bearer_scheme = HTTPBearer()
 
 
 # === AUTH ===
@@ -66,6 +68,7 @@ async def login(
     token = jwt.encode(
         {
             "client_id": str(client.id),
+            "is_admin": client.is_admin,
             "exp": datetime.utcnow() + timedelta(hours=settings.dashboard_jwt_expiry_hours),
         },
         settings.dashboard_jwt_secret or settings.app_secret_key,
@@ -76,24 +79,49 @@ async def login(
         token=token,
         client_id=str(client.id),
         business_name=client.business_name,
+        is_admin=client.is_admin,
     )
 
 
 async def get_current_client(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> Client:
-    """
-    Dependency to extract client from JWT token.
-    In production, this reads the Authorization header.
-    For development, we use a query param or the first active client.
-    """
-    # Development fallback — use first active client
+    """Dependency to extract and verify client from JWT Bearer token."""
+    import jwt as pyjwt
+    from src.config import get_settings
+    settings = get_settings()
+
+    try:
+        payload = pyjwt.decode(
+            credentials.credentials,
+            settings.dashboard_jwt_secret or settings.app_secret_key,
+            algorithms=["HS256"],
+        )
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    client_id = payload.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
     result = await db.execute(
-        select(Client).where(Client.is_active == True).limit(1)
+        select(Client).where(and_(Client.id == uuid.UUID(client_id), Client.is_active == True))
     )
     client = result.scalar_one_or_none()
     if not client:
-        raise HTTPException(status_code=401, detail="No authenticated client")
+        raise HTTPException(status_code=401, detail="Client not found")
+    return client
+
+
+async def get_current_admin(
+    client: Client = Depends(get_current_client),
+) -> Client:
+    """Dependency that requires the authenticated client to be an admin."""
+    if not client.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return client
 
 

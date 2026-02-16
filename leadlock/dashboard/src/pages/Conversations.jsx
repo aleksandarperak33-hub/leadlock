@@ -15,7 +15,6 @@ export default function Conversations() {
   const [leadDetail, setLeadDetail] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load lead list
   useEffect(() => {
     const fetchLeads = async () => {
       try {
@@ -30,17 +29,12 @@ export default function Conversations() {
     fetchLeads();
   }, []);
 
-  // Auto-select lead from URL param
   useEffect(() => {
-    if (leadId) {
-      setSelectedLead(leadId);
-    }
+    if (leadId) setSelectedLead(leadId);
   }, [leadId]);
 
-  // Load conversation when lead is selected
   useEffect(() => {
     if (!selectedLead) return;
-
     const fetchConversation = async () => {
       try {
         const [detail, convos] = await Promise.all([
@@ -53,7 +47,6 @@ export default function Conversations() {
         console.error('Failed to fetch conversation:', e);
       }
     };
-
     fetchConversation();
     const interval = setInterval(fetchConversation, 10000);
     return () => clearInterval(interval);
@@ -66,30 +59,39 @@ export default function Conversations() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-white mb-6">Conversations</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-5" style={{ color: 'var(--text-primary)' }}>Conversations</h1>
 
-      <div className="flex gap-4 h-[calc(100vh-180px)]">
-        {/* Lead list panel */}
-        <div className="w-80 flex-shrink-0 bg-slate-900 border border-slate-800 rounded-xl overflow-y-auto hidden lg:block">
-          <div className="p-3 border-b border-slate-800">
-            <p className="text-xs text-slate-400 font-medium">Recent Leads</p>
+      <div className="flex gap-3 h-[calc(100vh-180px)]">
+        {/* Lead list */}
+        <div
+          className="w-72 flex-shrink-0 rounded-card overflow-y-auto hidden lg:block"
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+        >
+          <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+              Recent Leads
+            </p>
           </div>
-          <div className="divide-y divide-slate-800/50">
+          <div>
             {leads.map(lead => (
               <button
                 key={lead.id}
                 onClick={() => selectLead(lead.id)}
-                className={`w-full text-left px-4 py-3 transition-colors ${
-                  selectedLead === lead.id ? 'bg-slate-800' : 'hover:bg-slate-800/50'
-                }`}
+                className="w-full text-left px-4 py-2.5 transition-colors"
+                style={{
+                  background: selectedLead === lead.id ? 'var(--surface-2)' : 'transparent',
+                  borderBottom: '1px solid var(--border)',
+                }}
+                onMouseEnter={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'var(--surface-2)'; }}
+                onMouseLeave={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'transparent'; }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-white font-medium truncate">
+                  <span className="text-[13px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                     {lead.first_name || 'Unknown'} {lead.last_name || ''}
                   </span>
                   <LeadStatusBadge status={lead.state} />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
                   {lead.source?.replace('_', ' ')} &middot; {new Date(lead.created_at).toLocaleDateString()}
                 </p>
               </button>
@@ -98,47 +100,57 @@ export default function Conversations() {
         </div>
 
         {/* Conversation panel */}
-        <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden">
+        <div
+          className="flex-1 rounded-card flex flex-col overflow-hidden"
+          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+        >
           {!selectedLead ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-              <MessageSquare className="w-12 h-12 mb-3" />
-              <p>Select a lead to view their conversation</p>
+            <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
+              <MessageSquare className="w-8 h-8 mb-3" strokeWidth={1.5} />
+              <p className="text-[13px]">Select a lead to view their conversation</p>
             </div>
           ) : (
             <>
-              {/* Lead detail header */}
               {leadDetail?.lead && (
-                <div className="px-5 py-4 border-b border-slate-800">
-                  <div className="flex items-center gap-3 mb-2">
+                <div className="px-5 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={() => { setSelectedLead(null); navigate('/conversations'); }}
-                      className="lg:hidden text-slate-400"
+                      className="lg:hidden"
+                      style={{ color: 'var(--text-tertiary)' }}
                     >
-                      <ArrowLeft className="w-5 h-5" />
+                      <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-slate-400" />
+                    <div
+                      className="w-8 h-8 rounded-md flex items-center justify-center"
+                      style={{ background: 'var(--surface-3)' }}
+                    >
+                      <User className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">
+                      <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
                         {leadDetail.lead.first_name || 'Unknown'} {leadDetail.lead.last_name || ''}
                       </p>
-                      <p className="text-xs text-slate-500">{leadDetail.lead.phone_masked}</p>
+                      <p className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{leadDetail.lead.phone_masked}</p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                       <LeadStatusBadge status={leadDetail.lead.state} />
-                      <span className="text-xs text-slate-500 capitalize">{leadDetail.lead.source?.replace('_', ' ')}</span>
+                      <span className="text-[11px] capitalize" style={{ color: 'var(--text-tertiary)' }}>
+                        {leadDetail.lead.source?.replace('_', ' ')}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Booking card */}
                   {leadDetail.booking && (
-                    <div className="mt-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                      <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium mb-1">
-                        <Calendar className="w-4 h-4" />
+                    <div
+                      className="mt-3 px-3.5 py-2.5 rounded-md"
+                      style={{ background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.12)' }}
+                    >
+                      <div className="flex items-center gap-1.5 text-[12px] font-medium mb-0.5" style={{ color: '#34d399' }}>
+                        <Calendar className="w-3.5 h-3.5" />
                         Appointment Booked
                       </div>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                         {leadDetail.booking.appointment_date}
                         {leadDetail.booking.time_window_start && ` at ${leadDetail.booking.time_window_start}`}
                         {leadDetail.booking.tech_name && ` with ${leadDetail.booking.tech_name}`}
@@ -148,24 +160,24 @@ export default function Conversations() {
                 </div>
               )}
 
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-5">
                 <ConversationThread messages={conversations} />
               </div>
 
-              {/* Timeline */}
               {leadDetail?.events?.length > 0 && (
-                <div className="px-5 py-3 border-t border-slate-800 max-h-32 overflow-y-auto">
-                  <p className="text-[10px] text-slate-500 font-medium mb-2 uppercase tracking-wider">Timeline</p>
-                  <div className="space-y-1">
+                <div className="px-5 py-2.5 max-h-28 overflow-y-auto" style={{ borderTop: '1px solid var(--border)' }}>
+                  <p className="text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                    Timeline
+                  </p>
+                  <div className="space-y-0.5">
                     {leadDetail.events.slice(-5).map(event => (
                       <div key={event.id} className="flex items-center gap-2 text-[11px]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                        <span className="text-slate-500">{event.action.replace('_', ' ')}</span>
+                        <span className="w-1 h-1 rounded-full" style={{ background: 'var(--text-tertiary)' }} />
+                        <span style={{ color: 'var(--text-tertiary)' }}>{event.action.replace('_', ' ')}</span>
                         {event.duration_ms && (
-                          <span className="text-slate-600">{event.duration_ms}ms</span>
+                          <span className="font-mono" style={{ color: 'var(--text-tertiary)' }}>{event.duration_ms}ms</span>
                         )}
-                        <span className="text-slate-600 ml-auto">
+                        <span className="ml-auto font-mono" style={{ color: 'var(--text-tertiary)' }}>
                           {format(new Date(event.created_at), 'h:mm a')}
                         </span>
                       </div>

@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
-import LeadStatusBadge from '../components/LeadStatusBadge';
-import { Search, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { api } from '../../api/client';
+import { Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 
 const STATE_FILTERS = ['all', 'new', 'qualifying', 'qualified', 'booked', 'cold', 'opted_out'];
 
-export default function LeadFeed() {
-  const navigate = useNavigate();
+export default function AdminLeads() {
   const [leads, setLeads] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -16,29 +13,36 @@ export default function LeadFeed() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const fetchLeads = async () => {
-    try {
-      const params = { page, per_page: 20 };
-      if (stateFilter !== 'all') params.state = stateFilter;
-      if (search) params.search = search;
+  useEffect(() => {
+    const fetchLeads = async () => {
+      setLoading(true);
+      try {
+        const params = { page, per_page: 25 };
+        if (stateFilter !== 'all') params.state = stateFilter;
+        if (search) params.search = search;
+        const data = await api.getAdminLeads(params);
+        setLeads(data.leads || []);
+        setTotal(data.total || 0);
+        setPages(data.pages || 1);
+      } catch (e) {
+        console.error('Failed to fetch admin leads:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeads();
+  }, [page, stateFilter, search]);
 
-      const data = await api.getLeads(params);
-      setLeads(data.leads || []);
-      setTotal(data.total || 0);
-      setPages(data.pages || 1);
-    } catch (e) {
-      console.error('Failed to fetch leads:', e);
-    } finally {
-      setLoading(false);
+  const stateColor = (state) => {
+    switch (state) {
+      case 'booked': case 'completed': return '#34d399';
+      case 'qualified': case 'qualifying': return '#5a72f0';
+      case 'new': case 'intake_sent': return '#fbbf24';
+      case 'cold': case 'dead': return '#f87171';
+      case 'opted_out': return '#ef4444';
+      default: return 'var(--text-tertiary)';
     }
   };
-
-  useEffect(() => {
-    setLoading(true);
-    fetchLeads();
-    const interval = setInterval(fetchLeads, 15000);
-    return () => clearInterval(interval);
-  }, [page, stateFilter, search]);
 
   const responseTimeColor = (ms) => {
     if (!ms) return 'var(--text-tertiary)';
@@ -50,7 +54,7 @@ export default function LeadFeed() {
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Leads</h1>
+        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>All Leads</h1>
         <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
       </div>
 
@@ -60,22 +64,18 @@ export default function LeadFeed() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
           <input
             type="text"
-            placeholder="Search name, phone, service..."
+            placeholder="Search name, phone, service, client..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-4 py-2 rounded-md text-[13px] outline-none transition-colors"
-            style={{
-              background: 'var(--surface-1)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
-            }}
+            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
             onFocus={e => e.target.style.borderColor = 'var(--border-active)'}
             onBlur={e => e.target.style.borderColor = 'var(--border)'}
           />
         </div>
       </div>
 
-      {/* Filter chips */}
+      {/* State filters */}
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
         {STATE_FILTERS.map(s => (
           <button
@@ -85,7 +85,7 @@ export default function LeadFeed() {
             style={{
               background: stateFilter === s ? 'var(--accent-muted)' : 'transparent',
               color: stateFilter === s ? 'var(--accent)' : 'var(--text-tertiary)',
-              border: stateFilter === s ? '1px solid rgba(90, 114, 240, 0.2)' : '1px solid var(--border)',
+              border: stateFilter === s ? '1px solid rgba(124, 91, 240, 0.2)' : '1px solid var(--border)',
             }}
           >
             {s === 'all' ? 'All' : s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
@@ -99,7 +99,7 @@ export default function LeadFeed() {
           <table className="w-full">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Phone', 'Source', 'Status', 'Score', 'Service', 'Response', 'Date'].map(h => (
+                {['Name', 'Client', 'Phone', 'Source', 'Status', 'Score', 'Response', 'Date'].map(h => (
                   <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {h}
                   </th>
@@ -107,7 +107,7 @@ export default function LeadFeed() {
               </tr>
             </thead>
             <tbody>
-              {loading && leads.length === 0 ? (
+              {loading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td colSpan={8} className="px-4 py-3.5">
@@ -122,36 +122,40 @@ export default function LeadFeed() {
                   </td>
                 </tr>
               ) : leads.map(lead => (
-                <tr
-                  key={lead.id}
-                  onClick={() => navigate(`/conversations/${lead.id}`)}
-                  className="cursor-pointer transition-colors"
-                  style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
+                <tr key={lead.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td className="px-4 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
                     {lead.first_name || 'Unknown'} {lead.last_name || ''}
                   </td>
-                  <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{lead.phone_masked}</td>
-                  <td className="px-4 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-tertiary)' }}>{lead.source?.replace('_', ' ')}</td>
-                  <td className="px-4 py-2.5"><LeadStatusBadge status={lead.state} /></td>
+                  <td className="px-4 py-2.5 text-[12px]" style={{ color: 'var(--accent)' }}>
+                    {lead.client_name || '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                    {lead.phone_masked || '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-tertiary)' }}>
+                    {(lead.source || '').replace('_', ' ')}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] font-medium capitalize px-1.5 py-0.5 rounded"
+                      style={{ color: stateColor(lead.state), background: `${stateColor(lead.state)}15` }}>
+                      {(lead.state || '').replace('_', ' ')}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <div className="w-10 rounded-full h-1" style={{ background: 'var(--surface-3)' }}>
                         <div
                           className="h-1 rounded-full"
                           style={{
-                            width: `${lead.score}%`,
-                            background: lead.score >= 70 ? '#34d399' : lead.score >= 40 ? '#fbbf24' : '#f87171',
+                            width: `${lead.score || 0}%`,
+                            background: (lead.score || 0) >= 70 ? '#34d399' : (lead.score || 0) >= 40 ? '#fbbf24' : '#f87171',
                             opacity: 0.75,
                           }}
                         />
                       </div>
-                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{lead.score}</span>
+                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{lead.score ?? '—'}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-[12px] max-w-[120px] truncate" style={{ color: 'var(--text-tertiary)' }}>{lead.service_type || '\u2014'}</td>
                   <td className="px-4 py-2.5">
                     {lead.first_response_ms ? (
                       <span className="text-[11px] font-mono font-medium flex items-center gap-1" style={{ color: responseTimeColor(lead.first_response_ms) }}>
@@ -159,11 +163,11 @@ export default function LeadFeed() {
                         {(lead.first_response_ms / 1000).toFixed(1)}s
                       </span>
                     ) : (
-                      <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>\u2014</span>
+                      <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{'\u2014'}</span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                    {new Date(lead.created_at).toLocaleDateString()}
+                    {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
@@ -176,20 +180,10 @@ export default function LeadFeed() {
           <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: '1px solid var(--border)' }}>
             <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>Page {page} of {pages}</span>
             <div className="flex gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1 rounded transition-colors disabled:opacity-20"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1 rounded disabled:opacity-20" style={{ color: 'var(--text-tertiary)' }}>
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setPage(p => Math.min(pages, p + 1))}
-                disabled={page === pages}
-                className="p-1 rounded transition-colors disabled:opacity-20"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
+              <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages} className="p-1 rounded disabled:opacity-20" style={{ color: 'var(--text-tertiary)' }}>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

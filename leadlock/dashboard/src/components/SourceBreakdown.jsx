@@ -11,48 +11,63 @@ const SOURCE_LABELS = {
 };
 
 const SOURCE_COLORS = {
-  google_lsa: 'bg-blue-500',
-  angi: 'bg-orange-500',
-  facebook: 'bg-indigo-500',
-  website: 'bg-emerald-500',
-  missed_call: 'bg-amber-500',
-  text_in: 'bg-cyan-500',
-  thumbtack: 'bg-green-500',
-  referral: 'bg-purple-500',
-  yelp: 'bg-red-500',
+  google_lsa: '#5a72f0',
+  angi: '#f59e0b',
+  facebook: '#818cf8',
+  website: '#34d399',
+  missed_call: '#fbbf24',
+  text_in: '#22d3ee',
+  thumbtack: '#4ade80',
+  referral: '#a78bfa',
+  yelp: '#f87171',
 };
 
 export default function SourceBreakdown({ data = {} }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
   const max = Math.max(...entries.map(([, v]) => v), 1);
+  const total = entries.reduce((sum, [, v]) => sum + v, 0);
 
   if (!entries.length) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <h3 className="text-sm font-medium text-slate-400 mb-4">Leads by Source</h3>
-        <p className="text-slate-500 text-sm">No data available</p>
+      <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+          Leads by Source
+        </h3>
+        <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No data available</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-      <h3 className="text-sm font-medium text-slate-400 mb-4">Leads by Source</h3>
+    <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+        Leads by Source
+      </h3>
       <div className="space-y-3">
-        {entries.map(([source, count]) => (
-          <div key={source}>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-slate-300">{SOURCE_LABELS[source] || source}</span>
-              <span className="text-slate-400 font-medium">{count}</span>
+        {entries.map(([source, count]) => {
+          const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
+          return (
+            <div key={source}>
+              <div className="flex items-center justify-between text-[12px] mb-1.5">
+                <span style={{ color: 'var(--text-secondary)' }}>{SOURCE_LABELS[source] || source}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{pct}%</span>
+                  <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</span>
+                </div>
+              </div>
+              <div className="w-full rounded-full h-[5px]" style={{ background: 'var(--surface-3)' }}>
+                <div
+                  className="h-[5px] rounded-full transition-all duration-700"
+                  style={{
+                    width: `${(count / max) * 100}%`,
+                    background: SOURCE_COLORS[source] || '#5a72f0',
+                    opacity: 0.75,
+                  }}
+                />
+              </div>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all duration-500 ${SOURCE_COLORS[source] || 'bg-slate-500'}`}
-                style={{ width: `${(count / max) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

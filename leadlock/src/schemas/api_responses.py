@@ -15,6 +15,7 @@ class LoginResponse(BaseModel):
     token: str
     client_id: str
     business_name: str
+    is_admin: bool = False
 
 
 class LeadSummary(BaseModel):

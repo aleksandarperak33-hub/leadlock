@@ -1,20 +1,45 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout';
+import AdminLayout from './layouts/AdminLayout';
 import Dashboard from './pages/Dashboard';
 import LeadFeed from './pages/LeadFeed';
 import Conversations from './pages/Conversations';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import AdminOverview from './pages/admin/AdminOverview';
+import AdminClients from './pages/admin/AdminClients';
+import AdminClientDetail from './pages/admin/AdminClientDetail';
+import AdminLeads from './pages/admin/AdminLeads';
+import AdminRevenue from './pages/admin/AdminRevenue';
+import AdminOutreach from './pages/admin/AdminOutreach';
 
 function App() {
   const token = localStorage.getItem('ll_token');
+  const isAdmin = localStorage.getItem('ll_is_admin') === 'true';
 
   if (!token) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <Routes>
+        <Route element={<AdminLayout />}>
+          <Route path="/" element={<AdminOverview />} />
+          <Route path="/clients" element={<AdminClients />} />
+          <Route path="/clients/:clientId" element={<AdminClientDetail />} />
+          <Route path="/leads" element={<AdminLeads />} />
+          <Route path="/revenue" element={<AdminRevenue />} />
+          <Route path="/outreach" element={<AdminOutreach />} />
+        </Route>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }

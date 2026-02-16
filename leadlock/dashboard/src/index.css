@@ -1,22 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --surface-0: #0a0c10;
+    --surface-1: #0f1117;
+    --surface-2: #161820;
+    --surface-3: #1c1f2a;
+    --border: rgba(148, 163, 184, 0.08);
+    --border-active: rgba(148, 163, 184, 0.16);
+    --text-primary: #e8eaed;
+    --text-secondary: #8b92a5;
+    --text-tertiary: #5a6178;
+    --accent: #5a72f0;
+    --accent-muted: rgba(90, 114, 240, 0.12);
+  }
+
   body {
-    @apply bg-slate-950 text-slate-100;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+  }
+
+  * {
+    border-color: var(--border);
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; }
+/* Refined scrollbar — barely visible until hovered */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgb(51 65 85); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgb(71 85 105); }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.1); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.2); }
 
-/* Pulse animation for live indicators */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* Subtle live pulse */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.92); }
 }
-.animate-pulse-dot { animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.animate-live-pulse {
+  animation: live-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Glow ring for live dot */
+@keyframes glow-ring {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.animate-glow-ring {
+  animation: glow-ring 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Selection */
+::selection {
+  background: rgba(90, 114, 240, 0.3);
+  color: #fff;
+}
+
+/* Admin theme override — indigo/purple tint */
+.admin-theme {
+  --accent: #7c5bf0;
+  --accent-muted: rgba(124, 91, 240, 0.12);
+}
+.admin-theme ::selection {
+  background: rgba(124, 91, 240, 0.3);
+}
+
+/* Card surface utility */
+.surface-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* Print styles */
+@media print {
+  body { background: white; color: black; }
+  .no-print { display: none !important; }
+}

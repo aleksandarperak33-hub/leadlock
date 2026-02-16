@@ -9,6 +9,7 @@ from src.models.booking import Booking
 from src.models.followup import FollowupTask
 from src.models.event_log import EventLog
 from src.models.agency_partner import AgencyPartner
+from src.models.outreach import Outreach
 
 __all__ = [
     "Client",
@@ -19,4 +20,5 @@ __all__ = [
     "FollowupTask",
     "EventLog",
     "AgencyPartner",
+    "Outreach",
 ]

@@ -1,22 +1,21 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, MessageSquare, BarChart3,
-  Settings, LogOut, Menu, X, Shield
+  LayoutDashboard, Users, FileText, DollarSign,
+  Target, Activity, LogOut, Menu, X, Shield
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/leads', icon: Users, label: 'Leads' },
-  { to: '/conversations', icon: MessageSquare, label: 'Conversations' },
-  { to: '/reports', icon: BarChart3, label: 'Reports' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/clients', icon: Users, label: 'Clients' },
+  { to: '/leads', icon: FileText, label: 'All Leads' },
+  { to: '/revenue', icon: DollarSign, label: 'Revenue' },
+  { to: '/outreach', icon: Target, label: 'Outreach' },
 ];
 
-export default function DashboardLayout() {
+export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
-  const businessName = localStorage.getItem('ll_business') || 'LeadLock';
 
   const handleLogout = () => {
     localStorage.removeItem('ll_token');
@@ -26,7 +25,7 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--surface-0)' }}>
+    <div className="admin-theme flex h-screen overflow-hidden" style={{ background: 'var(--surface-0)' }}>
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-[220px] flex flex-col
@@ -41,17 +40,14 @@ export default function DashboardLayout() {
             <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--accent)' }}>
               <span className="text-white text-xs font-bold tracking-tight">L</span>
             </div>
-            <span className="text-[13px] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>LeadLock</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[13px] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>LeadLock</span>
+              <span className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-muted)', color: 'var(--accent)' }}>Admin</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden" style={{ color: 'var(--text-tertiary)' }}>
             <X className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Client name */}
-        <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Client</p>
-          <p className="text-[13px] font-medium truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>{businessName}</p>
         </div>
 
         {/* Navigation */}
@@ -62,13 +58,7 @@ export default function DashboardLayout() {
               to={to}
               end={to === '/'}
               onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) => `
-                flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] font-medium transition-all duration-150
-                ${isActive
-                  ? 'text-white'
-                  : 'hover:text-[var(--text-primary)]'
-                }
-              `}
+              className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] font-medium transition-all duration-150"
               style={({ isActive }) => ({
                 color: isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
                 background: isActive ? 'var(--surface-3)' : 'transparent',
@@ -80,11 +70,11 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        {/* Compliance badge */}
-        <div className="mx-3 mb-2 px-3 py-2 rounded-md" style={{ background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.1)' }}>
+        {/* System status */}
+        <div className="mx-3 mb-2 px-3 py-2 rounded-md" style={{ background: 'rgba(124, 91, 240, 0.06)', border: '1px solid rgba(124, 91, 240, 0.1)' }}>
           <div className="flex items-center gap-1.5">
-            <Shield className="w-3 h-3" style={{ color: 'rgba(52, 211, 153, 0.7)' }} />
-            <span className="text-[11px] font-medium" style={{ color: 'rgba(52, 211, 153, 0.7)' }}>TCPA Compliant</span>
+            <Activity className="w-3 h-3" style={{ color: 'rgba(124, 91, 240, 0.7)' }} />
+            <span className="text-[11px] font-medium" style={{ color: 'rgba(124, 91, 240, 0.7)' }}>System Active</span>
           </div>
         </div>
 
@@ -115,7 +105,7 @@ export default function DashboardLayout() {
           <button onClick={() => setSidebarOpen(true)} style={{ color: 'var(--text-tertiary)' }}>
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-[13px] font-semibold tracking-tight">LeadLock</span>
+          <span className="text-[13px] font-semibold tracking-tight">LeadLock Admin</span>
         </div>
 
         <div className="p-5 lg:p-8 max-w-[1200px] mx-auto">

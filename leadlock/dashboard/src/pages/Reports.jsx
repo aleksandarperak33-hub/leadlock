@@ -23,8 +23,8 @@ export default function Reports() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-8 w-48 bg-slate-800 rounded animate-pulse" />
-        <div className="h-96 bg-slate-900 border border-slate-800 rounded-xl animate-pulse" />
+        <div className="h-6 w-40 rounded animate-pulse" style={{ background: 'var(--surface-2)' }} />
+        <div className="h-96 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
       </div>
     );
   }
@@ -32,88 +32,74 @@ export default function Reports() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-white">Weekly Report</h1>
+        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Weekly Report</h1>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
         >
-          <Printer className="w-4 h-4" />
-          Print Report
+          <Printer className="w-3.5 h-3.5" />
+          Print
         </button>
       </div>
 
       {report && (
-        <div className="space-y-6">
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-2">
-                <Users className="w-4 h-4" /> Total Leads
+        <div className="space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Leads', value: report.total_leads, accent: '#5a72f0' },
+              { label: 'Booked', value: report.total_booked, sub: `${(report.conversion_rate * 100).toFixed(1)}% conversion`, accent: '#34d399' },
+              { label: 'Avg Response', value: `${(report.avg_response_time_ms / 1000).toFixed(1)}s`, accent: '#fbbf24' },
+              { label: 'Total Cost', value: `$${(report.total_ai_cost + report.total_sms_cost).toFixed(2)}`, sub: `AI: $${report.total_ai_cost.toFixed(2)} | SMS: $${report.total_sms_cost.toFixed(2)}`, accent: '#a78bfa' },
+            ].map(({ label, value, sub, accent }) => (
+              <div key={label} className="relative overflow-hidden rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+                <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: accent, opacity: 0.6 }} />
+                <div className="pl-2.5">
+                  <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
+                  <p className="text-xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>{value}</p>
+                  {sub && <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{sub}</p>}
+                </div>
               </div>
-              <p className="text-2xl font-bold text-white">{report.total_leads}</p>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-2">
-                <CalendarCheck className="w-4 h-4" /> Booked
-              </div>
-              <p className="text-2xl font-bold text-emerald-400">{report.total_booked}</p>
-              <p className="text-xs text-slate-500 mt-1">{(report.conversion_rate * 100).toFixed(1)}% conversion</p>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-2">
-                <Clock className="w-4 h-4" /> Avg Response
-              </div>
-              <p className="text-2xl font-bold text-white">{(report.avg_response_time_ms / 1000).toFixed(1)}s</p>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-medium mb-2">
-                <DollarSign className="w-4 h-4" /> Total Cost
-              </div>
-              <p className="text-2xl font-bold text-white">
-                ${(report.total_ai_cost + report.total_sms_cost).toFixed(2)}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                AI: ${report.total_ai_cost.toFixed(2)} | SMS: ${report.total_sms_cost.toFixed(2)}
-              </p>
-            </div>
+            ))}
           </div>
 
-          {/* Leads by source table */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-slate-400 mb-4">Leads by Source</h3>
+          {/* Leads by source */}
+          <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <h3 className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Leads by Source</h3>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left py-2 text-xs font-medium text-slate-500">Source</th>
-                  <th className="text-right py-2 text-xs font-medium text-slate-500">Count</th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th className="text-left py-2 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Source</th>
+                  <th className="text-right py-2 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Count</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(report.leads_by_source || {}).sort((a, b) => b[1] - a[1]).map(([source, count]) => (
-                  <tr key={source} className="border-b border-slate-800/50">
-                    <td className="py-2 text-sm text-slate-300 capitalize">{source.replace('_', ' ')}</td>
-                    <td className="py-2 text-sm text-white text-right font-medium">{count}</td>
+                  <tr key={source} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td className="py-2 text-[13px] capitalize" style={{ color: 'var(--text-secondary)' }}>{source.replace('_', ' ')}</td>
+                    <td className="py-2 text-[13px] text-right font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Leads by state table */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-slate-400 mb-4">Leads by State</h3>
+          {/* Leads by state */}
+          <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <h3 className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Leads by State</h3>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left py-2 text-xs font-medium text-slate-500">State</th>
-                  <th className="text-right py-2 text-xs font-medium text-slate-500">Count</th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th className="text-left py-2 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>State</th>
+                  <th className="text-right py-2 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Count</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(report.leads_by_state || {}).sort((a, b) => b[1] - a[1]).map(([state, count]) => (
-                  <tr key={state} className="border-b border-slate-800/50">
-                    <td className="py-2 text-sm text-slate-300 capitalize">{state.replace('_', ' ')}</td>
-                    <td className="py-2 text-sm text-white text-right font-medium">{count}</td>
+                  <tr key={state} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td className="py-2 text-[13px] capitalize" style={{ color: 'var(--text-secondary)' }}>{state.replace('_', ' ')}</td>
+                    <td className="py-2 text-[13px] text-right font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -121,15 +107,20 @@ export default function Reports() {
           </div>
 
           {/* Response time distribution */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-slate-400 mb-4">Response Time Distribution</h3>
-            <div className="grid grid-cols-4 gap-3">
-              {(report.response_time_distribution || []).map(bucket => (
-                <div key={bucket.bucket} className="text-center p-3 bg-slate-800 rounded-lg">
-                  <p className="text-lg font-bold text-white">{bucket.count}</p>
-                  <p className="text-xs text-slate-400">{bucket.bucket}</p>
-                </div>
-              ))}
+          <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <h3 className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Response Time Distribution</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {(report.response_time_distribution || []).map(bucket => {
+                const color = bucket.bucket === '0-10s' ? '#34d399' :
+                              bucket.bucket === '10-30s' ? '#5a72f0' :
+                              bucket.bucket === '30-60s' ? '#fbbf24' : '#f87171';
+                return (
+                  <div key={bucket.bucket} className="text-center p-3 rounded-md" style={{ background: 'var(--surface-2)' }}>
+                    <p className="text-lg font-semibold font-mono" style={{ color }}>{bucket.count}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{bucket.bucket}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
