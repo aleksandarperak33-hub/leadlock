@@ -80,6 +80,8 @@ async def search_local_businesses(
         # Brave POI response fields: title, url, postal_address, contact, categories, results (nested)
         results = []
         for poi in (poi_data.get("results") or []):
+            if not poi:
+                continue
             # Name — Brave uses "title" not "name"
             name = poi.get("title") or poi.get("name") or ""
 
