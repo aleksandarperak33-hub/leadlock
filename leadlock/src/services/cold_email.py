@@ -102,17 +102,13 @@ async def send_cold_email(
         ]
         message.reply_to = ReplyTo(reply_to)
 
-        # Headers (use dict to set all at once, avoiding overwrite)
-        headers = {
-            "List-Unsubscribe": f"<{unsubscribe_url}>",
-            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        }
-        # Email threading headers for follow-ups
+        # Headers (add individually — Mail.headers has no setter)
+        message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
+        message.header = Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
         if in_reply_to:
-            headers["In-Reply-To"] = f"<{in_reply_to}>"
+            message.header = Header("In-Reply-To", f"<{in_reply_to}>")
         if references:
-            headers["References"] = references
-        message.headers = headers
+            message.header = Header("References", references)
 
         # Custom args for webhook tracking
         if custom_args:
@@ -120,10 +116,13 @@ async def send_cold_email(
                 message.custom_arg = CustomArg(key, str(value))
 
         # Enable open and click tracking
-        message.tracking_settings = {
-            "open_tracking": {"enable": True},
-            "click_tracking": {"enable": True},
-        }
+        from sendgrid.helpers.mail import (
+            TrackingSettings, OpenTracking, ClickTracking,
+        )
+        message.tracking_settings = TrackingSettings(
+            open_tracking=OpenTracking(enable=True),
+            click_tracking=ClickTracking(enable=True),
+        )
 
         sg = SendGridAPIClient(api_key=settings.sendgrid_api_key)
 
