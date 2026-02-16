@@ -127,7 +127,10 @@ export const api = {
   },
   getAdminRevenue: (period = '30d') => adminRequest(`/revenue?period=${period}`),
   getAdminHealth: () => adminRequest('/health'),
-  getAdminOutreach: () => adminRequest('/outreach'),
+  getAdminOutreach: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminRequest(`/outreach?${qs}`);
+  },
   createOutreach: (data) => adminRequest('/outreach', { method: 'POST', body: JSON.stringify(data) }),
   updateOutreach: (id, data) => adminRequest(`/outreach/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteOutreach: (id) => adminRequest(`/outreach/${id}`, { method: 'DELETE' }),

@@ -23,6 +23,10 @@ const inputStyle = {
 
 export default function AdminOutreach() {
   const [prospects, setProspects] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('board');
   const [showForm, setShowForm] = useState(false);
@@ -35,8 +39,12 @@ export default function AdminOutreach() {
 
   const fetchOutreach = async () => {
     try {
-      const data = await api.getAdminOutreach();
+      const params = { page, per_page: 50 };
+      if (statusFilter) params.status = statusFilter;
+      const data = await api.getAdminOutreach(params);
       setProspects(data.prospects || data || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.pages || 1);
     } catch (e) {
       console.error('Failed to fetch outreach:', e);
     } finally {
@@ -44,7 +52,7 @@ export default function AdminOutreach() {
     }
   };
 
-  useEffect(() => { fetchOutreach(); }, []);
+  useEffect(() => { fetchOutreach(); }, [page, statusFilter]);
 
   const resetForm = () => {
     setForm({
@@ -272,6 +280,33 @@ export default function AdminOutreach() {
         </div>
       )}
 
+      {/* Filters & Pagination */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 rounded-md text-[12px] outline-none"
+            style={inputStyle}
+          >
+            <option value="">All Statuses</option>
+            {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+          </select>
+          <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} prospects</span>
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+              className="px-2 py-1 text-[11px] rounded disabled:opacity-40" style={inputStyle}>Prev</button>
+            <span className="px-2 py-1 text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+              {page} / {totalPages}
+            </span>
+            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+              className="px-2 py-1 text-[11px] rounded disabled:opacity-40" style={inputStyle}>Next</button>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="h-64 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
       ) : view === 'board' ? (
@@ -441,7 +476,7 @@ export default function AdminOutreach() {
             <div className="flex items-center gap-4">
               <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Pipeline</span>
               <span className="text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>
-                {prospects.length} prospects
+                {total} prospects
               </span>
             </div>
             <div className="flex items-center gap-4">
