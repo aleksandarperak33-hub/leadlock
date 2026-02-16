@@ -9,7 +9,7 @@ const BUCKET_COLORS = {
 
 export default function ResponseTimeChart({ data = [] }) {
   return (
-    <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+    <div className="glass-card gradient-border p-5">
       <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
         Response Time Distribution
       </h3>
@@ -29,12 +29,13 @@ export default function ResponseTimeChart({ data = [] }) {
             />
             <Tooltip
               contentStyle={{
-                background: '#161820',
-                border: '1px solid rgba(148, 163, 184, 0.1)',
-                borderRadius: '8px',
-                color: '#e8eaed',
+                background: 'rgba(15, 17, 24, 0.9)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '10px',
+                color: '#edf0f7',
                 fontSize: '12px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}
               cursor={{ fill: 'rgba(255,255,255,0.02)' }}
             />

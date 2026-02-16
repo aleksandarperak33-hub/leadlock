@@ -41,7 +41,7 @@ export default function AdminRevenue() {
   const totalClients = revenue?.total_paying_clients || 0;
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Revenue</h1>
         <div className="flex gap-1">
@@ -64,7 +64,7 @@ export default function AdminRevenue() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-        <div className="relative overflow-hidden rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card gradient-border relative overflow-hidden p-5">
           <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#34d399', opacity: 0.6 }} />
           <div className="pl-3">
             <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Total MRR</p>
@@ -74,7 +74,7 @@ export default function AdminRevenue() {
             <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{totalClients} paying clients</p>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card gradient-border relative overflow-hidden p-5">
           <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#7c5bf0', opacity: 0.6 }} />
           <div className="pl-3">
             <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Annualized</p>
@@ -84,7 +84,7 @@ export default function AdminRevenue() {
             <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>projected ARR</p>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card gradient-border relative overflow-hidden p-5">
           <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#fbbf24', opacity: 0.6 }} />
           <div className="pl-3">
             <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Avg per Client</p>
@@ -98,7 +98,7 @@ export default function AdminRevenue() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* MRR by Tier */}
-        <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card gradient-border p-5">
           <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>MRR by Tier</h3>
           <div className="space-y-3">
             {Object.entries(mrrByTier).sort((a, b) => b[1] - a[1]).map(([tier, mrr]) => {
@@ -124,7 +124,7 @@ export default function AdminRevenue() {
         </div>
 
         {/* Top Clients by Revenue */}
-        <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card gradient-border p-5">
           <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Top Clients by Revenue</h3>
           <div className="space-y-1">
             {topClients.map((client, i) => (

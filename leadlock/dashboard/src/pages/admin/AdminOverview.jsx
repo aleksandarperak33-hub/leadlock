@@ -71,7 +71,7 @@ export default function AdminOverview() {
   const billingData = overview?.clients_by_billing || {};
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>System Overview</h1>
         <div className="flex items-center gap-1.5">
@@ -85,10 +85,9 @@ export default function AdminOverview() {
         {metrics.map(({ label, value, sub, accent }) => (
           <div
             key={label}
-            className="relative overflow-hidden rounded-card p-4"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+            className="glass-card gradient-border relative overflow-hidden p-4"
           >
-            <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: accent, opacity: 0.6 }} />
+            <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: `linear-gradient(180deg, ${accent}, transparent)`, opacity: 0.6 }} />
             <div className="pl-2.5">
               <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
               <p className="text-xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>{value}</p>
@@ -100,8 +99,8 @@ export default function AdminOverview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Clients by Tier */}
-        <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Clients by Tier</h3>
+        <div className="glass-card gradient-border p-5">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Clients by Tier</h3>
           <div className="space-y-2.5">
             {Object.entries(tierData).sort((a, b) => b[1] - a[1]).map(([tier, count]) => {
               const total = Object.values(tierData).reduce((s, v) => s + v, 0) || 1;
@@ -125,8 +124,8 @@ export default function AdminOverview() {
         </div>
 
         {/* Billing Status */}
-        <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Billing Status</h3>
+        <div className="glass-card gradient-border p-5">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Billing Status</h3>
           <div className="space-y-2.5">
             {Object.entries(billingData).sort((a, b) => b[1] - a[1]).map(([status, count]) => {
               const color = status === 'active' ? '#34d399' : status === 'trial' ? '#fbbf24' : status === 'past_due' ? '#f87171' : 'var(--text-tertiary)';
@@ -147,8 +146,8 @@ export default function AdminOverview() {
         </div>
 
         {/* System Health */}
-        <div className="rounded-card p-5 lg:col-span-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>System Health (24h)</h3>
+        <div className="glass-card gradient-border p-5 lg:col-span-2">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>System Health (24h)</h3>
           {health ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>

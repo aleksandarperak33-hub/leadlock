@@ -6,17 +6,23 @@ export default function QuietHoursIndicator() {
 
   if (isQuietHours) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-        <Moon className="w-4 h-4 text-amber-400" />
-        <span className="text-xs text-amber-400 font-medium">Quiet Hours Active</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{
+        background: 'rgba(245, 158, 11, 0.08)',
+        border: '1px solid rgba(245, 158, 11, 0.15)',
+      }}>
+        <Moon className="w-4 h-4" style={{ color: '#fbbf24' }} />
+        <span className="text-[11px] font-medium" style={{ color: '#fbbf24' }}>Quiet Hours Active</span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-      <Sun className="w-4 h-4 text-emerald-400" />
-      <span className="text-xs text-emerald-400 font-medium">Active Hours</span>
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{
+      background: 'rgba(16, 185, 129, 0.08)',
+      border: '1px solid rgba(16, 185, 129, 0.15)',
+    }}>
+      <Sun className="w-4 h-4" style={{ color: '#34d399' }} />
+      <span className="text-[11px] font-medium" style={{ color: '#34d399' }}>Active Hours</span>
     </div>
   );
 }

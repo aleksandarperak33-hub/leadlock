@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ConversationThread from '../components/ConversationThread';
 import LeadStatusBadge from '../components/LeadStatusBadge';
-import { MessageSquare, User, Calendar, Clock, ArrowLeft } from 'lucide-react';
+import { MessageSquare, User, Calendar, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Conversations() {
@@ -58,17 +58,14 @@ export default function Conversations() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <h1 className="text-lg font-semibold tracking-tight mb-5" style={{ color: 'var(--text-primary)' }}>Conversations</h1>
 
       <div className="flex gap-3 h-[calc(100vh-180px)]">
         {/* Lead list */}
-        <div
-          className="w-72 flex-shrink-0 rounded-card overflow-y-auto hidden lg:block"
-          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-        >
+        <div className="w-72 flex-shrink-0 glass-card overflow-y-auto hidden lg:block">
           <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
-            <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
               Recent Leads
             </p>
           </div>
@@ -77,12 +74,12 @@ export default function Conversations() {
               <button
                 key={lead.id}
                 onClick={() => selectLead(lead.id)}
-                className="w-full text-left px-4 py-2.5 transition-colors"
+                className="w-full text-left px-4 py-2.5 transition-all duration-150"
                 style={{
-                  background: selectedLead === lead.id ? 'var(--surface-2)' : 'transparent',
+                  background: selectedLead === lead.id ? 'var(--accent-muted)' : 'transparent',
                   borderBottom: '1px solid var(--border)',
                 }}
-                onMouseEnter={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'var(--surface-2)'; }}
+                onMouseEnter={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; }}
                 onMouseLeave={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'transparent'; }}
               >
                 <div className="flex items-center justify-between">
@@ -100,10 +97,7 @@ export default function Conversations() {
         </div>
 
         {/* Conversation panel */}
-        <div
-          className="flex-1 rounded-card flex flex-col overflow-hidden"
-          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-        >
+        <div className="flex-1 glass-card flex flex-col overflow-hidden">
           {!selectedLead ? (
             <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
               <MessageSquare className="w-8 h-8 mb-3" strokeWidth={1.5} />
@@ -122,10 +116,10 @@ export default function Conversations() {
                       <ArrowLeft className="w-4 h-4" />
                     </button>
                     <div
-                      className="w-8 h-8 rounded-md flex items-center justify-center"
-                      style={{ background: 'var(--surface-3)' }}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center"
+                      style={{ background: 'var(--accent-muted)' }}
                     >
-                      <User className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                      <User className="w-4 h-4" style={{ color: 'var(--accent)' }} />
                     </div>
                     <div>
                       <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -143,7 +137,7 @@ export default function Conversations() {
 
                   {leadDetail.booking && (
                     <div
-                      className="mt-3 px-3.5 py-2.5 rounded-md"
+                      className="mt-3 px-3.5 py-2.5 rounded-lg"
                       style={{ background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.12)' }}
                     >
                       <div className="flex items-center gap-1.5 text-[12px] font-medium mb-0.5" style={{ color: '#34d399' }}>
@@ -166,7 +160,7 @@ export default function Conversations() {
 
               {leadDetail?.events?.length > 0 && (
                 <div className="px-5 py-2.5 max-h-28 overflow-y-auto" style={{ borderTop: '1px solid var(--border)' }}>
-                  <p className="text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
                     Timeline
                   </p>
                   <div className="space-y-0.5">

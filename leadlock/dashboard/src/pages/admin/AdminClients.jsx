@@ -72,15 +72,14 @@ export default function AdminClients() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Clients</h1>
         <div className="flex items-center gap-3">
           <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
           <button
             onClick={() => { setForm(INITIAL_FORM); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
-            style={{ background: 'var(--accent)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all gradient-btn"
           >
             <Plus className="w-3.5 h-3.5" />
             New Client
@@ -91,7 +90,7 @@ export default function AdminClients() {
       {/* New Client Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="w-full max-w-lg rounded-xl p-6 glass-card gradient-border">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>New Client</h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-tertiary)' }}>
@@ -170,22 +169,20 @@ export default function AdminClients() {
             placeholder="Search clients..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-4 py-2 rounded-md text-[13px] outline-none transition-colors"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-            onFocus={e => e.target.style.borderColor = 'var(--border-active)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+            style={{ color: 'var(--text-primary)' }}
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)' }}>
                 {['Business', 'Trade', 'Tier', 'Billing', 'Leads (30d)', 'Booked', 'Conversion', 'MRR'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {h}
                   </th>
                 ))}

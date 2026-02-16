@@ -52,7 +52,7 @@ export default function AdminLeads() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>All Leads</h1>
         <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
@@ -67,10 +67,8 @@ export default function AdminLeads() {
             placeholder="Search name, phone, service, client..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-4 py-2 rounded-md text-[13px] outline-none transition-colors"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-            onFocus={e => e.target.style.borderColor = 'var(--border-active)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+            style={{ color: 'var(--text-primary)' }}
           />
         </div>
       </div>
@@ -94,13 +92,13 @@ export default function AdminLeads() {
       </div>
 
       {/* Table */}
-      <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)' }}>
                 {['Name', 'Client', 'Phone', 'Source', 'Status', 'Score', 'Response', 'Date'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {h}
                   </th>
                 ))}

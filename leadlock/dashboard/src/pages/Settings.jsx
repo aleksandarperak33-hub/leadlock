@@ -2,12 +2,6 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { Save, Check, AlertCircle } from 'lucide-react';
 
-const inputStyle = {
-  background: 'var(--surface-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-};
-
 export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [config, setConfig] = useState({});
@@ -60,7 +54,7 @@ export default function Settings() {
   };
 
   if (loading) {
-    return <div className="h-96 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />;
+    return <div className="h-96 rounded-xl animate-pulse" style={{ background: 'var(--surface-1)' }} />;
   }
 
   const persona = config.persona || {};
@@ -68,14 +62,13 @@ export default function Settings() {
   const services = config.services || {};
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl animate-fade-up">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Settings</h1>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-md text-[12px] font-medium text-white transition-all duration-150 disabled:opacity-50"
-          style={{ background: saved ? '#34d399' : 'var(--accent)' }}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold text-white gradient-btn disabled:opacity-50"
         >
           {saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
           {saved ? 'Saved' : saving ? 'Saving...' : 'Save Changes'}
@@ -83,17 +76,17 @@ export default function Settings() {
       </div>
 
       {error && (
-        <div className="mb-4 px-3.5 py-2.5 rounded-md flex items-center gap-2 text-[13px]"
-          style={{ background: 'rgba(248, 113, 113, 0.08)', border: '1px solid rgba(248, 113, 113, 0.15)', color: '#f87171' }}>
-          <AlertCircle className="w-3.5 h-3.5" />
+        <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2.5 text-[13px]"
+          style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.12)', color: '#f87171' }}>
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
       <div className="space-y-4">
         {/* Business Info */}
-        <section className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Information</h2>
+        <section className="glass-card gradient-border p-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Information</h2>
           <div className="grid grid-cols-2 gap-4">
             {[
               { label: 'Business Name', value: settings?.business_name },
@@ -110,28 +103,26 @@ export default function Settings() {
         </section>
 
         {/* AI Persona */}
-        <section className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>AI Persona</h2>
+        <section className="glass-card gradient-border p-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>AI Persona</h2>
           <div className="space-y-3.5">
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Rep Name</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Rep Name</label>
               <input
                 type="text"
                 value={persona.rep_name || ''}
                 onChange={e => updateConfig('persona.rep_name', e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none transition-colors"
-                style={inputStyle}
-                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                style={{ color: 'var(--text-primary)' }}
               />
             </div>
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Tone</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Tone</label>
               <select
                 value={persona.tone || 'friendly_professional'}
                 onChange={e => updateConfig('persona.tone', e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                style={inputStyle}
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                style={{ color: 'var(--text-primary)' }}
               >
                 <option value="friendly_professional">Friendly Professional</option>
                 <option value="casual">Casual</option>
@@ -139,15 +130,13 @@ export default function Settings() {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Emergency Contact Phone</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Emergency Contact Phone</label>
               <input
                 type="text"
                 value={persona.emergency_contact_phone || ''}
                 onChange={e => updateConfig('persona.emergency_contact_phone', e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none transition-colors"
-                style={inputStyle}
-                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                style={{ color: 'var(--text-primary)' }}
                 placeholder="+15551234567"
               />
             </div>
@@ -155,37 +144,37 @@ export default function Settings() {
         </section>
 
         {/* Business Hours */}
-        <section className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Hours</h2>
+        <section className="glass-card gradient-border p-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Hours</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday Start</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday Start</label>
               <input
                 type="time"
                 value={hours.business?.start || '07:00'}
                 onChange={e => updateConfig('hours.business.start', e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                style={inputStyle}
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                style={{ color: 'var(--text-primary)' }}
               />
             </div>
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday End</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday End</label>
               <input
                 type="time"
                 value={hours.business?.end || '18:00'}
                 onChange={e => updateConfig('hours.business.end', e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                style={inputStyle}
+                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                style={{ color: 'var(--text-primary)' }}
               />
             </div>
           </div>
           <div className="mt-3.5">
-            <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>After Hours Handling</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>After Hours Handling</label>
             <select
               value={hours.after_hours_handling || 'ai_responds_books_next_available'}
               onChange={e => updateConfig('hours.after_hours_handling', e.target.value)}
-              className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-              style={inputStyle}
+              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+              style={{ color: 'var(--text-primary)' }}
             >
               <option value="ai_responds_books_next_available">AI responds, books next available</option>
               <option value="ai_responds_owner_notified">AI responds, owner notified</option>
@@ -195,8 +184,8 @@ export default function Settings() {
         </section>
 
         {/* Services */}
-        <section className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Services</h2>
+        <section className="glass-card gradient-border p-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Services</h2>
           <div className="space-y-3.5">
             {[
               { label: 'Primary Services', key: 'services.primary', val: services.primary },
@@ -204,17 +193,15 @@ export default function Settings() {
               { label: 'Do Not Quote', key: 'services.do_not_quote', val: services.do_not_quote },
             ].map(({ label, key, val }) => (
               <div key={key}>
-                <label className="block text-[11px] font-medium uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
                   {label} <span className="normal-case text-[10px]" style={{ color: 'var(--text-tertiary)' }}>(comma-separated)</span>
                 </label>
                 <input
                   type="text"
                   value={(val || []).join(', ')}
                   onChange={e => updateConfig(key, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                  className="w-full px-3 py-2 rounded-md text-[13px] outline-none transition-colors"
-                  style={inputStyle}
-                  onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+                  style={{ color: 'var(--text-primary)' }}
                 />
               </div>
             ))}
@@ -222,16 +209,14 @@ export default function Settings() {
         </section>
 
         {/* Emergency Keywords */}
-        <section className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Custom Emergency Keywords</h2>
+        <section className="glass-card gradient-border p-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Custom Emergency Keywords</h2>
           <input
             type="text"
             value={(config.emergency_keywords || []).join(', ')}
             onChange={e => updateConfig('emergency_keywords', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            className="w-full px-3 py-2 rounded-md text-[13px] outline-none transition-colors"
-            style={inputStyle}
-            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+            style={{ color: 'var(--text-primary)' }}
             placeholder="gas leak, no heat, flooding..."
           />
           <p className="text-[10px] mt-2" style={{ color: 'var(--text-tertiary)' }}>

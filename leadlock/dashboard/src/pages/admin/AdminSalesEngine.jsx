@@ -29,7 +29,7 @@ const inputStyle = {
 
 function MetricCard({ label, value, sub, color }) {
   return (
-    <div className="rounded-lg p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+    <div className="glass-card p-4">
       <p className="text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
       <p className="text-xl font-semibold font-mono" style={{ color: color || 'var(--text-primary)' }}>{value}</p>
       {sub && <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{sub}</p>}
@@ -211,7 +211,7 @@ export default function AdminSalesEngine() {
   }
 
   return (
-    <div>
+    <div className="animate-fade-up">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
@@ -231,8 +231,7 @@ export default function AdminSalesEngine() {
         </div>
         <button
           onClick={() => { setShowScrapeForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
-          style={{ background: 'var(--accent)' }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all gradient-btn"
         >
           <Play className="w-3.5 h-3.5" />
           Run Scrape
@@ -261,7 +260,7 @@ export default function AdminSalesEngine() {
       {/* Scrape Form Modal */}
       {showScrapeForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="w-full max-w-sm rounded-xl p-6 glass-card gradient-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>Run Manual Scrape</h2>
               <button onClick={() => setShowScrapeForm(false)} style={{ color: 'var(--text-tertiary)' }}><X className="w-4 h-4" /></button>

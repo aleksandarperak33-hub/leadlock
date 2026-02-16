@@ -29,8 +29,8 @@ export default function SourceBreakdown({ data = {} }) {
 
   if (!entries.length) {
     return (
-      <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-        <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="glass-card gradient-border p-5">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
           Leads by Source
         </h3>
         <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No data available</p>
@@ -39,8 +39,8 @@ export default function SourceBreakdown({ data = {} }) {
   }
 
   return (
-    <div className="rounded-card p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-      <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+    <div className="glass-card gradient-border p-5">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
         Leads by Source
       </h3>
       <div className="space-y-3">

@@ -131,7 +131,7 @@ export default function AdminOutreach() {
   }, {});
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Sales Outreach</h1>
         <div className="flex items-center gap-2">
@@ -153,8 +153,7 @@ export default function AdminOutreach() {
           </div>
           <button
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
-            style={{ background: 'var(--accent)' }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all gradient-btn"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Prospect
@@ -165,7 +164,7 @@ export default function AdminOutreach() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="w-full max-w-sm rounded-xl p-6 glass-card gradient-border">
             <h2 className="text-[15px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
               {confirmAction.type === 'delete' ? 'Delete Prospect' : 'Convert to Client'}
             </h2>
@@ -201,7 +200,7 @@ export default function AdminOutreach() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl p-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+          <div className="w-full max-w-md rounded-xl p-6 glass-card gradient-border">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {editingId ? 'Edit Prospect' : 'New Prospect'}
@@ -327,10 +326,7 @@ export default function AdminOutreach() {
                 {(grouped[status] || []).map(prospect => (
                   <div
                     key={prospect.id}
-                    className="rounded-lg p-3 transition-colors"
-                    style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-active)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    className="glass-card p-3"
                   >
                     <div className="flex items-start justify-between">
                       <div className="cursor-pointer flex-1" onClick={() => startEdit(prospect)}>
@@ -376,13 +372,13 @@ export default function AdminOutreach() {
         </div>
       ) : (
         /* Table View */
-        <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="glass-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)' }}>
                   {['Name', 'Company', 'Trade', 'Status', 'Est. MRR', 'Notes', ''].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                       {h}
                     </th>
                   ))}
@@ -471,7 +467,7 @@ export default function AdminOutreach() {
 
       {/* Pipeline summary */}
       {!loading && prospects.length > 0 && (
-        <div className="mt-4 rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="mt-4 glass-card gradient-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Pipeline</span>

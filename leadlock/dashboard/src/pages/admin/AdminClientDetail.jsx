@@ -96,7 +96,7 @@ export default function AdminClientDetail() {
       </div>
 
       {/* Client Info */}
-      <div className="rounded-card p-5 mb-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="glass-card gradient-border p-5 mb-4">
         <h3 className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Client Information</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
@@ -123,8 +123,7 @@ export default function AdminClientDetail() {
         ].map(({ label, value, accent }) => (
           <div
             key={label}
-            className="relative overflow-hidden rounded-card p-4"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+            className="glass-card gradient-border relative overflow-hidden p-4"
           >
             <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: accent, opacity: 0.6 }} />
             <div className="pl-2.5">
@@ -136,7 +135,7 @@ export default function AdminClientDetail() {
       </div>
 
       {/* Recent Leads */}
-      <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="glass-card overflow-hidden">
         <div className="px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <h3 className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Recent Leads</h3>
         </div>

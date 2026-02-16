@@ -48,7 +48,7 @@ export default function LeadFeed() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Leads</h1>
         <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} total</span>
@@ -63,14 +63,8 @@ export default function LeadFeed() {
             placeholder="Search name, phone, service..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-4 py-2 rounded-md text-[13px] outline-none transition-colors"
-            style={{
-              background: 'var(--surface-1)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--border-active)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
+            style={{ color: 'var(--text-primary)' }}
           />
         </div>
       </div>
@@ -81,11 +75,11 @@ export default function LeadFeed() {
           <button
             key={s}
             onClick={() => { setStateFilter(s); setPage(1); }}
-            className="px-2.5 py-1 text-[11px] font-medium rounded-md whitespace-nowrap transition-all duration-150"
+            className="px-2.5 py-1 text-[11px] font-medium rounded-lg whitespace-nowrap transition-all duration-200"
             style={{
               background: stateFilter === s ? 'var(--accent-muted)' : 'transparent',
               color: stateFilter === s ? 'var(--accent)' : 'var(--text-tertiary)',
-              border: stateFilter === s ? '1px solid rgba(90, 114, 240, 0.2)' : '1px solid var(--border)',
+              border: stateFilter === s ? '1px solid rgba(99, 102, 241, 0.2)' : '1px solid var(--border)',
             }}
           >
             {s === 'all' ? 'All' : s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
@@ -94,13 +88,13 @@ export default function LeadFeed() {
       </div>
 
       {/* Table */}
-      <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+      <div className="glass-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)' }}>
                 {['Name', 'Phone', 'Source', 'Status', 'Score', 'Service', 'Response', 'Date'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                     {h}
                   </th>
                 ))}
@@ -111,7 +105,7 @@ export default function LeadFeed() {
                 [...Array(5)].map((_, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td colSpan={8} className="px-4 py-3.5">
-                      <div className="h-3.5 rounded animate-pulse" style={{ background: 'var(--surface-2)' }} />
+                      <div className="h-3.5 rounded-lg animate-pulse" style={{ background: 'var(--surface-2)' }} />
                     </td>
                   </tr>
                 ))
@@ -125,9 +119,9 @@ export default function LeadFeed() {
                 <tr
                   key={lead.id}
                   onClick={() => navigate(`/conversations/${lead.id}`)}
-                  className="cursor-pointer transition-colors"
+                  className="cursor-pointer transition-all duration-150"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <td className="px-4 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -179,7 +173,7 @@ export default function LeadFeed() {
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-1 rounded transition-colors disabled:opacity-20"
+                className="p-1.5 rounded-lg transition-colors disabled:opacity-20"
                 style={{ color: 'var(--text-tertiary)' }}
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -187,7 +181,7 @@ export default function LeadFeed() {
               <button
                 onClick={() => setPage(p => Math.min(pages, p + 1))}
                 disabled={page === pages}
-                className="p-1 rounded transition-colors disabled:opacity-20"
+                className="p-1.5 rounded-lg transition-colors disabled:opacity-20"
                 style={{ color: 'var(--text-tertiary)' }}
               >
                 <ChevronRight className="w-4 h-4" />
