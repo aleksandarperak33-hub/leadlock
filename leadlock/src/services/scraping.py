@@ -1,10 +1,12 @@
 """
 Scraping service — local business discovery via Brave Search API.
 Two-step process: web search for location IDs → POI details for business data.
+Fetches ALL location IDs (not just first 20) by batching POI requests.
 """
 import hashlib
 import logging
 import re
+import unicodedata
 from typing import Optional
 import httpx
 
@@ -13,27 +15,47 @@ logger = logging.getLogger(__name__)
 BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 BRAVE_POI_URL = "https://api.search.brave.com/res/v1/local/pois"
 BRAVE_COST_PER_SEARCH = 0.005  # ~$5/1k requests
+POI_BATCH_SIZE = 20  # Brave POI endpoint max IDs per request
+
+
+def normalize_biz_name(name: str) -> str:
+    """Normalize business name for stable dedup hashing.
+    Strips punctuation, extra whitespace, common suffixes like Inc/LLC.
+    """
+    if not name:
+        return ""
+    # Lowercase
+    s = name.lower().strip()
+    # Remove common legal suffixes
+    for suffix in [" llc", " inc", " inc.", " corp", " corp.", " co.", " ltd", " ltd."]:
+        if s.endswith(suffix):
+            s = s[: -len(suffix)].strip()
+    # Remove punctuation (keep alphanumeric and spaces)
+    s = re.sub(r"[^\w\s]", "", s)
+    # Collapse whitespace
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
 
 
 async def search_local_businesses(
     query: str,
     location: str,
     api_key: str,
-    offset: int = 0,
+    max_poi_batches: int = 5,
 ) -> dict:
     """
     Search for local businesses via Brave Search API.
-    Step 1: Web search with location filter to get POI IDs.
-    Step 2: Fetch full POI details (phone, website, rating, etc).
+    Step 1: Web search with location filter to get ALL POI IDs.
+    Step 2: Fetch POI details in batches of 20 (up to max_poi_batches).
 
     Args:
         query: Search term, e.g. "HVAC contractors"
         location: Location string, e.g. "Austin, TX"
         api_key: Brave Search API key
-        offset: Pagination offset (0-9) for deeper results
+        max_poi_batches: Max POI batch requests (default 5 = up to 100 POIs)
 
     Returns:
-        {"results": [...], "cost_usd": float}
+        {"results": [...], "cost_usd": float, "total_location_ids": int}
     """
     headers = {
         "Accept": "application/json",
@@ -45,12 +67,11 @@ async def search_local_businesses(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Step 1: Web search to get location IDs
+            # Step 1: Web search to get ALL location IDs
             search_params = {
                 "q": f"{query} {location}",
                 "result_filter": "locations",
                 "count": 20,
-                "offset": min(offset, 9),  # Brave max offset is 9
             }
             response = await client.get(
                 BRAVE_SEARCH_URL, params=search_params, headers=headers
@@ -59,31 +80,47 @@ async def search_local_businesses(
             search_data = response.json()
             total_cost += BRAVE_COST_PER_SEARCH
 
-            # Extract location IDs
+            # Extract location IDs — Brave returns ALL matching IDs (often 50-100+)
             locations_obj = search_data.get("locations") or {}
             locations = locations_obj.get("results") or []
             if not locations:
                 logger.info("Brave search: no local results for %s %s", query, location)
-                return {"results": [], "cost_usd": total_cost}
+                return {"results": [], "cost_usd": total_cost, "total_location_ids": 0}
 
             location_ids = [loc["id"] for loc in locations if loc.get("id")]
             if not location_ids:
                 logger.info("Brave search: no location IDs for %s %s", query, location)
-                return {"results": [], "cost_usd": total_cost}
+                return {"results": [], "cost_usd": total_cost, "total_location_ids": 0}
 
-            # Step 2: Fetch POI details (max 20 per request)
-            poi_params = [("ids", lid) for lid in location_ids[:20]]
-            poi_response = await client.get(
-                BRAVE_POI_URL, params=poi_params, headers=headers
-            )
-            poi_response.raise_for_status()
-            poi_data = poi_response.json()
-            total_cost += BRAVE_COST_PER_SEARCH
+            total_ids = len(location_ids)
+
+            # Step 2: Fetch POI details in batches of 20
+            all_poi_data = []
+            batches_to_fetch = min(max_poi_batches, (total_ids + POI_BATCH_SIZE - 1) // POI_BATCH_SIZE)
+
+            for batch_idx in range(batches_to_fetch):
+                start = batch_idx * POI_BATCH_SIZE
+                end = start + POI_BATCH_SIZE
+                batch_ids = location_ids[start:end]
+                if not batch_ids:
+                    break
+
+                poi_params = [("ids", lid) for lid in batch_ids]
+                poi_response = await client.get(
+                    BRAVE_POI_URL, params=poi_params, headers=headers
+                )
+                poi_response.raise_for_status()
+                poi_data = poi_response.json()
+                total_cost += BRAVE_COST_PER_SEARCH
+
+                batch_results = poi_data.get("results") or []
+                all_poi_data.extend(batch_results)
 
         # Parse POI results into our standard format
-        # Brave POI response fields: title, url, postal_address, contact, categories, results (nested)
         results = []
-        for poi in (poi_data.get("results") or []):
+        seen_hashes = set()  # Dedup within this response
+
+        for poi in all_poi_data:
             if not poi:
                 continue
             # Name — Brave uses "title" not "name"
@@ -116,9 +153,15 @@ async def search_local_businesses(
                             review_count = rating_obj["ratingCount"]
                         break
 
-            # Place ID — deterministic hash for stable dedup across runs
-            hash_input = f"{name}|{phone}|{full_address}".lower()
+            # Place ID — deterministic hash with normalized name for stable dedup
+            normalized_name = normalize_biz_name(name)
+            hash_input = f"{normalized_name}|{phone}|{full_address}".lower()
             place_id = f"brave_{hashlib.sha256(hash_input.encode()).hexdigest()[:12]}"
+
+            # Skip duplicates within this batch (same business from overlapping POI data)
+            if place_id in seen_hashes:
+                continue
+            seen_hashes.add(place_id)
 
             # Categories
             categories = poi.get("categories") or []
@@ -136,10 +179,10 @@ async def search_local_businesses(
             })
 
         logger.info(
-            "Brave search: query='%s %s' location_ids=%d results=%d cost=$%.3f",
-            query, location, len(location_ids), len(results), total_cost,
+            "Brave search: query='%s %s' location_ids=%d batches=%d results=%d cost=$%.3f",
+            query, location, total_ids, batches_to_fetch, len(results), total_cost,
         )
-        return {"results": results, "cost_usd": total_cost}
+        return {"results": results, "cost_usd": total_cost, "total_location_ids": total_ids}
 
     except Exception as e:
         logger.error("Brave search failed: %s", str(e))

@@ -530,7 +530,7 @@ async def _run_scrape_background(
 
         try:
             search_results = await search_local_businesses(
-                query, location_str, settings.brave_api_key, offset=offset,
+                query, location_str, settings.brave_api_key,
             )
             total_cost += search_results.get("cost_usd", 0)
             all_results = search_results.get("results", [])
@@ -619,9 +619,9 @@ async def _run_scrape_background(
             job.completed_at = datetime.utcnow()
 
             logger.info(
-                "Manual scrape completed: %s in %s (variant=%d offset=%d query='%s') — "
+                "Manual scrape completed: %s in %s (variant=%d query='%s') — "
                 "found=%d new=%d dupes=%d",
-                trade, location_str, variant_idx, offset, query,
+                trade, location_str, variant_idx, query,
                 len(all_results), new_count, dupe_count,
             )
 

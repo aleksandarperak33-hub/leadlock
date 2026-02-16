@@ -1,7 +1,8 @@
 """
 Lead scraper worker — discovers home services contractors via Brave Search API.
-Runs every 6 hours. Uses query rotation + offset pagination so re-scrapes
-always return fresh results instead of duplicates.
+Runs every 6 hours. Uses query rotation (6 variants per trade) so re-scrapes
+always return fresh results instead of duplicates. Each query fetches ALL
+location IDs from Brave (up to 100 POIs via batch requests).
 Deduplicates by place_id and phone number.
 """
 import asyncio
@@ -23,7 +24,6 @@ from src.config import get_settings
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours
-MAX_BRAVE_OFFSET = 9  # Brave Search API max offset
 
 # Multiple query variations per trade — each produces different Brave results.
 # Rotated across scrape cycles so we always discover new businesses.
@@ -101,16 +101,15 @@ async def get_next_variant_and_offset(
     trade: str,
 ) -> tuple[int, int]:
     """
-    Determine the next query_variant + search_offset to use for a location+trade.
-    Looks at all completed scrape jobs for this combo and picks the next unused slot.
+    Determine the next query_variant to use for a location+trade.
+    Looks at all completed scrape jobs for this combo and picks the next unused variant.
 
-    Rotation order:
-      variant=0 offset=0 → variant=1 offset=0 → ... → variant=N offset=0
-      → variant=0 offset=1 → variant=1 offset=1 → ... → variant=N offset=1
-      → ... up to MAX_BRAVE_OFFSET
+    Brave's offset parameter doesn't work with result_filter=locations, so rotation
+    is purely by query variant. Each variant now fetches ALL location IDs (up to 100
+    POIs via batch requests), so a single variant covers far more businesses than before.
 
     Returns:
-        (query_variant_index, search_offset) or (-1, -1) if all exhausted.
+        (query_variant_index, 0) or (-1, -1) if all variants exhausted.
     """
     num_variants = len(get_query_variants(trade))
     if num_variants == 0:
@@ -118,7 +117,7 @@ async def get_next_variant_and_offset(
 
     # Get all completed scrape jobs for this location+trade
     result = await db.execute(
-        select(ScrapeJob.query_variant, ScrapeJob.search_offset).where(
+        select(ScrapeJob.query_variant).where(
             and_(
                 ScrapeJob.city == city,
                 ScrapeJob.state_code == state,
@@ -127,15 +126,14 @@ async def get_next_variant_and_offset(
             )
         )
     )
-    used_slots = {(row[0], row[1]) for row in result.all()}
+    used_variants = {row[0] for row in result.all()}
 
-    # Find the next unused slot: iterate offsets, then variants within each offset
-    for offset in range(MAX_BRAVE_OFFSET + 1):
-        for variant in range(num_variants):
-            if (variant, offset) not in used_slots:
-                return variant, offset
+    # Find the next unused variant
+    for variant in range(num_variants):
+        if variant not in used_variants:
+            return variant, 0
 
-    # All slots exhausted
+    # All variants exhausted
     return -1, -1
 
 
@@ -204,10 +202,8 @@ async def scrape_cycle():
 
                 if variant_idx == -1:
                     logger.info(
-                        "All query variants exhausted for %s in %s "
-                        "(%d variants x %d offsets). Skipping.",
-                        trade, location_str,
-                        len(get_query_variants(trade)), MAX_BRAVE_OFFSET + 1,
+                        "All %d query variants exhausted for %s in %s. Skipping.",
+                        len(get_query_variants(trade)), trade, location_str,
                     )
                     continue
 
@@ -235,7 +231,7 @@ async def scrape_location_trade(
     query_variant: int,
     search_offset: int,
 ):
-    """Scrape a single location+trade combination with specific query variant and offset."""
+    """Scrape a single location+trade combination with specific query variant."""
     # Create scrape job record
     job = ScrapeJob(
         platform="brave",
@@ -256,9 +252,9 @@ async def scrape_location_trade(
     dupe_count = 0
 
     try:
-        # Search via Brave with offset for pagination
+        # Search via Brave — fetches ALL location IDs in batches of 20
         search_results = await search_local_businesses(
-            query, location_str, settings.brave_api_key, offset=search_offset,
+            query, location_str, settings.brave_api_key,
         )
         total_cost += search_results.get("cost_usd", 0)
         all_results = search_results.get("results", [])
@@ -360,9 +356,9 @@ async def scrape_location_trade(
         job.completed_at = datetime.utcnow()
 
         logger.info(
-            "Scrape completed: %s in %s (variant=%d offset=%d query='%s') — "
+            "Scrape completed: %s in %s (variant=%d query='%s') — "
             "found=%d new=%d dupes=%d cost=$%.3f",
-            trade, location_str, query_variant, search_offset, query,
+            trade, location_str, query_variant, query,
             len(all_results), new_count, dupe_count, total_cost,
         )
 
