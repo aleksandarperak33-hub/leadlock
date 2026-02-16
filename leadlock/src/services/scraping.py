@@ -56,7 +56,8 @@ async def search_local_businesses(
             total_cost += BRAVE_COST_PER_SEARCH
 
             # Extract location IDs
-            locations = search_data.get("locations", {}).get("results", [])
+            locations_obj = search_data.get("locations") or {}
+            locations = locations_obj.get("results") or []
             if not locations:
                 logger.info("Brave search: no local results for %s %s", query, location)
                 return {"results": [], "cost_usd": total_cost}
@@ -77,9 +78,9 @@ async def search_local_businesses(
 
         # Parse POI results into our standard format
         results = []
-        for poi in poi_data.get("results", []):
+        for poi in (poi_data.get("results") or []):
             # Build address string from components
-            address_obj = poi.get("address", {})
+            address_obj = poi.get("address") or {}
             address_parts = []
             if address_obj.get("streetAddress"):
                 address_parts.append(address_obj["streetAddress"])
@@ -95,12 +96,12 @@ async def search_local_businesses(
             phone = ""
             if poi.get("phone"):
                 phone = poi["phone"]
-            elif poi.get("contact", {}).get("telephone"):
+            elif (poi.get("contact") or {}).get("telephone"):
                 phone = poi["contact"]["telephone"]
 
             # Extract rating
             rating = None
-            rating_obj = poi.get("rating", {})
+            rating_obj = poi.get("rating") or {}
             if isinstance(rating_obj, dict):
                 rating = rating_obj.get("ratingValue")
             elif isinstance(rating_obj, (int, float)):
