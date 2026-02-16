@@ -1,47 +1,50 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 const BUCKET_COLORS = {
-  '0-10s': '#34d399',
-  '10-30s': '#5a72f0',
-  '30-60s': '#fbbf24',
-  '60s+': '#f87171',
+  '0-10s': '#10b981',
+  '10-30s': '#6366f1',
+  '30-60s': '#f59e0b',
+  '60s+': '#ef4444',
+};
+
+const TOOLTIP_STYLE = {
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '8px',
+  color: '#111827',
+  fontSize: '12px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+  padding: '8px 12px',
 };
 
 export default function ResponseTimeChart({ data = [] }) {
   return (
-    <div className="glass-card gradient-border p-5">
-      <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+      <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 text-gray-500">
         Response Time Distribution
       </h3>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
             <XAxis
               dataKey="bucket"
-              tick={{ fill: '#5a6178', fontSize: 11, fontFamily: 'var(--font-mono, monospace)' }}
+              tick={{ fill: '#9ca3af', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: '#5a6178', fontSize: 11, fontFamily: 'var(--font-mono, monospace)' }}
+              tick={{ fill: '#9ca3af', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
-              contentStyle={{
-                background: 'rgba(15, 17, 24, 0.9)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '10px',
-                color: '#edf0f7',
-                fontSize: '12px',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              }}
-              cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+              contentStyle={TOOLTIP_STYLE}
+              cursor={{ fill: '#f9fafb' }}
             />
             <Bar dataKey="count" radius={[4, 4, 0, 0]}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#5a72f0'} fillOpacity={0.8} />
+                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#6366f1'} fillOpacity={0.85} />
               ))}
             </Bar>
           </BarChart>

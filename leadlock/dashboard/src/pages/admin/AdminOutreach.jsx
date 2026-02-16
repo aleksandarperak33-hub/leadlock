@@ -3,23 +3,30 @@ import { api } from '../../api/client';
 import { Plus, X, Edit2, Trash2, UserCheck } from 'lucide-react';
 
 const STATUSES = ['cold', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'won', 'lost'];
-const STATUS_COLORS = {
-  cold: '#94a3b8',
-  contacted: '#fbbf24',
-  demo_scheduled: '#5a72f0',
-  demo_completed: '#7c5bf0',
-  proposal_sent: '#f59e0b',
-  won: '#34d399',
-  lost: '#f87171',
+
+const STATUS_BADGE = {
+  cold: 'bg-gray-50 text-gray-600 border border-gray-100',
+  contacted: 'bg-amber-50 text-amber-700 border border-amber-100',
+  demo_scheduled: 'bg-blue-50 text-blue-700 border border-blue-100',
+  demo_completed: 'bg-violet-50 text-violet-700 border border-violet-100',
+  proposal_sent: 'bg-orange-50 text-orange-700 border border-orange-100',
+  won: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  lost: 'bg-red-50 text-red-700 border border-red-100',
+};
+
+const STATUS_DOT = {
+  cold: 'bg-gray-400',
+  contacted: 'bg-amber-500',
+  demo_scheduled: 'bg-blue-500',
+  demo_completed: 'bg-violet-500',
+  proposal_sent: 'bg-orange-500',
+  won: 'bg-emerald-500',
+  lost: 'bg-red-500',
 };
 
 const VIEW_MODES = ['board', 'table'];
 
-const inputStyle = {
-  background: 'var(--surface-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-};
+const inputClasses = 'bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all';
 
 export default function AdminOutreach() {
   const [prospects, setProspects] = useState([]);
@@ -131,21 +138,20 @@ export default function AdminOutreach() {
   }, {});
 
   return (
-    <div className="animate-fade-up">
+    <div style={{ backgroundColor: '#f8f9fb' }}>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Sales Outreach</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-gray-900">Sales Outreach</h1>
         <div className="flex items-center gap-2">
           <div className="flex gap-1">
             {VIEW_MODES.map(m => (
               <button
                 key={m}
                 onClick={() => setView(m)}
-                className="px-2.5 py-1 text-[11px] font-medium rounded-md capitalize transition-all"
-                style={{
-                  background: view === m ? 'var(--accent-muted)' : 'transparent',
-                  color: view === m ? 'var(--accent)' : 'var(--text-tertiary)',
-                  border: view === m ? '1px solid rgba(124, 91, 240, 0.2)' : '1px solid var(--border)',
-                }}
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg capitalize transition-all cursor-pointer ${
+                  view === m
+                    ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                    : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
+                }`}
               >
                 {m}
               </button>
@@ -153,7 +159,7 @@ export default function AdminOutreach() {
           </div>
           <button
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all gradient-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Prospect
@@ -163,12 +169,12 @@ export default function AdminOutreach() {
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl p-6 glass-card gradient-border">
-            <h2 className="text-[15px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm bg-white border border-gray-200 rounded-xl shadow-lg p-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-2">
               {confirmAction.type === 'delete' ? 'Delete Prospect' : 'Convert to Client'}
             </h2>
-            <p className="text-[13px] mb-5" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm text-gray-500 mb-5">
               {confirmAction.type === 'delete'
                 ? `Are you sure you want to delete "${confirmAction.prospect.prospect_name}"? This cannot be undone.`
                 : `Convert "${confirmAction.prospect.prospect_name}" into a LeadLock client? This will create a new client account.`
@@ -177,8 +183,7 @@ export default function AdminOutreach() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
-                style={{ color: 'var(--text-tertiary)', border: '1px solid var(--border)' }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 hover:border-gray-300 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -187,8 +192,11 @@ export default function AdminOutreach() {
                   ? handleDelete(confirmAction.prospect)
                   : handleConvert(confirmAction.prospect)
                 }
-                className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white transition-all"
-                style={{ background: confirmAction.type === 'delete' ? '#f87171' : '#34d399' }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-colors cursor-pointer ${
+                  confirmAction.type === 'delete'
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-emerald-500 hover:bg-emerald-600'
+                }`}
               >
                 {confirmAction.type === 'delete' ? 'Delete' : 'Convert'}
               </button>
@@ -199,13 +207,13 @@ export default function AdminOutreach() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl p-6 glass-card gradient-border">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md bg-white border border-gray-200 rounded-xl shadow-lg p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <h2 className="text-base font-semibold text-gray-900">
                 {editingId ? 'Edit Prospect' : 'New Prospect'}
               </h2>
-              <button onClick={resetForm} style={{ color: 'var(--text-tertiary)' }}>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -218,25 +226,23 @@ export default function AdminOutreach() {
                 { label: 'Est. MRR', key: 'estimated_mrr', type: 'number', placeholder: '997' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{label}</label>
+                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
                   <input
                     type={type}
                     value={form[key]}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                    style={inputStyle}
+                    className={`w-full px-3 py-2 rounded-lg text-sm ${inputClasses}`}
                     placeholder={placeholder}
                   />
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Trade Type</label>
+                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Trade Type</label>
                   <select
                     value={form.prospect_trade_type}
                     onChange={e => setForm(f => ({ ...f, prospect_trade_type: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                    style={inputStyle}
+                    className={`w-full px-3 py-2 rounded-lg text-sm cursor-pointer ${inputClasses}`}
                   >
                     {['hvac', 'plumbing', 'electrical', 'roofing', 'solar', 'general'].map(t => (
                       <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
@@ -244,12 +250,11 @@ export default function AdminOutreach() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Status</label>
+                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Status</label>
                   <select
                     value={form.status}
                     onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none"
-                    style={inputStyle}
+                    className={`w-full px-3 py-2 rounded-lg text-sm cursor-pointer ${inputClasses}`}
                   >
                     {STATUSES.map(s => (
                       <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
@@ -258,19 +263,17 @@ export default function AdminOutreach() {
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Notes</label>
+                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Notes</label>
                 <textarea
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-md text-[13px] outline-none resize-none h-20"
-                  style={inputStyle}
+                  className={`w-full px-3 py-2 rounded-lg text-sm resize-none h-20 ${inputClasses}`}
                   placeholder="Notes about the prospect..."
                 />
               </div>
               <button
                 onClick={handleSave}
-                className="w-full py-2.5 rounded-md text-[13px] font-medium text-white transition-all"
-                style={{ background: 'var(--accent)' }}
+                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
               >
                 {editingId ? 'Update Prospect' : 'Create Prospect'}
               </button>
@@ -285,40 +288,43 @@ export default function AdminOutreach() {
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            className="px-3 py-1.5 rounded-md text-[12px] outline-none"
-            style={inputStyle}
+            className={`px-3 py-1.5 rounded-lg text-xs cursor-pointer ${inputClasses}`}
           >
             <option value="">All Statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
-          <span className="text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{total} prospects</span>
+          <span className="text-xs font-mono text-gray-400">{total} prospects</span>
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-2 py-1 text-[11px] rounded disabled:opacity-40" style={inputStyle}>Prev</button>
-            <span className="px-2 py-1 text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+              className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 cursor-pointer transition-colors">
+              Prev
+            </button>
+            <span className="px-2 py-1 text-xs font-mono text-gray-500">
               {page} / {totalPages}
             </span>
             <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-2 py-1 text-[11px] rounded disabled:opacity-40" style={inputStyle}>Next</button>
+              className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 cursor-pointer transition-colors">
+              Next
+            </button>
           </div>
         )}
       </div>
 
       {loading ? (
-        <div className="h-64 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
+        <div className="h-64 bg-gray-100 rounded-xl animate-pulse" />
       ) : view === 'board' ? (
         /* Kanban Board */
         <div className="flex gap-2.5 overflow-x-auto pb-4">
           {STATUSES.map(status => (
             <div key={status} className="flex-shrink-0 w-56">
               <div className="flex items-center gap-2 mb-2.5 px-1">
-                <span className="w-2 h-2 rounded-full" style={{ background: STATUS_COLORS[status] }} />
-                <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                <span className={`w-2 h-2 rounded-full ${STATUS_DOT[status] || 'bg-gray-400'}`} />
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
                   {status.replace('_', ' ')}
                 </span>
-                <span className="text-[10px] font-mono ml-auto" style={{ color: 'var(--text-tertiary)' }}>
+                <span className="text-[10px] font-mono ml-auto text-gray-400">
                   {grouped[status]?.length || 0}
                 </span>
               </div>
@@ -326,19 +332,18 @@ export default function AdminOutreach() {
                 {(grouped[status] || []).map(prospect => (
                   <div
                     key={prospect.id}
-                    className="glass-card p-3"
+                    className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 hover:border-gray-300 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="cursor-pointer flex-1" onClick={() => startEdit(prospect)}>
-                        <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{prospect.prospect_name}</p>
-                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{prospect.prospect_company}</p>
+                        <p className="text-sm font-medium text-gray-900">{prospect.prospect_name}</p>
+                        <p className="text-xs mt-0.5 text-gray-400">{prospect.prospect_company}</p>
                       </div>
                       <div className="flex items-center gap-0.5 ml-1">
                         {canConvert(prospect) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'convert', prospect }); }}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: '#34d399' }}
+                            className="p-1 rounded-md text-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer"
                             title="Convert to client"
                           >
                             <UserCheck className="w-3 h-3" />
@@ -346,10 +351,7 @@ export default function AdminOutreach() {
                         )}
                         <button
                           onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'delete', prospect }); }}
-                          className="p-1 rounded transition-colors"
-                          style={{ color: 'var(--text-tertiary)' }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                          className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Delete prospect"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -357,9 +359,9 @@ export default function AdminOutreach() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-[11px] capitalize" style={{ color: 'var(--text-tertiary)' }}>{prospect.prospect_trade_type}</span>
+                      <span className="text-xs capitalize text-gray-400">{prospect.prospect_trade_type}</span>
                       {prospect.estimated_mrr && (
-                        <span className="text-[11px] font-mono font-medium" style={{ color: '#34d399' }}>
+                        <span className="text-xs font-mono font-medium text-emerald-600">
                           ${prospect.estimated_mrr}
                         </span>
                       )}
@@ -372,13 +374,13 @@ export default function AdminOutreach() {
         </div>
       ) : (
         /* Table View */
-        <div className="glass-card overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                <tr className="bg-gray-50 border-b border-gray-100">
                   {['Name', 'Company', 'Trade', 'Status', 'Est. MRR', 'Notes', ''].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">
                       {h}
                     </th>
                   ))}
@@ -387,59 +389,50 @@ export default function AdminOutreach() {
               <tbody>
                 {prospects.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
                       No prospects yet. Add your first one.
                     </td>
                   </tr>
                 ) : prospects.map(prospect => (
-                  <tr key={prospect.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td className="px-4 py-2.5 text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                  <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900">
                       {prospect.prospect_name}
                     </td>
-                    <td className="px-4 py-2.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                      {prospect.prospect_company || '—'}
+                    <td className="px-4 py-2.5 text-xs text-gray-500">
+                      {prospect.prospect_company || '\u2014'}
                     </td>
-                    <td className="px-4 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-tertiary)' }}>
+                    <td className="px-4 py-2.5 text-xs capitalize text-gray-400">
                       {prospect.prospect_trade_type}
                     </td>
                     <td className="px-4 py-2.5">
                       <select
                         value={prospect.status}
                         onChange={e => updateStatus(prospect.id, e.target.value)}
-                        className="text-[11px] font-medium px-1.5 py-0.5 rounded outline-none cursor-pointer"
-                        style={{
-                          color: STATUS_COLORS[prospect.status],
-                          background: `${STATUS_COLORS[prospect.status]}15`,
-                          border: 'none',
-                        }}
+                        className={`text-xs font-medium px-2 py-0.5 rounded-md cursor-pointer ${STATUS_BADGE[prospect.status] || 'bg-gray-50 text-gray-600 border border-gray-100'}`}
                       >
                         {STATUSES.map(s => (
                           <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: prospect.estimated_mrr ? '#34d399' : 'var(--text-tertiary)' }}>
-                      {prospect.estimated_mrr ? `$${prospect.estimated_mrr}` : '—'}
+                    <td className={`px-4 py-2.5 text-xs font-mono ${prospect.estimated_mrr ? 'text-emerald-600' : 'text-gray-400'}`}>
+                      {prospect.estimated_mrr ? `$${prospect.estimated_mrr}` : '\u2014'}
                     </td>
-                    <td className="px-4 py-2.5 text-[11px] max-w-[200px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                      {prospect.notes || '—'}
+                    <td className="px-4 py-2.5 text-xs max-w-[200px] truncate text-gray-400">
+                      {prospect.notes || '\u2014'}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => startEdit(prospect)}
-                          className="p-1 rounded transition-colors"
-                          style={{ color: 'var(--text-tertiary)' }}
-                          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                          className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         {canConvert(prospect) && (
                           <button
                             onClick={() => setConfirmAction({ type: 'convert', prospect })}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: '#34d399' }}
+                            className="p-1 rounded-md text-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer"
                             title="Convert to client"
                           >
                             <UserCheck className="w-3.5 h-3.5" />
@@ -447,10 +440,7 @@ export default function AdminOutreach() {
                         )}
                         <button
                           onClick={() => setConfirmAction({ type: 'delete', prospect })}
-                          className="p-1 rounded transition-colors"
-                          style={{ color: 'var(--text-tertiary)' }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+                          className="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Delete prospect"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -467,22 +457,22 @@ export default function AdminOutreach() {
 
       {/* Pipeline summary */}
       {!loading && prospects.length > 0 && (
-        <div className="mt-4 glass-card gradient-border p-4">
+        <div className="mt-4 bg-white border border-gray-200 rounded-xl shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Pipeline</span>
-              <span className="text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>
+              <span className="text-xs font-medium uppercase tracking-wider text-gray-400">Pipeline</span>
+              <span className="text-xs font-mono text-gray-500">
                 {total} prospects
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                Est. value: <span className="font-mono font-medium" style={{ color: '#34d399' }}>
+              <span className="text-xs text-gray-400">
+                Est. value: <span className="font-mono font-medium text-emerald-600">
                   ${prospects.reduce((sum, p) => sum + (p.estimated_mrr || 0), 0).toLocaleString()}
                 </span>/mo
               </span>
-              <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                Won: <span className="font-mono font-medium" style={{ color: '#34d399' }}>
+              <span className="text-xs text-gray-400">
+                Won: <span className="font-mono font-medium text-emerald-600">
                   {prospects.filter(p => p.status === 'won').length}
                 </span>
               </span>

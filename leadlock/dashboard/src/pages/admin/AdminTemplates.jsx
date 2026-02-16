@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { FileText, Plus, Edit2, Trash2, Copy } from 'lucide-react';
+import { FileText, Plus, Edit2, Trash2 } from 'lucide-react';
 import { api } from '../../api/client';
 
 const STEP_TYPES = ['first_contact', 'followup', 'breakup', 'custom'];
-const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)' };
 
 export default function AdminTemplates() {
   const [templates, setTemplates] = useState([]);
@@ -72,83 +71,111 @@ export default function AdminTemplates() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#a855f7', borderTopColor: 'transparent' }} />
+        <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <FileText className="w-5 h-5" style={{ color: '#a855f7' }} />
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50">
+            <FileText className="w-4.5 h-4.5 text-violet-600" />
+          </div>
           <div>
-            <h1 className="text-[20px] font-bold" style={{ color: 'var(--text-primary)' }}>Email Templates</h1>
-            <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>{templates.length} templates</p>
+            <h1 className="text-xl font-semibold text-gray-900">Email Templates</h1>
+            <p className="text-sm text-gray-500">{templates.length} templates</p>
           </div>
         </div>
-        <button onClick={() => { setEditing(null); setShowEditor(!showEditor); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white"
-          style={{ background: '#a855f7' }}>
-          <Plus className="w-3.5 h-3.5" /> New Template
+        <button
+          onClick={() => { setEditing(null); setShowEditor(!showEditor); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4" /> New Template
         </button>
       </div>
 
       {/* Editor */}
       {showEditor && (
-        <div className="rounded-xl p-5 mb-6" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <h2 className="text-[14px] font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">
             {editing ? 'Edit Template' : 'Create Template'}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Name</label>
-              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="HVAC Step 1" />
+              <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                placeholder="HVAC Step 1"
+              />
             </div>
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Step Type</label>
-              <select value={form.step_type} onChange={e => setForm({ ...form, step_type: e.target.value })}
-                className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}>
+              <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">Step Type</label>
+              <select
+                value={form.step_type}
+                onChange={e => setForm({ ...form, step_type: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow cursor-pointer"
+              >
                 {STEP_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
               </select>
             </div>
           </div>
           <div className="mb-4">
-            <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Subject Template</label>
-            <input type="text" value={form.subject_template} onChange={e => setForm({ ...form, subject_template: e.target.value })}
-              className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}
-              placeholder="Quick question about {{company_name}}" />
+            <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">Subject Template</label>
+            <input
+              type="text"
+              value={form.subject_template}
+              onChange={e => setForm({ ...form, subject_template: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+              placeholder="Quick question about {{company_name}}"
+            />
           </div>
           <div className="mb-4">
-            <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Body Template</label>
-            <textarea value={form.body_template} onChange={e => setForm({ ...form, body_template: e.target.value })}
-              className="w-full px-3 py-2 rounded-md text-[13px] outline-none h-32 resize-none font-mono" style={inputStyle}
-              placeholder="Hi {{prospect_name}},\n\nI noticed..." />
+            <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">Body Template</label>
+            <textarea
+              value={form.body_template}
+              onChange={e => setForm({ ...form, body_template: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-32 resize-none font-mono"
+              placeholder="Hi {{prospect_name}},&#10;&#10;I noticed..."
+            />
           </div>
           <div className="mb-4">
-            <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>AI Instructions (optional)</label>
-            <textarea value={form.ai_instructions} onChange={e => setForm({ ...form, ai_instructions: e.target.value })}
-              className="w-full px-3 py-2 rounded-md text-[13px] outline-none h-20 resize-none" style={inputStyle}
-              placeholder="Focus on speed-to-lead pain point. Mention their Google rating." />
+            <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">AI Instructions (optional)</label>
+            <textarea
+              value={form.ai_instructions}
+              onChange={e => setForm({ ...form, ai_instructions: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-20 resize-none"
+              placeholder="Focus on speed-to-lead pain point. Mention their Google rating."
+            />
           </div>
           <div className="flex items-center gap-3 mb-4">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_ai_generated}
+              <input
+                type="checkbox"
+                checked={form.is_ai_generated}
                 onChange={e => setForm({ ...form, is_ai_generated: e.target.checked })}
-                className="w-4 h-4 rounded" />
-              <span className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>AI-generated (uses template as guidance)</span>
+                className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+              />
+              <span className="text-xs text-gray-700">AI-generated (uses template as guidance)</span>
             </label>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleSave} disabled={!form.name}
-              className="px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50"
-              style={{ background: '#a855f7' }}>
+            <button
+              onClick={handleSave}
+              disabled={!form.name}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 transition-colors cursor-pointer"
+            >
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={() => { setShowEditor(false); setEditing(null); }}
-              className="px-4 py-2 rounded-lg text-[13px] font-medium"
-              style={{ color: 'var(--text-tertiary)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+            <button
+              onClick={() => { setShowEditor(false); setEditing(null); }}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+            >
               Cancel
             </button>
           </div>
@@ -157,46 +184,46 @@ export default function AdminTemplates() {
 
       {/* Templates list */}
       {templates.length === 0 ? (
-        <div className="text-center py-16 rounded-xl" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <FileText className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-tertiary)' }} />
-          <p className="text-[14px] font-medium" style={{ color: 'var(--text-secondary)' }}>No templates yet</p>
-          <p className="text-[12px] mt-1" style={{ color: 'var(--text-tertiary)' }}>Create templates to customize your outreach emails.</p>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm text-center py-16">
+          <FileText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <p className="text-sm font-medium text-gray-700">No templates yet</p>
+          <p className="text-xs text-gray-400 mt-1">Create templates to customize your outreach emails.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {templates.map(t => (
-            <div key={t.id} className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <div key={t.id} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t.name}</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium capitalize"
-                      style={{ background: 'rgba(124, 91, 240, 0.1)', color: '#a855f7' }}>
+                    <h3 className="text-sm font-semibold text-gray-900">{t.name}</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium capitalize bg-violet-50 text-violet-700 border border-violet-100">
                       {t.step_type?.replace('_', ' ')}
                     </span>
                     {t.is_ai_generated && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                        style={{ background: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa' }}>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
                         AI
                       </span>
                     )}
                   </div>
                   {t.subject_template && (
-                    <p className="text-[12px] mt-1 font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                    <p className="text-xs mt-1 font-mono text-gray-400">
                       Subject: {t.subject_template}
                     </p>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => handleEdit(t)}
-                    className="p-2 rounded-lg transition-colors hover:opacity-80"
-                    style={{ background: 'var(--surface-2)' }}>
-                    <Edit2 className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+                  <button
+                    onClick={() => handleEdit(t)}
+                    className="p-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-gray-400" />
                   </button>
-                  <button onClick={() => handleDelete(t.id)}
-                    className="p-2 rounded-lg transition-colors hover:opacity-80"
-                    style={{ background: 'var(--surface-2)' }}>
-                    <Trash2 className="w-3.5 h-3.5" style={{ color: '#f87171' }} />
+                  <button
+                    onClick={() => handleDelete(t.id)}
+                    className="p-2 rounded-lg bg-white border border-gray-200 hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   </button>
                 </div>
               </div>

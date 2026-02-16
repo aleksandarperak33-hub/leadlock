@@ -3,9 +3,9 @@ import { Shield, CheckCircle, AlertTriangle, XCircle, Clock, Users } from 'lucid
 import { api } from '../api/client';
 
 const STATUS_LEVELS = {
-  green: { icon: CheckCircle, label: 'Compliant', color: '#34d399', bg: 'rgba(52, 211, 153, 0.08)' },
-  yellow: { icon: AlertTriangle, label: 'Warning', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.08)' },
-  red: { icon: XCircle, label: 'Action Required', color: '#f87171', bg: 'rgba(248, 113, 113, 0.08)' },
+  green: { icon: CheckCircle, label: 'Compliant', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', dot: 'bg-emerald-500' },
+  yellow: { icon: AlertTriangle, label: 'Warning', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', dot: 'bg-amber-500' },
+  red: { icon: XCircle, label: 'Action Required', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500' },
 };
 
 export default function Compliance() {
@@ -30,7 +30,7 @@ export default function Compliance() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -48,29 +48,27 @@ export default function Compliance() {
 
   const overallStatus = getOverallStatus();
   const StatusIcon = STATUS_LEVELS[overallStatus].icon;
+  const statusConfig = STATUS_LEVELS[overallStatus];
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Shield className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+      <div className="flex items-center gap-3 mb-8">
+        <Shield className="w-5 h-5 text-indigo-500" />
         <div>
-          <h1 className="text-[20px] font-bold" style={{ color: 'var(--text-primary)' }}>Compliance</h1>
-          <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>TCPA compliance monitoring and audit trail</p>
+          <h1 className="text-xl font-semibold tracking-tight text-gray-900">Compliance</h1>
+          <p className="text-sm text-gray-500">TCPA compliance monitoring and audit trail</p>
         </div>
       </div>
 
       {/* Overall status banner */}
-      <div className="rounded-xl p-5 mb-6" style={{
-        background: STATUS_LEVELS[overallStatus].bg,
-        border: `1px solid ${STATUS_LEVELS[overallStatus].color}20`,
-      }}>
+      <div className={`rounded-xl p-5 mb-6 border ${statusConfig.bg} ${statusConfig.border}`}>
         <div className="flex items-center gap-3">
-          <StatusIcon className="w-6 h-6" style={{ color: STATUS_LEVELS[overallStatus].color }} />
+          <StatusIcon className={`w-6 h-6 ${statusConfig.color}`} />
           <div>
-            <p className="text-[15px] font-semibold" style={{ color: STATUS_LEVELS[overallStatus].color }}>
-              {STATUS_LEVELS[overallStatus].label}
+            <p className={`text-base font-semibold ${statusConfig.color}`}>
+              {statusConfig.label}
             </p>
-            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm text-gray-600 mt-0.5">
               {overallStatus === 'green' && 'All TCPA compliance checks are passing.'}
               {overallStatus === 'yellow' && 'Some compliance metrics need attention.'}
               {overallStatus === 'red' && 'Compliance violations detected. Immediate action required.'}
@@ -128,9 +126,9 @@ export default function Compliance() {
       </div>
 
       {/* Compliance checklist */}
-      <div className="rounded-xl p-5" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-        <h2 className="text-[14px] font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Compliance Checklist</h2>
-        <div className="space-y-3">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-5">Compliance Checklist</h2>
+        <div className="space-y-3.5">
           {[
             { label: 'STOP keyword processing active', ok: true },
             { label: 'Consent records retained (5yr FTC TSR)', ok: true },
@@ -142,15 +140,15 @@ export default function Compliance() {
             { label: 'No URL shorteners in messages', ok: true },
           ].map(({ label, ok }) => (
             <div key={label} className="flex items-center gap-3">
-              <CheckCircle className="w-4 h-4 flex-shrink-0" style={{ color: ok ? '#34d399' : '#f87171' }} />
-              <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <CheckCircle className={`w-4 h-4 flex-shrink-0 ${ok ? 'text-emerald-500' : 'text-red-500'}`} />
+              <span className="text-sm text-gray-600">{label}</span>
             </div>
           ))}
         </div>
       </div>
 
       {summary?.last_audit && (
-        <p className="text-[11px] mt-4" style={{ color: 'var(--text-tertiary)' }}>
+        <p className="text-xs text-gray-400 mt-4">
           Last audit: {new Date(summary.last_audit).toLocaleString()}
         </p>
       )}
@@ -159,18 +157,18 @@ export default function Compliance() {
 }
 
 function ComplianceCard({ title, value, icon: Icon, description, status }) {
-  const statusColor = STATUS_LEVELS[status]?.color || 'var(--text-secondary)';
+  const config = STATUS_LEVELS[status] || STATUS_LEVELS.green;
   return (
-    <div className="rounded-xl p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-      <div className="flex items-center justify-between mb-2">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Icon className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
-          <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{title}</span>
+          <Icon className="w-4 h-4 text-gray-400" />
+          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">{title}</span>
         </div>
-        <div className="w-2 h-2 rounded-full" style={{ background: statusColor }} />
+        <div className={`w-2 h-2 rounded-full ${config.dot}`} />
       </div>
-      <p className="text-[24px] font-bold" style={{ color: statusColor }}>{value}</p>
-      <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{description}</p>
+      <p className={`text-2xl font-bold ${config.color}`}>{value}</p>
+      <p className="text-xs text-gray-400 mt-1.5">{description}</p>
     </div>
   );
 }

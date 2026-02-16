@@ -29,10 +29,10 @@ export default {
         'card': '12px',
       },
       boxShadow: {
-        'card': '0 0 0 1px rgba(148, 163, 184, 0.04), 0 4px 24px rgba(0, 0, 0, 0.2)',
-        'card-hover': '0 0 0 1px rgba(148, 163, 184, 0.08), 0 8px 32px rgba(0, 0, 0, 0.3)',
-        'glow': '0 0 24px rgba(99, 102, 241, 0.12)',
-        'glow-lg': '0 0 48px rgba(99, 102, 241, 0.15)',
+        'card': '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
+        'card-hover': '0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06)',
+        'soft': '0 1px 2px rgba(0, 0, 0, 0.04)',
+        'elevated': '0 8px 24px rgba(0, 0, 0, 0.06)',
       },
       animation: {
         'fade-up': 'fade-up 0.4s ease-out',

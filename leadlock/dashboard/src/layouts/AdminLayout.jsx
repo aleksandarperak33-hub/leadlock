@@ -28,38 +28,36 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="admin-theme flex h-screen overflow-hidden" style={{ background: 'var(--surface-0)' }}>
+    <div className="admin-theme flex h-screen overflow-hidden bg-[#f8f9fb]">
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-[240px] flex flex-col glass-sidebar
+        fixed inset-y-0 left-0 z-50 w-[240px] flex flex-col bg-white border-r border-gray-200
         transform transition-transform duration-300 ease-in-out
         lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 h-16" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+        <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center gradient-btn" style={{ boxShadow: 'none', padding: 0 }}>
               <Zap className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              <span className="text-[14px] font-bold tracking-tight text-gray-900">
                 Lead<span className="gradient-text">Lock</span>
               </span>
-              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md" style={{
-                background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(168, 85, 247, 0.1))',
-                color: '#a855f7',
-                border: '1px solid rgba(168, 85, 247, 0.15)',
-              }}>Admin</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-600 border border-violet-100">
+                Admin
+              </span>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden" style={{ color: 'var(--text-tertiary)' }}>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-400 hover:text-gray-600 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
@@ -67,21 +65,15 @@ export default function AdminLayout() {
               end={to === '/'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `
-                flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200
-                ${isActive ? 'nav-active' : 'hover:bg-white/[0.03]'}
+                flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 cursor-pointer
+                ${isActive ? 'bg-violet-50 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
               `}
-              style={({ isActive }) => ({
-                color: isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              })}
             >
               {({ isActive }) => (
                 <>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{
-                    background: isActive ? 'rgba(124, 58, 237, 0.12)' : 'transparent',
-                  }}>
-                    <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.5} style={{
-                      color: isActive ? '#a855f7' : 'inherit',
-                    }} />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-violet-100' : ''}`}>
+                    <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.5}
+                      style={{ color: isActive ? '#7c3aed' : undefined }} />
                   </div>
                   {label}
                 </>
@@ -91,25 +83,21 @@ export default function AdminLayout() {
         </nav>
 
         {/* System status */}
-        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl" style={{
-          background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.06), rgba(168, 85, 247, 0.03))',
-          border: '1px solid rgba(124, 58, 237, 0.08)',
-        }}>
+        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-live-pulse" />
-              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-glow-ring" />
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-live-pulse" />
+              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-glow-ring" />
             </div>
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>System Active</span>
+            <span className="text-[11px] font-semibold text-gray-500">System Active</span>
           </div>
         </div>
 
         {/* Logout */}
-        <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)' }}>
+        <div className="px-3 py-3 border-t border-gray-100">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 hover:bg-white/[0.03]"
-            style={{ color: 'var(--text-tertiary)' }}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600 cursor-pointer"
           >
             <LogOut className="w-[18px] h-[18px]" strokeWidth={1.5} />
             Sign out
@@ -119,17 +107,17 @@ export default function AdminLayout() {
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         {/* Mobile header */}
-        <div className="lg:hidden flex items-center gap-3 px-4 h-14 sticky top-0 z-30 glass" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-          <button onClick={() => setSidebarOpen(true)} style={{ color: 'var(--text-tertiary)' }}>
+        <div className="lg:hidden flex items-center gap-3 px-4 h-14 sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-200">
+          <button onClick={() => setSidebarOpen(true)} className="text-gray-500 cursor-pointer">
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-[13px] font-bold tracking-tight">
+          <span className="text-[13px] font-bold tracking-tight text-gray-900">
             Lead<span className="gradient-text">Lock</span> Admin
           </span>
         </div>

@@ -30,13 +30,13 @@ export default function AdminOverview() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-6 w-48 rounded animate-pulse" style={{ background: 'var(--surface-2)' }} />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="h-6 w-48 rounded bg-gray-100 animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
+            <div key={i} className="h-28 rounded-xl bg-gray-100 animate-pulse" />
           ))}
         </div>
-        <div className="h-64 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
+        <div className="h-64 rounded-xl bg-gray-100 animate-pulse" />
       </div>
     );
   }
@@ -45,138 +45,178 @@ export default function AdminOverview() {
     {
       label: 'Active Clients',
       value: overview.active_clients,
-      accent: '#7c5bf0',
+      icon: Users,
+      color: 'violet',
     },
     {
       label: 'Monthly Revenue',
       value: `$${(overview.total_mrr || 0).toLocaleString()}`,
       sub: `${overview.clients_by_billing?.active || 0} paying`,
-      accent: '#34d399',
+      icon: DollarSign,
+      color: 'emerald',
     },
     {
       label: 'Leads (30d)',
       value: overview.total_leads_30d,
       sub: `${overview.total_leads_7d} this week`,
-      accent: '#5a72f0',
+      icon: FileText,
+      color: 'blue',
     },
     {
       label: 'Avg Response',
-      value: overview.avg_response_time_ms ? `${(overview.avg_response_time_ms / 1000).toFixed(1)}s` : '—',
+      value: overview.avg_response_time_ms ? `${(overview.avg_response_time_ms / 1000).toFixed(1)}s` : '\u2014',
       sub: `${((overview.conversion_rate || 0) * 100).toFixed(1)}% conversion`,
-      accent: '#fbbf24',
+      icon: Clock,
+      color: 'amber',
     },
   ] : [];
+
+  const iconBgMap = {
+    violet: 'bg-violet-50',
+    emerald: 'bg-emerald-50',
+    blue: 'bg-blue-50',
+    amber: 'bg-amber-50',
+  };
+  const iconColorMap = {
+    violet: 'text-violet-600',
+    emerald: 'text-emerald-600',
+    blue: 'text-blue-600',
+    amber: 'text-amber-600',
+  };
 
   const tierData = overview?.clients_by_tier || {};
   const billingData = overview?.clients_by_billing || {};
 
+  const billingDotColor = (status) => {
+    switch (status) {
+      case 'active': return 'bg-emerald-500';
+      case 'trial': return 'bg-amber-500';
+      case 'past_due': return 'bg-red-500';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const billingTextColor = (status) => {
+    switch (status) {
+      case 'active': return 'text-emerald-700';
+      case 'trial': return 'text-amber-700';
+      case 'past_due': return 'text-red-700';
+      default: return 'text-gray-500';
+    }
+  };
+
   return (
-    <div className="animate-fade-up">
+    <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>System Overview</h1>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full animate-live-pulse" style={{ background: '#34d399' }} />
-          <span className="text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>Live</span>
+        <h1 className="text-lg font-semibold tracking-tight text-gray-900">System Overview</h1>
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <span className="text-xs font-medium text-gray-400">Live</span>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {metrics.map(({ label, value, sub, accent }) => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {metrics.map(({ label, value, sub, icon: Icon, color }) => (
           <div
             key={label}
-            className="glass-card gradient-border relative overflow-hidden p-4"
+            className="bg-white border border-gray-200 rounded-xl shadow-sm p-4"
           >
-            <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full" style={{ background: `linear-gradient(180deg, ${accent}, transparent)`, opacity: 0.6 }} />
-            <div className="pl-2.5">
-              <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
-              <p className="text-xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>{value}</p>
-              {sub && <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{sub}</p>}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{label}</p>
+              <div className={`w-8 h-8 rounded-lg ${iconBgMap[color]} flex items-center justify-center`}>
+                <Icon className={`w-4 h-4 ${iconColorMap[color]}`} />
+              </div>
             </div>
+            <p className="text-2xl font-semibold font-mono text-gray-900">{value}</p>
+            {sub && <p className="text-xs mt-1 text-gray-400">{sub}</p>}
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Clients by Tier */}
-        <div className="glass-card gradient-border p-5">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Clients by Tier</h3>
-          <div className="space-y-2.5">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Clients by Tier</h3>
+          <div className="space-y-3">
             {Object.entries(tierData).sort((a, b) => b[1] - a[1]).map(([tier, count]) => {
               const total = Object.values(tierData).reduce((s, v) => s + v, 0) || 1;
               const pct = ((count / total) * 100).toFixed(0);
               return (
                 <div key={tier}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{tier}</span>
-                    <span className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{count} ({pct}%)</span>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm capitalize text-gray-700">{tier}</span>
+                    <span className="text-xs font-mono text-gray-400">{count} ({pct}%)</span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full" style={{ background: 'var(--surface-3)' }}>
-                    <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: 'var(--accent)', opacity: 0.7 }} />
+                  <div className="w-full h-1.5 rounded-full bg-gray-100">
+                    <div
+                      className="h-1.5 rounded-full bg-violet-500 transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
               );
             })}
             {Object.keys(tierData).length === 0 && (
-              <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>No tier data</p>
+              <p className="text-sm text-gray-400">No tier data</p>
             )}
           </div>
         </div>
 
         {/* Billing Status */}
-        <div className="glass-card gradient-border p-5">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Billing Status</h3>
-          <div className="space-y-2.5">
-            {Object.entries(billingData).sort((a, b) => b[1] - a[1]).map(([status, count]) => {
-              const color = status === 'active' ? '#34d399' : status === 'trial' ? '#fbbf24' : status === 'past_due' ? '#f87171' : 'var(--text-tertiary)';
-              return (
-                <div key={status} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid var(--border)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-                    <span className="text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{status.replace('_', ' ')}</span>
-                  </div>
-                  <span className="text-[12px] font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</span>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Billing Status</h3>
+          <div className="space-y-0.5">
+            {Object.entries(billingData).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
+              <div key={status} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                <div className="flex items-center gap-2.5">
+                  <span className={`w-2 h-2 rounded-full ${billingDotColor(status)}`} />
+                  <span className="text-sm capitalize text-gray-600">{status.replace('_', ' ')}</span>
                 </div>
-              );
-            })}
+                <span className="text-sm font-mono font-medium text-gray-900">{count}</span>
+              </div>
+            ))}
             {Object.keys(billingData).length === 0 && (
-              <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>No billing data</p>
+              <p className="text-sm text-gray-400">No billing data</p>
             )}
           </div>
         </div>
 
         {/* System Health */}
-        <div className="glass-card gradient-border p-5 lg:col-span-2">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>System Health (24h)</h3>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 lg:col-span-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">System Health (24h)</h3>
           {health ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Errors (24h)</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: (health.error_count_24h || 0) > 0 ? '#f87171' : '#34d399' }}>
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs text-gray-500">Errors (24h)</p>
+                <p className={`text-xl font-mono font-semibold mt-1 ${(health.error_count_24h || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                   {health.error_count_24h || 0}
                 </p>
               </div>
-              <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Pending Integrations</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs text-gray-500">Pending Integrations</p>
+                <p className="text-xl font-mono font-semibold mt-1 text-gray-900">
                   {health.pending_integrations?.length || 0}
                 </p>
               </div>
-              <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Recent Errors</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: (health.recent_errors?.length || 0) > 0 ? '#f87171' : '#34d399' }}>
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs text-gray-500">Recent Errors</p>
+                <p className={`text-xl font-mono font-semibold mt-1 ${(health.recent_errors?.length || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                   {health.recent_errors?.length || 0}
                 </p>
               </div>
-              <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Total Booked (30d)</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="text-xs text-gray-500">Total Booked (30d)</p>
+                <p className="text-xl font-mono font-semibold mt-1 text-gray-900">
                   {overview?.total_booked_30d || 0}
                 </p>
               </div>
             </div>
           ) : (
-            <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>Health data unavailable</p>
+            <p className="text-sm text-gray-400">Health data unavailable</p>
           )}
         </div>
       </div>

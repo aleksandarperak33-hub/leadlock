@@ -54,40 +54,42 @@ export default function Settings() {
   };
 
   if (loading) {
-    return <div className="h-96 rounded-xl animate-pulse" style={{ background: 'var(--surface-1)' }} />;
+    return <div className="h-96 rounded-xl bg-gray-100 animate-pulse" />;
   }
 
   const persona = config.persona || {};
   const hours = config.hours || {};
   const services = config.services || {};
 
+  const inputClasses = 'w-full px-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all';
+  const labelClasses = 'block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5';
+
   return (
-    <div className="max-w-2xl animate-fade-up">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900">Settings</h1>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold text-white gradient-btn disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
         >
-          {saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+          {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
           {saved ? 'Saved' : saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2.5 text-[13px]"
-          style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.12)', color: '#f87171' }}>
+        <div className="mb-5 px-4 py-3 rounded-lg flex items-center gap-2.5 text-sm bg-red-50 border border-red-100 text-red-700">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Business Info */}
-        <section className="glass-card gradient-border p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Information</h2>
-          <div className="grid grid-cols-2 gap-4">
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-5">Business Information</h2>
+          <div className="grid grid-cols-2 gap-5">
             {[
               { label: 'Business Name', value: settings?.business_name },
               { label: 'Trade Type', value: settings?.trade_type, capitalize: true },
@@ -95,34 +97,32 @@ export default function Settings() {
               { label: '10DLC Status', value: settings?.ten_dlc_status || 'pending', capitalize: true },
             ].map(({ label, value, capitalize }) => (
               <div key={label}>
-                <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
-                <p className={`text-[13px] mt-0.5 ${capitalize ? 'capitalize' : ''}`} style={{ color: 'var(--text-primary)' }}>{value || '\u2014'}</p>
+                <span className="text-xs text-gray-400">{label}</span>
+                <p className={`text-sm mt-0.5 font-medium ${capitalize ? 'capitalize' : ''} text-gray-900`}>{value || '\u2014'}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* AI Persona */}
-        <section className="glass-card gradient-border p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>AI Persona</h2>
-          <div className="space-y-3.5">
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-5">AI Persona</h2>
+          <div className="space-y-4">
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Rep Name</label>
+              <label className={labelClasses}>Rep Name</label>
               <input
                 type="text"
                 value={persona.rep_name || ''}
                 onChange={e => updateConfig('persona.rep_name', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                style={{ color: 'var(--text-primary)' }}
+                className={inputClasses}
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Tone</label>
+              <label className={labelClasses}>Tone</label>
               <select
                 value={persona.tone || 'friendly_professional'}
                 onChange={e => updateConfig('persona.tone', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                style={{ color: 'var(--text-primary)' }}
+                className={`${inputClasses} cursor-pointer`}
               >
                 <option value="friendly_professional">Friendly Professional</option>
                 <option value="casual">Casual</option>
@@ -130,13 +130,12 @@ export default function Settings() {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Emergency Contact Phone</label>
+              <label className={labelClasses}>Emergency Contact Phone</label>
               <input
                 type="text"
                 value={persona.emergency_contact_phone || ''}
                 onChange={e => updateConfig('persona.emergency_contact_phone', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                style={{ color: 'var(--text-primary)' }}
+                className={inputClasses}
                 placeholder="+15551234567"
               />
             </div>
@@ -144,37 +143,34 @@ export default function Settings() {
         </section>
 
         {/* Business Hours */}
-        <section className="glass-card gradient-border p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Business Hours</h2>
-          <div className="grid grid-cols-2 gap-3">
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-5">Business Hours</h2>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday Start</label>
+              <label className={labelClasses}>Weekday Start</label>
               <input
                 type="time"
                 value={hours.business?.start || '07:00'}
                 onChange={e => updateConfig('hours.business.start', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                style={{ color: 'var(--text-primary)' }}
+                className={inputClasses}
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>Weekday End</label>
+              <label className={labelClasses}>Weekday End</label>
               <input
                 type="time"
                 value={hours.business?.end || '18:00'}
                 onChange={e => updateConfig('hours.business.end', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                style={{ color: 'var(--text-primary)' }}
+                className={inputClasses}
               />
             </div>
           </div>
-          <div className="mt-3.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>After Hours Handling</label>
+          <div className="mt-4">
+            <label className={labelClasses}>After Hours Handling</label>
             <select
               value={hours.after_hours_handling || 'ai_responds_books_next_available'}
               onChange={e => updateConfig('hours.after_hours_handling', e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-              style={{ color: 'var(--text-primary)' }}
+              className={`${inputClasses} cursor-pointer`}
             >
               <option value="ai_responds_books_next_available">AI responds, books next available</option>
               <option value="ai_responds_owner_notified">AI responds, owner notified</option>
@@ -184,24 +180,23 @@ export default function Settings() {
         </section>
 
         {/* Services */}
-        <section className="glass-card gradient-border p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Services</h2>
-          <div className="space-y-3.5">
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-5">Services</h2>
+          <div className="space-y-4">
             {[
               { label: 'Primary Services', key: 'services.primary', val: services.primary },
               { label: 'Secondary Services', key: 'services.secondary', val: services.secondary },
               { label: 'Do Not Quote', key: 'services.do_not_quote', val: services.do_not_quote },
             ].map(({ label, key, val }) => (
               <div key={key}>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {label} <span className="normal-case text-[10px]" style={{ color: 'var(--text-tertiary)' }}>(comma-separated)</span>
+                <label className={labelClasses}>
+                  {label} <span className="normal-case text-[10px] text-gray-400">(comma-separated)</span>
                 </label>
                 <input
                   type="text"
                   value={(val || []).join(', ')}
                   onChange={e => updateConfig(key, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                  className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-                  style={{ color: 'var(--text-primary)' }}
+                  className={inputClasses}
                 />
               </div>
             ))}
@@ -209,17 +204,16 @@ export default function Settings() {
         </section>
 
         {/* Emergency Keywords */}
-        <section className="glass-card gradient-border p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Custom Emergency Keywords</h2>
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-5">Custom Emergency Keywords</h2>
           <input
             type="text"
             value={(config.emergency_keywords || []).join(', ')}
             onChange={e => updateConfig('emergency_keywords', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-            className="w-full px-4 py-2.5 rounded-xl text-[13px] outline-none glass-input"
-            style={{ color: 'var(--text-primary)' }}
+            className={inputClasses}
             placeholder="gas leak, no heat, flooding..."
           />
-          <p className="text-[10px] mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-[11px] text-gray-400 mt-2.5">
             Default keywords (always active): gas leak, carbon monoxide, fire, flooding, burst pipe, no heat, no ac, sewage, exposed wires
           </p>
         </section>

@@ -11,15 +11,15 @@ const SOURCE_LABELS = {
 };
 
 const SOURCE_COLORS = {
-  google_lsa: '#5a72f0',
+  google_lsa: '#6366f1',
   angi: '#f59e0b',
-  facebook: '#818cf8',
-  website: '#34d399',
-  missed_call: '#fbbf24',
-  text_in: '#22d3ee',
-  thumbtack: '#4ade80',
+  facebook: '#8b5cf6',
+  website: '#10b981',
+  missed_call: '#f59e0b',
+  text_in: '#06b6d4',
+  thumbtack: '#22c55e',
   referral: '#a78bfa',
-  yelp: '#f87171',
+  yelp: '#ef4444',
 };
 
 export default function SourceBreakdown({ data = {} }) {
@@ -29,39 +29,39 @@ export default function SourceBreakdown({ data = {} }) {
 
   if (!entries.length) {
     return (
-      <div className="glass-card gradient-border p-5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+        <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 text-gray-500">
           Leads by Source
         </h3>
-        <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No data available</p>
+        <p className="text-sm text-gray-400">No data available</p>
       </div>
     );
   }
 
   return (
-    <div className="glass-card gradient-border p-5">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+      <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 text-gray-500">
         Leads by Source
       </h3>
       <div className="space-y-3">
         {entries.map(([source, count]) => {
           const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
+          const barColor = SOURCE_COLORS[source] || '#6366f1';
           return (
             <div key={source}>
-              <div className="flex items-center justify-between text-[12px] mb-1.5">
-                <span style={{ color: 'var(--text-secondary)' }}>{SOURCE_LABELS[source] || source}</span>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-gray-600">{SOURCE_LABELS[source] || source}</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{pct}%</span>
-                  <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</span>
+                  <span className="tabular-nums text-gray-400">{pct}%</span>
+                  <span className="tabular-nums font-medium text-gray-900">{count}</span>
                 </div>
               </div>
-              <div className="w-full rounded-full h-[5px]" style={{ background: 'var(--surface-3)' }}>
+              <div className="w-full rounded-full h-1.5 bg-gray-100">
                 <div
-                  className="h-[5px] rounded-full transition-all duration-700"
+                  className="h-1.5 rounded-full transition-all duration-700"
                   style={{
                     width: `${(count / max) * 100}%`,
-                    background: SOURCE_COLORS[source] || '#5a72f0',
-                    opacity: 0.75,
+                    background: barColor,
                   }}
                 />
               </div>

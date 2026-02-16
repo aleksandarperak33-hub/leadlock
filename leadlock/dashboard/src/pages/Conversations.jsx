@@ -58,93 +58,96 @@ export default function Conversations() {
   };
 
   return (
-    <div className="animate-fade-up">
-      <h1 className="text-lg font-semibold tracking-tight mb-5" style={{ color: 'var(--text-primary)' }}>Conversations</h1>
+    <div className="min-h-screen" style={{ background: '#f8f9fb' }}>
+      {/* Header */}
+      <h1 className="text-lg font-semibold tracking-tight text-gray-900 mb-6">
+        Conversations
+      </h1>
 
-      <div className="flex gap-3 h-[calc(100vh-180px)]">
-        {/* Lead list */}
-        <div className="w-72 flex-shrink-0 glass-card overflow-y-auto hidden lg:block">
-          <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="flex gap-4 h-[calc(100vh-180px)]">
+        {/* Lead sidebar */}
+        <div className="w-72 flex-shrink-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden hidden lg:flex lg:flex-col">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               Recent Leads
             </p>
           </div>
-          <div>
-            {leads.map(lead => (
-              <button
-                key={lead.id}
-                onClick={() => selectLead(lead.id)}
-                className="w-full text-left px-4 py-2.5 transition-all duration-150"
-                style={{
-                  background: selectedLead === lead.id ? 'var(--accent-muted)' : 'transparent',
-                  borderBottom: '1px solid var(--border)',
-                }}
-                onMouseEnter={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; }}
-                onMouseLeave={e => { if (selectedLead !== lead.id) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                    {lead.first_name || 'Unknown'} {lead.last_name || ''}
-                  </span>
-                  <LeadStatusBadge status={lead.state} />
-                </div>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  {lead.source?.replace('_', ' ')} &middot; {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '—'}
-                </p>
-              </button>
-            ))}
+          <div className="flex-1 overflow-y-auto">
+            {leads.map(lead => {
+              const isSelected = selectedLead === lead.id;
+              return (
+                <button
+                  key={lead.id}
+                  onClick={() => selectLead(lead.id)}
+                  className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-50'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm font-medium truncate ${
+                      isSelected ? 'text-indigo-700' : 'text-gray-900'
+                    }`}>
+                      {lead.first_name || 'Unknown'} {lead.last_name || ''}
+                    </span>
+                    <LeadStatusBadge status={lead.state} />
+                  </div>
+                  <p className="text-[11px] mt-0.5 text-gray-400">
+                    {lead.source?.replace('_', ' ')} &middot; {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '\u2014'}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Conversation panel */}
-        <div className="flex-1 glass-card flex flex-col overflow-hidden">
+        <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
           {!selectedLead ? (
-            <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
               <MessageSquare className="w-8 h-8 mb-3" strokeWidth={1.5} />
-              <p className="text-[13px]">Select a lead to view their conversation</p>
+              <p className="text-sm">Select a lead to view their conversation</p>
             </div>
           ) : (
             <>
+              {/* Conversation header */}
               {leadDetail?.lead && (
-                <div className="px-5 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div className="px-5 py-4 border-b border-gray-100">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => { setSelectedLead(null); navigate('/conversations'); }}
-                      className="lg:hidden"
-                      style={{ color: 'var(--text-tertiary)' }}
+                      className="lg:hidden text-gray-400 hover:text-gray-600 cursor-pointer"
                     >
                       <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ background: 'var(--accent-muted)' }}
-                    >
-                      <User className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                      <User className="w-4 h-4 text-indigo-500" />
                     </div>
                     <div>
-                      <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <p className="text-sm font-medium text-gray-900">
                         {leadDetail.lead.first_name || 'Unknown'} {leadDetail.lead.last_name || ''}
                       </p>
-                      <p className="text-[11px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{leadDetail.lead.phone_masked}</p>
+                      <p className="text-[11px] font-mono text-gray-400">
+                        {leadDetail.lead.phone_masked}
+                      </p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
                       <LeadStatusBadge status={leadDetail.lead.state} />
-                      <span className="text-[11px] capitalize" style={{ color: 'var(--text-tertiary)' }}>
+                      <span className="text-[11px] capitalize text-gray-400">
                         {leadDetail.lead.source?.replace('_', ' ')}
                       </span>
                     </div>
                   </div>
 
+                  {/* Booking info */}
                   {leadDetail.booking && (
-                    <div
-                      className="mt-3 px-3.5 py-2.5 rounded-lg"
-                      style={{ background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.12)' }}
-                    >
-                      <div className="flex items-center gap-1.5 text-[12px] font-medium mb-0.5" style={{ color: '#34d399' }}>
+                    <div className="mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 mb-0.5">
                         <Calendar className="w-3.5 h-3.5" />
                         Appointment Booked
                       </div>
-                      <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                      <p className="text-[11px] text-gray-500">
                         {leadDetail.booking.appointment_date}
                         {leadDetail.booking.time_window_start && ` at ${leadDetail.booking.time_window_start}`}
                         {leadDetail.booking.tech_name && ` with ${leadDetail.booking.tech_name}`}
@@ -154,24 +157,30 @@ export default function Conversations() {
                 </div>
               )}
 
+              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-5">
                 <ConversationThread messages={conversations} />
               </div>
 
+              {/* Timeline */}
               {leadDetail?.events?.length > 0 && (
-                <div className="px-5 py-2.5 max-h-28 overflow-y-auto" style={{ borderTop: '1px solid var(--border)' }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                <div className="px-5 py-3 max-h-28 overflow-y-auto border-t border-gray-100 bg-gray-50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
                     Timeline
                   </p>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     {leadDetail.events.slice(-5).map(event => (
                       <div key={event.id} className="flex items-center gap-2 text-[11px]">
-                        <span className="w-1 h-1 rounded-full" style={{ background: 'var(--text-tertiary)' }} />
-                        <span style={{ color: 'var(--text-tertiary)' }}>{event.action.replace('_', ' ')}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                        <span className="text-gray-500">
+                          {event.action.replace('_', ' ')}
+                        </span>
                         {event.duration_ms && (
-                          <span className="font-mono" style={{ color: 'var(--text-tertiary)' }}>{event.duration_ms}ms</span>
+                          <span className="font-mono text-gray-400">
+                            {event.duration_ms}ms
+                          </span>
                         )}
-                        <span className="ml-auto font-mono" style={{ color: 'var(--text-tertiary)' }}>
+                        <span className="ml-auto font-mono text-gray-400">
                           {format(new Date(event.created_at), 'h:mm a')}
                         </span>
                       </div>

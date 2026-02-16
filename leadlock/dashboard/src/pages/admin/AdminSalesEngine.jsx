@@ -4,46 +4,71 @@ import { Zap, Play, Settings as SettingsIcon, BarChart3, RefreshCw, ChevronDown,
 
 const TRADE_TYPES = ['hvac', 'plumbing', 'roofing', 'electrical', 'solar', 'general'];
 const STATUS_OPTIONS = ['cold', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'won', 'lost'];
-const JOB_STATUS_COLORS = {
-  pending: '#94a3b8',
-  running: '#fbbf24',
-  completed: '#34d399',
-  failed: '#f87171',
-};
-const PROSPECT_STATUS_COLORS = {
-  cold: '#94a3b8',
-  contacted: '#60a5fa',
-  demo_scheduled: '#7c5bf0',
-  demo_completed: '#a78bfa',
-  proposal_sent: '#fbbf24',
-  won: '#34d399',
-  lost: '#f87171',
-};
-const HEALTH_COLORS = { healthy: '#34d399', warning: '#fbbf24', unhealthy: '#f87171', unknown: '#94a3b8' };
 
-const inputStyle = {
-  background: 'var(--surface-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
+const JOB_STATUS_BADGE = {
+  pending: 'bg-gray-50 text-gray-600 border border-gray-100',
+  running: 'bg-amber-50 text-amber-700 border border-amber-100',
+  completed: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  failed: 'bg-red-50 text-red-700 border border-red-100',
 };
 
-function MetricCard({ label, value, sub, color }) {
+const PROSPECT_STATUS_BADGE = {
+  cold: 'bg-gray-50 text-gray-600 border border-gray-100',
+  contacted: 'bg-blue-50 text-blue-700 border border-blue-100',
+  demo_scheduled: 'bg-violet-50 text-violet-700 border border-violet-100',
+  demo_completed: 'bg-purple-50 text-purple-700 border border-purple-100',
+  proposal_sent: 'bg-amber-50 text-amber-700 border border-amber-100',
+  won: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+  lost: 'bg-red-50 text-red-700 border border-red-100',
+};
+
+const PROSPECT_STATUS_DOT = {
+  cold: 'bg-gray-400',
+  contacted: 'bg-blue-500',
+  demo_scheduled: 'bg-violet-500',
+  demo_completed: 'bg-purple-500',
+  proposal_sent: 'bg-amber-500',
+  won: 'bg-emerald-500',
+  lost: 'bg-red-500',
+};
+
+const HEALTH_COLORS = {
+  healthy: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  unhealthy: 'bg-red-500',
+  unknown: 'bg-gray-400',
+};
+
+const HEALTH_TEXT = {
+  healthy: 'text-emerald-700',
+  warning: 'text-amber-700',
+  unhealthy: 'text-red-700',
+  unknown: 'text-gray-500',
+};
+
+function MetricCard({ label, value, sub, variant }) {
+  const textColor = variant === 'success' ? 'text-emerald-600'
+    : variant === 'warning' ? 'text-amber-600'
+    : variant === 'danger' ? 'text-red-600'
+    : variant === 'accent' ? 'text-violet-600'
+    : 'text-gray-900';
+
   return (
-    <div className="glass-card p-4">
-      <p className="text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{label}</p>
-      <p className="text-xl font-semibold font-mono" style={{ color: color || 'var(--text-primary)' }}>{value}</p>
-      {sub && <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{sub}</p>}
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</p>
+      <p className={`text-xl font-semibold font-mono ${textColor}`}>{value}</p>
+      {sub && <p className="text-xs mt-0.5 text-gray-400">{sub}</p>}
     </div>
   );
 }
 
-function StatusBadge({ status, colors }) {
-  const c = colors || PROSPECT_STATUS_COLORS;
+function StatusBadge({ status, type }) {
+  const styles = type === 'job' ? JOB_STATUS_BADGE : PROSPECT_STATUS_BADGE;
+  const cls = styles[status] || 'bg-gray-50 text-gray-600 border border-gray-100';
   return (
-    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded capitalize" style={{
-      color: c[status] || '#94a3b8',
-      background: `${c[status] || '#94a3b8'}15`,
-    }}>{(status || '').replace('_', ' ')}</span>
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-md capitalize ${cls}`}>
+      {(status || '').replace('_', ' ')}
+    </span>
   );
 }
 
@@ -207,23 +232,22 @@ export default function AdminSalesEngine() {
   ];
 
   if (loading) {
-    return <div className="h-64 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />;
+    return <div className="h-64 bg-gray-100 rounded-xl animate-pulse" />;
   }
 
   return (
-    <div className="animate-fade-up">
+    <div style={{ backgroundColor: '#f8f9fb' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Sales Engine</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-gray-900">Sales Engine</h1>
           <button
             onClick={handleToggle}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
-            style={{
-              background: config?.is_active ? 'rgba(52, 211, 153, 0.1)' : 'rgba(148, 163, 184, 0.1)',
-              color: config?.is_active ? '#34d399' : '#94a3b8',
-              border: `1px solid ${config?.is_active ? 'rgba(52, 211, 153, 0.2)' : 'rgba(148, 163, 184, 0.2)'}`,
-            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              config?.is_active
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-gray-50 text-gray-500 border border-gray-200'
+            }`}
           >
             <Zap className="w-3 h-3" />
             {config?.is_active ? 'Active' : 'Inactive'}
@@ -231,7 +255,7 @@ export default function AdminSalesEngine() {
         </div>
         <button
           onClick={() => { setShowScrapeForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-all gradient-btn"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
         >
           <Play className="w-3.5 h-3.5" />
           Run Scrape
@@ -244,12 +268,11 @@ export default function AdminSalesEngine() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-md capitalize transition-all whitespace-nowrap"
-            style={{
-              background: activeTab === key ? 'var(--accent-muted)' : 'transparent',
-              color: activeTab === key ? 'var(--accent)' : 'var(--text-tertiary)',
-              border: activeTab === key ? '1px solid rgba(124, 91, 240, 0.2)' : '1px solid var(--border)',
-            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === key
+                ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
+            }`}
           >
             <Icon className="w-3.5 h-3.5" />
             {label}
@@ -259,38 +282,41 @@ export default function AdminSalesEngine() {
 
       {/* Scrape Form Modal */}
       {showScrapeForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl p-6 glass-card gradient-border">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm bg-white border border-gray-200 rounded-xl shadow-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>Run Manual Scrape</h2>
-              <button onClick={() => setShowScrapeForm(false)} style={{ color: 'var(--text-tertiary)' }}><X className="w-4 h-4" /></button>
+              <h2 className="text-base font-semibold text-gray-900">Run Manual Scrape</h2>
+              <button onClick={() => setShowScrapeForm(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>City</label>
+                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">City</label>
                 <input
                   type="text" value={scrapeForm.city} onChange={e => setScrapeForm(f => ({ ...f, city: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="Austin"
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                  placeholder="Austin"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>State</label>
+                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">State</label>
                 <input
                   type="text" value={scrapeForm.state} onChange={e => setScrapeForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                  className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="TX" maxLength={2}
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                  placeholder="TX" maxLength={2}
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>Trade Type</label>
+                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Trade Type</label>
                 <select value={scrapeForm.trade_type} onChange={e => setScrapeForm(f => ({ ...f, trade_type: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}>
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer">
                   {TRADE_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                 </select>
               </div>
               <button
                 onClick={handleScrape} disabled={scraping || !scrapeForm.city || !scrapeForm.state}
-                className="w-full py-2.5 rounded-md text-[13px] font-medium text-white transition-all disabled:opacity-50"
-                style={{ background: 'var(--accent)' }}
+                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {scraping ? 'Scraping...' : 'Start Scrape'}
               </button>
@@ -305,23 +331,23 @@ export default function AdminSalesEngine() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             <MetricCard label="Prospects Scraped" value={metrics.prospects?.total || 0} />
             <MetricCard label="Emails Sent" value={metrics.emails?.sent || 0} />
-            <MetricCard label="Open Rate" value={`${metrics.emails?.open_rate || 0}%`} color={metrics.emails?.open_rate > 20 ? '#34d399' : '#fbbf24'} />
-            <MetricCard label="Reply Rate" value={`${metrics.emails?.reply_rate || 0}%`} color={metrics.emails?.reply_rate > 5 ? '#34d399' : '#fbbf24'} />
+            <MetricCard label="Open Rate" value={`${metrics.emails?.open_rate || 0}%`} variant={metrics.emails?.open_rate > 20 ? 'success' : 'warning'} />
+            <MetricCard label="Reply Rate" value={`${metrics.emails?.reply_rate || 0}%`} variant={metrics.emails?.reply_rate > 5 ? 'success' : 'warning'} />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Demos Booked" value={metrics.conversions?.demos_booked || 0} color="#7c5bf0" />
-            <MetricCard label="Won" value={metrics.conversions?.won || 0} color="#34d399" />
+            <MetricCard label="Demos Booked" value={metrics.conversions?.demos_booked || 0} variant="accent" />
+            <MetricCard label="Won" value={metrics.conversions?.won || 0} variant="success" />
             <MetricCard label="Total Cost" value={`$${metrics.cost?.total || 0}`} />
-            <MetricCard label="Bounced" value={metrics.emails?.bounced || 0} color={metrics.emails?.bounced > 0 ? '#f87171' : 'var(--text-primary)'} />
+            <MetricCard label="Bounced" value={metrics.emails?.bounced || 0} variant={metrics.emails?.bounced > 0 ? 'danger' : undefined} />
           </div>
-          <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <p className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>Pipeline Breakdown</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-3">Pipeline Breakdown</p>
             <div className="flex flex-wrap gap-3">
               {Object.entries(metrics.prospects?.by_status || {}).map(([status, count]) => (
                 <div key={status} className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: PROSPECT_STATUS_COLORS[status] || '#94a3b8' }} />
-                  <span className="text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{status.replace('_', ' ')}</span>
-                  <span className="text-[12px] font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{count}</span>
+                  <span className={`w-2 h-2 rounded-full ${PROSPECT_STATUS_DOT[status] || 'bg-gray-400'}`} />
+                  <span className="text-xs capitalize text-gray-500">{status.replace('_', ' ')}</span>
+                  <span className="text-xs font-mono font-medium text-gray-900">{count}</span>
                 </div>
               ))}
             </div>
@@ -335,17 +361,18 @@ export default function AdminSalesEngine() {
           {/* Filters */}
           <div className="flex gap-2 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
               <input
                 type="text" value={prospectsFilter.search}
                 onChange={e => { setProspectsFilter(f => ({ ...f, search: e.target.value })); setProspectsPage(1); }}
-                className="w-full pl-8 pr-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="Search name, company, email..."
+                className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                placeholder="Search name, company, email..."
               />
             </div>
             <select
               value={prospectsFilter.status}
               onChange={e => { setProspectsFilter(f => ({ ...f, status: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}
+              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer"
             >
               <option value="">All Statuses</option>
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
@@ -353,7 +380,7 @@ export default function AdminSalesEngine() {
             <select
               value={prospectsFilter.trade_type}
               onChange={e => { setProspectsFilter(f => ({ ...f, trade_type: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle}
+              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer"
             >
               <option value="">All Trades</option>
               {TRADE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -362,41 +389,44 @@ export default function AdminSalesEngine() {
 
           <div className="flex gap-4">
             {/* Prospects Table */}
-            <div className={`rounded-card overflow-hidden ${selectedProspect ? 'flex-1' : 'w-full'}`} style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+            <div className={`bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden ${selectedProspect ? 'flex-1' : 'w-full'}`}>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <tr className="bg-gray-50 border-b border-gray-100">
                       {['Name', 'Email', 'Trade', 'Status', 'Step', 'Opened', 'Cost'].map(h => (
-                        <th key={h} className="text-left px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{h}</th>
+                        <th key={h} className="text-left px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {prospects.length === 0 ? (
-                      <tr><td colSpan={7} className="px-4 py-12 text-center text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No prospects found.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">No prospects found.</td></tr>
                     ) : prospects.map(p => (
                       <tr
                         key={p.id}
                         onClick={() => handleSelectProspect(p)}
-                        className="cursor-pointer transition-colors hover:opacity-80"
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          background: selectedProspect?.id === p.id ? 'var(--accent-muted)' : 'transparent',
-                        }}
+                        className={`cursor-pointer transition-colors border-b border-gray-100 ${
+                          selectedProspect?.id === p.id ? 'bg-violet-50' : 'hover:bg-gray-50'
+                        }`}
                       >
                         <td className="px-3 py-2.5">
-                          <div className="text-[12px] font-medium" style={{ color: 'var(--text-primary)' }}>{p.prospect_name}</div>
+                          <div className="text-xs font-medium text-gray-900">{p.prospect_name}</div>
                           {p.prospect_company && p.prospect_company !== p.prospect_name && (
-                            <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{p.prospect_company}</div>
+                            <div className="text-xs text-gray-400">{p.prospect_company}</div>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>{p.prospect_email || '—'}</td>
-                        <td className="px-3 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{p.prospect_trade_type}</td>
+                        <td className="px-3 py-2.5 text-xs text-gray-500">{p.prospect_email || '\u2014'}</td>
+                        <td className="px-3 py-2.5 text-xs capitalize text-gray-500">{p.prospect_trade_type}</td>
                         <td className="px-3 py-2.5"><StatusBadge status={p.status} /></td>
-                        <td className="px-3 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>{p.outreach_sequence_step}/{config?.max_sequence_steps || 3}</td>
-                        <td className="px-3 py-2.5 text-[12px]" style={{ color: p.last_email_opened_at ? '#34d399' : 'var(--text-tertiary)' }}>{p.last_email_opened_at ? 'Yes' : '—'}</td>
-                        <td className="px-3 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>${(p.total_cost_usd || 0).toFixed(3)}</td>
+                        <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{p.outreach_sequence_step}/{config?.max_sequence_steps || 3}</td>
+                        <td className="px-3 py-2.5 text-xs">
+                          {p.last_email_opened_at
+                            ? <span className="text-emerald-600 font-medium">Yes</span>
+                            : <span className="text-gray-400">\u2014</span>
+                          }
+                        </td>
+                        <td className="px-3 py-2.5 text-xs font-mono text-gray-500">${(p.total_cost_usd || 0).toFixed(3)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -404,14 +434,18 @@ export default function AdminSalesEngine() {
               </div>
               {/* Pagination */}
               {prospectsTotal > 25 && (
-                <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-                  <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{prospectsTotal} total</span>
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+                  <span className="text-xs text-gray-400">{prospectsTotal} total</span>
                   <div className="flex gap-1">
                     <button disabled={prospectsPage <= 1} onClick={() => setProspectsPage(p => p - 1)}
-                      className="px-2 py-1 text-[11px] rounded" style={{ ...inputStyle, opacity: prospectsPage <= 1 ? 0.4 : 1 }}>Prev</button>
-                    <span className="px-2 py-1 text-[11px] font-mono" style={{ color: 'var(--text-secondary)' }}>{prospectsPage}</span>
+                      className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 cursor-pointer transition-colors">
+                      Prev
+                    </button>
+                    <span className="px-2 py-1 text-xs font-mono text-gray-500">{prospectsPage}</span>
                     <button onClick={() => setProspectsPage(p => p + 1)}
-                      className="px-2 py-1 text-[11px] rounded" style={inputStyle}>Next</button>
+                      className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 cursor-pointer transition-colors">
+                      Next
+                    </button>
                   </div>
                 </div>
               )}
@@ -419,13 +453,15 @@ export default function AdminSalesEngine() {
 
             {/* Prospect Detail Panel */}
             {selectedProspect && (
-              <div className="w-[400px] flex-shrink-0 rounded-card overflow-y-auto" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', maxHeight: '80vh' }}>
-                <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="w-[400px] flex-shrink-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-y-auto" style={{ maxHeight: '80vh' }}>
+                <div className="p-4 border-b border-gray-100">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{selectedProspect.prospect_name}</h3>
-                    <button onClick={() => setSelectedProspect(null)} style={{ color: 'var(--text-tertiary)' }}><X className="w-4 h-4" /></button>
+                    <h3 className="text-sm font-semibold text-gray-900">{selectedProspect.prospect_name}</h3>
+                    <button onClick={() => setSelectedProspect(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <div className="space-y-1 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="space-y-1 text-xs text-gray-500">
                     {selectedProspect.prospect_email && <div>Email: {selectedProspect.prospect_email}</div>}
                     {selectedProspect.prospect_phone && <div>Phone: {selectedProspect.prospect_phone}</div>}
                     {selectedProspect.website && <div>Web: {selectedProspect.website}</div>}
@@ -434,13 +470,11 @@ export default function AdminSalesEngine() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => handleDeleteProspect(selectedProspect.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded text-[11px] font-medium"
-                      style={{ background: 'rgba(248, 113, 113, 0.1)', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 cursor-pointer transition-colors">
                       <Trash2 className="w-3 h-3" /> Delete
                     </button>
                     <button onClick={() => handleBlacklistProspect(selectedProspect.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded text-[11px] font-medium"
-                      style={{ background: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 cursor-pointer transition-colors">
                       <Ban className="w-3 h-3" /> Blacklist
                     </button>
                   </div>
@@ -448,37 +482,40 @@ export default function AdminSalesEngine() {
 
                 {/* Email Thread */}
                 <div className="p-4">
-                  <p className="text-[11px] font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-3">
                     <Mail className="w-3 h-3 inline mr-1" /> Email Thread ({prospectEmails.length})
                   </p>
                   {prospectEmails.length === 0 ? (
-                    <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>No emails yet.</p>
+                    <p className="text-xs text-gray-400">No emails yet.</p>
                   ) : (
                     <div className="space-y-3">
                       {prospectEmails.map(email => (
-                        <div key={email.id} className="rounded-lg p-3" style={{
-                          background: email.direction === 'outbound' ? 'var(--surface-2)' : 'rgba(124, 91, 240, 0.05)',
-                          border: `1px solid ${email.direction === 'outbound' ? 'var(--border)' : 'rgba(124, 91, 240, 0.2)'}`,
-                        }}>
+                        <div key={email.id} className={`rounded-lg p-3 border ${
+                          email.direction === 'outbound'
+                            ? 'bg-gray-50 border-gray-100'
+                            : 'bg-violet-50 border-violet-100'
+                        }`}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-medium" style={{ color: email.direction === 'outbound' ? 'var(--text-tertiary)' : '#7c5bf0' }}>
-                              {email.direction === 'outbound' ? `Step ${email.sequence_step} — Sent` : 'Reply'}
+                            <span className={`text-xs font-medium ${
+                              email.direction === 'outbound' ? 'text-gray-500' : 'text-violet-600'
+                            }`}>
+                              {email.direction === 'outbound' ? `Step ${email.sequence_step} \u2014 Sent` : 'Reply'}
                             </span>
-                            <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                            <span className="text-[10px] text-gray-400">
                               {email.sent_at ? new Date(email.sent_at).toLocaleString() : ''}
                             </span>
                           </div>
-                          <p className="text-[12px] font-medium mb-1" style={{ color: 'var(--text-primary)' }}>{email.subject}</p>
-                          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                          <p className="text-xs font-medium mb-1 text-gray-900">{email.subject}</p>
+                          <p className="text-xs leading-relaxed text-gray-500">
                             {email.body_text ? email.body_text.slice(0, 300) : ''}
                             {email.body_text && email.body_text.length > 300 ? '...' : ''}
                           </p>
                           {email.direction === 'outbound' && (
                             <div className="flex gap-2 mt-2">
-                              {email.delivered_at && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52, 211, 153, 0.1)', color: '#34d399' }}>Delivered</span>}
-                              {email.opened_at && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa' }}>Opened</span>}
-                              {email.clicked_at && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(124, 91, 240, 0.1)', color: '#7c5bf0' }}>Clicked</span>}
-                              {email.bounced_at && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(248, 113, 113, 0.1)', color: '#f87171' }}>Bounced</span>}
+                              {email.delivered_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">Delivered</span>}
+                              {email.opened_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">Opened</span>}
+                              {email.clicked_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">Clicked</span>}
+                              {email.bounced_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100">Bounced</span>}
                             </div>
                           )}
                         </div>
@@ -494,30 +531,30 @@ export default function AdminSalesEngine() {
 
       {/* Scrape Jobs Tab */}
       {activeTab === 'scraping' && (
-        <div className="rounded-card overflow-hidden" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr className="bg-gray-50 border-b border-gray-100">
                   {['Platform', 'Trade', 'Location', 'Status', 'Found', 'New', 'Dupes', 'Cost', 'Date'].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>{h}</th>
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {scrapeJobs.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-12 text-center text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No scrape jobs yet. Run your first scrape.</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">No scrape jobs yet. Run your first scrape.</td></tr>
                 ) : scrapeJobs.map(job => (
-                  <tr key={job.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td className="px-4 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{job.platform?.replace('_', ' ')}</td>
-                    <td className="px-4 py-2.5 text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{job.trade_type}</td>
-                    <td className="px-4 py-2.5 text-[12px]" style={{ color: 'var(--text-primary)' }}>{job.city}, {job.state_code}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={job.status} colors={JOB_STATUS_COLORS} /></td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>{job.results_found}</td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: '#34d399' }}>{job.new_prospects_created}</td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{job.duplicates_skipped}</td>
-                    <td className="px-4 py-2.5 text-[12px] font-mono" style={{ color: 'var(--text-secondary)' }}>${job.api_cost_usd?.toFixed(3)}</td>
-                    <td className="px-4 py-2.5 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{job.created_at ? new Date(job.created_at).toLocaleDateString() : '—'}</td>
+                  <tr key={job.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2.5 text-xs capitalize text-gray-500">{job.platform?.replace('_', ' ')}</td>
+                    <td className="px-4 py-2.5 text-xs capitalize text-gray-500">{job.trade_type}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-900">{job.city}, {job.state_code}</td>
+                    <td className="px-4 py-2.5"><StatusBadge status={job.status} type="job" /></td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-gray-500">{job.results_found}</td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-emerald-600">{job.new_prospects_created}</td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-gray-400">{job.duplicates_skipped}</td>
+                    <td className="px-4 py-2.5 text-xs font-mono text-gray-500">${job.api_cost_usd?.toFixed(3)}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-400">{job.created_at ? new Date(job.created_at).toLocaleDateString() : '\u2014'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -531,37 +568,37 @@ export default function AdminSalesEngine() {
         <div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {workerStatus?.workers && Object.entries(workerStatus.workers).map(([name, info]) => (
-              <div key={name} className="rounded-lg p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+              <div key={name} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: HEALTH_COLORS[info.health] || '#94a3b8' }} />
-                  <span className="text-[12px] font-medium capitalize" style={{ color: 'var(--text-primary)' }}>{name.replace('_', ' ')}</span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${HEALTH_COLORS[info.health] || 'bg-gray-400'}`} />
+                  <span className="text-xs font-medium capitalize text-gray-900">{name.replace('_', ' ')}</span>
                 </div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                <p className="text-xs text-gray-400">
                   {info.health === 'unknown' ? 'No heartbeat' :
                     info.last_heartbeat ? `Last: ${new Date(info.last_heartbeat).toLocaleTimeString()}` : 'N/A'}
                 </p>
-                <p className="text-[11px] capitalize font-medium mt-1" style={{ color: HEALTH_COLORS[info.health] }}>
+                <p className={`text-xs capitalize font-medium mt-1 ${HEALTH_TEXT[info.health] || 'text-gray-500'}`}>
                   {info.health}
                 </p>
               </div>
             ))}
           </div>
           {workerStatus?.alerts && (
-            <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-              <p className="text-[11px] font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>Alerts</p>
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Alerts</p>
               <div className="flex items-center gap-2">
-                <span className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>Bounce Rate:</span>
-                <span className="text-[12px] font-mono font-medium" style={{ color: workerStatus.alerts.bounce_rate_alert ? '#f87171' : '#34d399' }}>
+                <span className="text-xs text-gray-500">Bounce Rate:</span>
+                <span className={`text-xs font-mono font-medium ${workerStatus.alerts.bounce_rate_alert ? 'text-red-600' : 'text-emerald-600'}`}>
                   {workerStatus.alerts.bounce_rate || 0}%
                 </span>
                 {workerStatus.alerts.bounce_rate_alert && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(248, 113, 113, 0.1)', color: '#f87171' }}>HIGH</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100">HIGH</span>
                 )}
               </div>
             </div>
           )}
           {!workerStatus && (
-            <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>Loading worker status...</p>
+            <p className="text-sm text-gray-400">Loading worker status...</p>
           )}
         </div>
       )}
@@ -570,39 +607,45 @@ export default function AdminSalesEngine() {
       {activeTab === 'settings' && config && (
         <div className="space-y-5">
           {/* Target Locations */}
-          <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <p className="text-[13px] font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Target Locations</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Target Locations</p>
             <div className="flex flex-wrap gap-2 mb-3">
               {(config.target_locations || []).map((loc, i) => (
-                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px]" style={{ background: 'var(--surface-3)', color: 'var(--text-secondary)' }}>
+                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
                   {loc.city}, {loc.state}
-                  <button onClick={() => removeLocation(i)} className="ml-0.5" style={{ color: 'var(--text-tertiary)' }}><X className="w-3 h-3" /></button>
+                  <button onClick={() => removeLocation(i)} className="ml-0.5 text-gray-400 hover:text-gray-600 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
                 </span>
               ))}
             </div>
             <div className="flex gap-2">
               <input type="text" value={newLocation.city} onChange={e => setNewLocation(l => ({ ...l, city: e.target.value }))}
-                className="flex-1 px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="City" />
+                className="flex-1 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                placeholder="City" />
               <input type="text" value={newLocation.state} onChange={e => setNewLocation(l => ({ ...l, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                className="w-16 px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder="ST" maxLength={2} />
-              <button onClick={addLocation} className="px-3 py-2 rounded-md text-[12px] font-medium text-white" style={{ background: 'var(--accent)' }}>Add</button>
+                className="w-16 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                placeholder="ST" maxLength={2} />
+              <button onClick={addLocation}
+                className="px-3 py-2 rounded-lg text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 cursor-pointer transition-colors">
+                Add
+              </button>
             </div>
           </div>
 
           {/* Target Trade Types */}
-          <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <p className="text-[13px] font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Target Trade Types</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Target Trade Types</p>
             <div className="flex flex-wrap gap-2">
               {TRADE_TYPES.map(trade => {
                 const active = (config.target_trade_types || []).includes(trade);
                 return (
                   <button key={trade} onClick={() => toggleTradeType(trade)}
-                    className="px-3 py-1.5 rounded-md text-[12px] font-medium capitalize transition-all"
-                    style={{
-                      background: active ? 'var(--accent-muted)' : 'var(--surface-2)',
-                      color: active ? 'var(--accent)' : 'var(--text-tertiary)',
-                      border: `1px solid ${active ? 'rgba(124, 91, 240, 0.3)' : 'var(--border)'}`,
-                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
+                      active
+                        ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                        : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300'
+                    }`}
                   >
                     {trade}
                   </button>
@@ -612,8 +655,8 @@ export default function AdminSalesEngine() {
           </div>
 
           {/* Limits */}
-          <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <p className="text-[13px] font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Limits</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Limits</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: 'Daily Emails', key: 'daily_email_limit' },
@@ -622,17 +665,17 @@ export default function AdminSalesEngine() {
                 { label: 'Max Steps', key: 'max_sequence_steps' },
               ].map(({ label, key }) => (
                 <div key={key}>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{label}</label>
+                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
                   <input type="number" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} />
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all" />
                 </div>
               ))}
             </div>
           </div>
 
           {/* Email Sender */}
-          <div className="rounded-card p-4" style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <p className="text-[13px] font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Email Sender</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Email Sender</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
                 { label: 'From Email', key: 'from_email', placeholder: 'outreach@leadlock.io' },
@@ -641,17 +684,17 @@ export default function AdminSalesEngine() {
                 { label: 'Company Address', key: 'company_address', placeholder: '123 Main St, Austin, TX 78701' },
               ].map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--text-tertiary)' }}>{label}</label>
+                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
                   <input type="text" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-md text-[13px] outline-none" style={inputStyle} placeholder={placeholder} />
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                    placeholder={placeholder} />
                 </div>
               ))}
             </div>
           </div>
 
           <button onClick={handleSaveConfig} disabled={saving}
-            className="px-5 py-2.5 rounded-md text-[13px] font-medium text-white transition-all disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}>
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-50 cursor-pointer">
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
         </div>

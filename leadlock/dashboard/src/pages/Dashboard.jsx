@@ -7,10 +7,26 @@ import LiveIndicator from '../components/LiveIndicator';
 import {
   Users, CalendarCheck, Timer, Gauge, Activity
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
 
 const PERIODS = ['7d', '30d', '90d'];
+
+const ACTIVITY_DOT_COLORS = {
+  booking_confirmed: 'bg-emerald-500',
+  lead_created: 'bg-indigo-500',
+  opt_out: 'bg-red-500',
+};
+
+const TOOLTIP_STYLE = {
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '8px',
+  color: '#111827',
+  fontSize: '12px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+  padding: '8px 12px',
+};
 
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -46,11 +62,11 @@ export default function Dashboard() {
 
   if (loading && !metrics) {
     return (
-      <div className="space-y-4 animate-fade-up">
-        <div className="h-6 w-40 rounded-lg animate-pulse" style={{ background: 'var(--surface-2)' }} />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="space-y-4">
+        <div className="h-6 w-40 rounded-lg bg-gray-100 animate-pulse" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 rounded-xl animate-pulse" style={{ background: 'var(--surface-1)' }} />
+            <div key={i} className="h-28 rounded-xl bg-gray-100 animate-pulse" />
           ))}
         </div>
       </div>
@@ -58,23 +74,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="animate-fade-up">
+    <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Overview</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-gray-900">Overview</h1>
           <div className="mt-1.5"><LiveIndicator /></div>
         </div>
-        <div className="flex rounded-lg p-0.5 glass" style={{ border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+        <div className="flex rounded-lg p-0.5 bg-gray-100 border border-gray-200">
           {PERIODS.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className="px-3 py-1 text-[11px] font-medium rounded-md transition-all duration-200"
-              style={{
-                background: period === p ? 'var(--accent-muted)' : 'transparent',
-                color: period === p ? 'var(--accent)' : 'var(--text-tertiary)',
-              }}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                period === p
+                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
             >
               {p}
             </button>
@@ -83,7 +99,7 @@ export default function Dashboard() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard
           title="Total Leads"
           value={metrics?.total_leads ?? '\u2014'}
@@ -115,15 +131,15 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid lg:grid-cols-2 gap-3 mb-6">
+      <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <ResponseTimeChart data={metrics?.response_time_distribution || []} />
         <SourceBreakdown data={metrics?.leads_by_source || {}} />
       </div>
 
       {/* Leads per day */}
       {metrics?.leads_by_day?.length > 0 && (
-        <div className="glass-card gradient-border p-5 mb-6">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+          <h3 className="text-xs font-semibold uppercase tracking-wider mb-4 text-gray-500">
             Leads Per Day
           </h3>
           <div className="h-48">
@@ -131,25 +147,16 @@ export default function Dashboard() {
               <AreaChart data={metrics.leads_by_day} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" tick={{ fill: '#555c72', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#555c72', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: 'rgba(15, 17, 24, 0.9)',
-                    backdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '10px',
-                    color: '#edf0f7',
-                    fontSize: '12px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                  }}
-                />
-                <Area type="monotone" dataKey="count" stroke="var(--accent)" fill="url(#leadGradient)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="booked" stroke="#34d399" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: '#e5e7eb' }} />
+                <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#leadGradient)" strokeWidth={2} />
+                <Area type="monotone" dataKey="booked" stroke="#10b981" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -157,31 +164,25 @@ export default function Dashboard() {
       )}
 
       {/* Activity feed */}
-      <div className="glass-card gradient-border p-5">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Activity className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} strokeWidth={1.75} />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+          <Activity className="w-3.5 h-3.5 text-gray-400" strokeWidth={1.75} />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Recent Activity
           </h3>
         </div>
-        <div className="space-y-2.5 max-h-80 overflow-y-auto">
+        <div className="space-y-1 max-h-80 overflow-y-auto">
           {activity.length === 0 && (
-            <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>No recent activity</p>
+            <p className="text-sm text-gray-400">No recent activity</p>
           )}
           {activity.map((event, i) => (
-            <div key={i} className="flex items-start gap-3 text-[13px] py-1">
-              <div className="w-1.5 h-1.5 mt-[7px] rounded-full flex-shrink-0" style={{
-                background: event.type === 'booking_confirmed' ? '#34d399' :
-                            event.type === 'lead_created' ? '#6366f1' :
-                            event.type === 'opt_out' ? '#f87171' :
-                            '#475569',
-                boxShadow: event.type === 'booking_confirmed' ? '0 0 6px rgba(52, 211, 153, 0.5)' :
-                           event.type === 'lead_created' ? '0 0 6px rgba(99, 102, 241, 0.5)' :
-                           'none',
-              }} />
+            <div key={i} className="flex items-start gap-3 text-sm py-2 rounded-lg hover:bg-gray-50 px-2 -mx-2 transition-colors">
+              <div className={`w-1.5 h-1.5 mt-[7px] rounded-full flex-shrink-0 ${
+                ACTIVITY_DOT_COLORS[event.type] || 'bg-gray-400'
+              }`} />
               <div className="flex-1 min-w-0">
-                <p className="truncate" style={{ color: 'var(--text-secondary)' }}>{event.message}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                <p className="truncate text-gray-600">{event.message}</p>
+                <p className="text-xs mt-0.5 text-gray-400">
                   {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
                 </p>
               </div>

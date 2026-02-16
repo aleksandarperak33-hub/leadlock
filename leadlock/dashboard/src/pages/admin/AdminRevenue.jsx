@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { DollarSign, TrendingUp } from 'lucide-react';
+import { DollarSign, TrendingUp, Users } from 'lucide-react';
 
 export default function AdminRevenue() {
   const [revenue, setRevenue] = useState(null);
@@ -25,10 +25,10 @@ export default function AdminRevenue() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-6 w-40 rounded animate-pulse" style={{ background: 'var(--surface-2)' }} />
-        <div className="grid grid-cols-3 gap-3">
+        <div className="h-6 w-40 rounded bg-gray-100 animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-28 rounded-card animate-pulse" style={{ background: 'var(--surface-1)' }} />
+            <div key={i} className="h-28 rounded-xl bg-gray-100 animate-pulse" />
           ))}
         </div>
       </div>
@@ -40,21 +40,47 @@ export default function AdminRevenue() {
   const topClients = revenue?.top_clients || [];
   const totalClients = revenue?.total_paying_clients || 0;
 
+  const summaryCards = [
+    {
+      label: 'Total MRR',
+      value: `$${totalMrr.toLocaleString()}`,
+      sub: `${totalClients} paying clients`,
+      icon: DollarSign,
+      iconBg: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+    },
+    {
+      label: 'Annualized',
+      value: `$${(totalMrr * 12).toLocaleString()}`,
+      sub: 'projected ARR',
+      icon: TrendingUp,
+      iconBg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+    },
+    {
+      label: 'Avg per Client',
+      value: `$${totalClients > 0 ? Math.round(totalMrr / totalClients).toLocaleString() : '0'}`,
+      sub: 'monthly revenue',
+      icon: Users,
+      iconBg: 'bg-amber-50',
+      iconColor: 'text-amber-600',
+    },
+  ];
+
   return (
-    <div className="animate-fade-up">
+    <div style={{ background: '#f8f9fb' }}>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Revenue</h1>
-        <div className="flex gap-1">
+        <h1 className="text-lg font-semibold tracking-tight text-gray-900">Revenue</h1>
+        <div className="flex gap-1.5">
           {['7d', '30d', '90d'].map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-all"
-              style={{
-                background: period === p ? 'var(--accent-muted)' : 'transparent',
-                color: period === p ? 'var(--accent)' : 'var(--text-tertiary)',
-                border: period === p ? '1px solid rgba(124, 91, 240, 0.2)' : '1px solid var(--border)',
-              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer border ${
+                period === p
+                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
+              }`}
             >
               {p}
             </button>
@@ -63,86 +89,71 @@ export default function AdminRevenue() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-        <div className="glass-card gradient-border relative overflow-hidden p-5">
-          <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#34d399', opacity: 0.6 }} />
-          <div className="pl-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Total MRR</p>
-            <p className="text-2xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>
-              ${totalMrr.toLocaleString()}
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{totalClients} paying clients</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {summaryCards.map(({ label, value, sub, icon: Icon, iconBg, iconColor }) => (
+          <div key={label} className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{label}</p>
+              <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}>
+                <Icon className={`w-4 h-4 ${iconColor}`} />
+              </div>
+            </div>
+            <p className="text-2xl font-semibold font-mono text-gray-900">{value}</p>
+            <p className="text-xs mt-1.5 text-gray-400">{sub}</p>
           </div>
-        </div>
-        <div className="glass-card gradient-border relative overflow-hidden p-5">
-          <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#7c5bf0', opacity: 0.6 }} />
-          <div className="pl-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Annualized</p>
-            <p className="text-2xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>
-              ${(totalMrr * 12).toLocaleString()}
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>projected ARR</p>
-          </div>
-        </div>
-        <div className="glass-card gradient-border relative overflow-hidden p-5">
-          <div className="absolute left-0 top-4 bottom-4 w-[2px] rounded-full" style={{ background: '#fbbf24', opacity: 0.6 }} />
-          <div className="pl-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Avg per Client</p>
-            <p className="text-2xl font-semibold font-mono mt-1" style={{ color: 'var(--text-primary)' }}>
-              ${totalClients > 0 ? Math.round(totalMrr / totalClients).toLocaleString() : '0'}
-            </p>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>monthly revenue</p>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* MRR by Tier */}
-        <div className="glass-card gradient-border p-5">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>MRR by Tier</h3>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">MRR by Tier</h3>
           <div className="space-y-3">
             {Object.entries(mrrByTier).sort((a, b) => b[1] - a[1]).map(([tier, mrr]) => {
               const pct = totalMrr > 0 ? ((mrr / totalMrr) * 100).toFixed(0) : 0;
               return (
                 <div key={tier}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] capitalize" style={{ color: 'var(--text-secondary)' }}>{tier}</span>
-                    <span className="text-[12px] font-mono font-medium" style={{ color: 'var(--text-primary)' }}>
-                      ${mrr.toLocaleString()} <span style={{ color: 'var(--text-tertiary)' }}>({pct}%)</span>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm capitalize text-gray-700">{tier}</span>
+                    <span className="text-sm font-mono font-medium text-gray-900">
+                      ${mrr.toLocaleString()} <span className="text-gray-400">({pct}%)</span>
                     </span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full" style={{ background: 'var(--surface-3)' }}>
-                    <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: 'var(--accent)', opacity: 0.7 }} />
+                  <div className="w-full h-1.5 rounded-full bg-gray-100">
+                    <div
+                      className="h-1.5 rounded-full bg-violet-500 transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
               );
             })}
             {Object.keys(mrrByTier).length === 0 && (
-              <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>No tier data</p>
+              <p className="text-sm text-gray-400">No tier data</p>
             )}
           </div>
         </div>
 
         {/* Top Clients by Revenue */}
-        <div className="glass-card gradient-border p-5">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider mb-4" style={{ color: 'var(--text-tertiary)' }}>Top Clients by Revenue</h3>
-          <div className="space-y-1">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Top Clients by Revenue</h3>
+          <div className="space-y-0.5">
             {topClients.map((client, i) => (
-              <div key={client.id || i} className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-5 text-[11px] font-mono text-center" style={{ color: 'var(--text-tertiary)' }}>{i + 1}</span>
+              <div key={client.id || i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-mono font-medium text-gray-500">{i + 1}</span>
                   <div>
-                    <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{client.business_name}</p>
-                    <p className="text-[11px] capitalize" style={{ color: 'var(--text-tertiary)' }}>{client.trade_type} &middot; {client.tier}</p>
+                    <p className="text-sm font-medium text-gray-900">{client.business_name}</p>
+                    <p className="text-xs capitalize text-gray-400">{client.trade_type} &middot; {client.tier}</p>
                   </div>
                 </div>
-                <span className="text-[13px] font-mono font-medium" style={{ color: '#34d399' }}>
+                <span className="text-sm font-mono font-semibold text-emerald-600">
                   ${client.mrr?.toLocaleString() || '0'}
                 </span>
               </div>
             ))}
             {topClients.length === 0 && (
-              <p className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>No revenue data</p>
+              <p className="text-sm text-gray-400">No revenue data</p>
             )}
           </div>
         </div>
