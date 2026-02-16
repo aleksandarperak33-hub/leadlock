@@ -152,21 +152,21 @@ export default function AdminOverview() {
           {health ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Errors</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: (health.recent_errors || 0) > 0 ? '#f87171' : '#34d399' }}>
-                  {health.recent_errors || 0}
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Errors (24h)</p>
+                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: (health.error_count_24h || 0) > 0 ? '#f87171' : '#34d399' }}>
+                  {health.error_count_24h || 0}
                 </p>
               </div>
               <div>
                 <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Pending Integrations</p>
                 <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {health.pending_integrations || 0}
+                  {health.pending_integrations?.length || 0}
                 </p>
               </div>
               <div>
-                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Active Integrations</p>
-                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: '#34d399' }}>
-                  {health.active_integrations || 0}
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>Recent Errors</p>
+                <p className="text-lg font-mono font-semibold mt-0.5" style={{ color: (health.recent_errors?.length || 0) > 0 ? '#f87171' : '#34d399' }}>
+                  {health.recent_errors?.length || 0}
                 </p>
               </div>
               <div>
