@@ -77,49 +77,55 @@ async def search_local_businesses(
             total_cost += BRAVE_COST_PER_SEARCH
 
         # Parse POI results into our standard format
+        # Brave POI response fields: title, url, postal_address, contact, categories, results (nested)
         results = []
         for poi in (poi_data.get("results") or []):
-            # Build address string from components
-            address_obj = poi.get("address") or {}
-            address_parts = []
-            if address_obj.get("streetAddress"):
-                address_parts.append(address_obj["streetAddress"])
-            if address_obj.get("addressLocality"):
-                address_parts.append(address_obj["addressLocality"])
-            if address_obj.get("addressRegion"):
-                address_parts.append(address_obj["addressRegion"])
-            if address_obj.get("postalCode"):
-                address_parts.append(address_obj["postalCode"])
-            full_address = ", ".join(address_parts)
+            # Name — Brave uses "title" not "name"
+            name = poi.get("title") or poi.get("name") or ""
 
-            # Extract phone — Brave puts it in various places
+            # Address — Brave uses postal_address.displayAddress
+            postal_addr = poi.get("postal_address") or {}
+            full_address = postal_addr.get("displayAddress") or ""
+
+            # Phone — in contact.telephone
             phone = ""
-            if poi.get("phone"):
-                phone = poi["phone"]
-            elif (poi.get("contact") or {}).get("telephone"):
-                phone = poi["contact"]["telephone"]
+            contact = poi.get("contact") or {}
+            if contact.get("telephone"):
+                phone = contact["telephone"]
 
-            # Extract rating
+            # Website — Brave uses "url"
+            website = poi.get("url") or ""
+
+            # Rating — check nested "results" array for aggregateRating
             rating = None
-            rating_obj = poi.get("rating") or {}
-            if isinstance(rating_obj, dict):
-                rating = rating_obj.get("ratingValue")
-            elif isinstance(rating_obj, (int, float)):
-                rating = rating_obj
-
             review_count = None
-            if isinstance(rating_obj, dict):
-                review_count = rating_obj.get("ratingCount")
+            nested_results = poi.get("results") or []
+            for nr in nested_results:
+                if isinstance(nr, dict):
+                    rating_obj = nr.get("rating") or {}
+                    if isinstance(rating_obj, dict):
+                        if rating_obj.get("ratingValue") is not None:
+                            rating = rating_obj["ratingValue"]
+                        if rating_obj.get("ratingCount") is not None:
+                            review_count = rating_obj["ratingCount"]
+                        break
+
+            # Place ID — generate from URL since Brave doesn't provide stable IDs
+            place_id = f"brave_{hash(name + phone + full_address) & 0xFFFFFFFF}"
+
+            # Categories
+            categories = poi.get("categories") or []
+            cat_str = ", ".join(categories) if categories else ""
 
             results.append({
-                "name": poi.get("name", poi.get("title", "")),
-                "place_id": f"brave_{poi.get('id', '')}",
+                "name": name,
+                "place_id": place_id,
                 "address": full_address,
                 "phone": phone,
-                "website": poi.get("website", poi.get("url", "")),
+                "website": website,
                 "rating": rating,
                 "reviews": review_count,
-                "type": ", ".join(poi.get("categories", [])) if poi.get("categories") else "",
+                "type": cat_str,
             })
 
         logger.info(
