@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     dashboard_jwt_expiry_hours: int = 24
 
     # Sales Engine
-    serpapi_api_key: str = ""
+    brave_api_key: str = ""
     hunter_api_key: str = ""
     sales_engine_enabled: bool = False
     sales_daily_email_limit: int = 50

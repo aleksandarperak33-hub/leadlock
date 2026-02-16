@@ -1,6 +1,6 @@
 """
-Scraping service — Google Maps & Yelp via SerpAPI.
-Discovers home services contractors by trade type and location.
+Scraping service — local business discovery via Brave Search API.
+Two-step process: web search for location IDs → POI details for business data.
 """
 import logging
 import re
@@ -9,115 +9,127 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-SERPAPI_BASE = "https://serpapi.com/search"
-SERPAPI_COST_PER_SEARCH = 0.01  # ~$0.01/search
+BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+BRAVE_POI_URL = "https://api.search.brave.com/res/v1/local/pois"
+BRAVE_COST_PER_SEARCH = 0.005  # ~$5/1k requests
 
 
-async def search_google_maps(
+async def search_local_businesses(
     query: str,
     location: str,
     api_key: str,
 ) -> dict:
     """
-    Search Google Maps for businesses via SerpAPI.
+    Search for local businesses via Brave Search API.
+    Step 1: Web search with location filter to get POI IDs.
+    Step 2: Fetch full POI details (phone, website, rating, etc).
 
     Args:
         query: Search term, e.g. "HVAC contractors"
         location: Location string, e.g. "Austin, TX"
-        api_key: SerpAPI API key
+        api_key: Brave Search API key
 
     Returns:
         {"results": [...], "cost_usd": float}
     """
-    params = {
-        "engine": "google_maps",
-        "q": query,
-        "location": location,
-        "type": "search",
-        "api_key": api_key,
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": api_key,
     }
+
+    total_cost = 0.0
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(SERPAPI_BASE, params=params)
+            # Step 1: Web search to get location IDs
+            search_params = {
+                "q": f"{query} {location}",
+                "result_filter": "locations",
+                "count": 20,
+            }
+            response = await client.get(
+                BRAVE_SEARCH_URL, params=search_params, headers=headers
+            )
             response.raise_for_status()
-            data = response.json()
+            search_data = response.json()
+            total_cost += BRAVE_COST_PER_SEARCH
 
+            # Extract location IDs
+            locations = search_data.get("locations", {}).get("results", [])
+            if not locations:
+                logger.info("Brave search: no local results for %s %s", query, location)
+                return {"results": [], "cost_usd": total_cost}
+
+            location_ids = [loc["id"] for loc in locations if loc.get("id")]
+            if not location_ids:
+                logger.info("Brave search: no location IDs for %s %s", query, location)
+                return {"results": [], "cost_usd": total_cost}
+
+            # Step 2: Fetch POI details (max 20 per request)
+            poi_params = [("ids", lid) for lid in location_ids[:20]]
+            poi_response = await client.get(
+                BRAVE_POI_URL, params=poi_params, headers=headers
+            )
+            poi_response.raise_for_status()
+            poi_data = poi_response.json()
+            total_cost += BRAVE_COST_PER_SEARCH
+
+        # Parse POI results into our standard format
         results = []
-        for place in data.get("local_results", []):
+        for poi in poi_data.get("results", []):
+            # Build address string from components
+            address_obj = poi.get("address", {})
+            address_parts = []
+            if address_obj.get("streetAddress"):
+                address_parts.append(address_obj["streetAddress"])
+            if address_obj.get("addressLocality"):
+                address_parts.append(address_obj["addressLocality"])
+            if address_obj.get("addressRegion"):
+                address_parts.append(address_obj["addressRegion"])
+            if address_obj.get("postalCode"):
+                address_parts.append(address_obj["postalCode"])
+            full_address = ", ".join(address_parts)
+
+            # Extract phone — Brave puts it in various places
+            phone = ""
+            if poi.get("phone"):
+                phone = poi["phone"]
+            elif poi.get("contact", {}).get("telephone"):
+                phone = poi["contact"]["telephone"]
+
+            # Extract rating
+            rating = None
+            rating_obj = poi.get("rating", {})
+            if isinstance(rating_obj, dict):
+                rating = rating_obj.get("ratingValue")
+            elif isinstance(rating_obj, (int, float)):
+                rating = rating_obj
+
+            review_count = None
+            if isinstance(rating_obj, dict):
+                review_count = rating_obj.get("ratingCount")
+
             results.append({
-                "name": place.get("title", ""),
-                "place_id": place.get("place_id", ""),
-                "address": place.get("address", ""),
-                "phone": place.get("phone", ""),
-                "website": place.get("website", ""),
-                "rating": place.get("rating"),
-                "reviews": place.get("reviews"),
-                "type": place.get("type", ""),
+                "name": poi.get("name", poi.get("title", "")),
+                "place_id": f"brave_{poi.get('id', '')}",
+                "address": full_address,
+                "phone": phone,
+                "website": poi.get("website", poi.get("url", "")),
+                "rating": rating,
+                "reviews": review_count,
+                "type": ", ".join(poi.get("categories", [])) if poi.get("categories") else "",
             })
 
         logger.info(
-            "Google Maps search: query=%s location=%s results=%d",
-            query, location, len(results),
+            "Brave search: query='%s %s' location_ids=%d results=%d cost=$%.3f",
+            query, location, len(location_ids), len(results), total_cost,
         )
-        return {"results": results, "cost_usd": SERPAPI_COST_PER_SEARCH}
+        return {"results": results, "cost_usd": total_cost}
 
     except Exception as e:
-        logger.error("Google Maps search failed: %s", str(e))
-        return {"results": [], "cost_usd": SERPAPI_COST_PER_SEARCH, "error": str(e)}
-
-
-async def search_yelp(
-    query: str,
-    location: str,
-    api_key: str,
-) -> dict:
-    """
-    Search Yelp for businesses via SerpAPI.
-
-    Args:
-        query: Search term, e.g. "plumbing contractors"
-        location: Location string, e.g. "Austin, TX"
-        api_key: SerpAPI API key
-
-    Returns:
-        {"results": [...], "cost_usd": float}
-    """
-    params = {
-        "engine": "yelp",
-        "find_desc": query,
-        "find_loc": location,
-        "api_key": api_key,
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(SERPAPI_BASE, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-        results = []
-        for biz in data.get("organic_results", []):
-            results.append({
-                "name": biz.get("title", ""),
-                "place_id": f"yelp_{biz.get('place_ids', [''])[0]}" if biz.get("place_ids") else "",
-                "address": biz.get("neighborhoods", ""),
-                "phone": biz.get("phone", ""),
-                "website": biz.get("link", ""),
-                "rating": biz.get("rating"),
-                "reviews": biz.get("reviews"),
-                "type": ", ".join(biz.get("categories", [])) if biz.get("categories") else "",
-            })
-
-        logger.info(
-            "Yelp search: query=%s location=%s results=%d",
-            query, location, len(results),
-        )
-        return {"results": results, "cost_usd": SERPAPI_COST_PER_SEARCH}
-
-    except Exception as e:
-        logger.error("Yelp search failed: %s", str(e))
-        return {"results": [], "cost_usd": SERPAPI_COST_PER_SEARCH, "error": str(e)}
+        logger.error("Brave search failed: %s", str(e))
+        return {"results": [], "cost_usd": total_cost, "error": str(e)}
 
 
 def parse_address_components(address: str) -> dict:

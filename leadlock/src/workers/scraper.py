@@ -1,5 +1,5 @@
 """
-Lead scraper worker — discovers home services contractors from Google Maps and Yelp.
+Lead scraper worker — discovers home services contractors via Brave Search API.
 Runs every 6 hours. Respects daily scrape limits and deduplicates by place_id/phone.
 """
 import asyncio
@@ -12,7 +12,7 @@ from src.database import async_session_factory
 from src.models.outreach import Outreach
 from src.models.scrape_job import ScrapeJob
 from src.models.sales_config import SalesEngineConfig
-from src.services.scraping import search_google_maps, search_yelp, parse_address_components
+from src.services.scraping import search_local_businesses, parse_address_components
 from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
 from src.config import get_settings
 
@@ -56,8 +56,8 @@ async def scrape_cycle():
             return
 
         settings = get_settings()
-        if not settings.serpapi_api_key:
-            logger.warning("SerpAPI key not configured, skipping scrape")
+        if not settings.brave_api_key:
+            logger.warning("Brave API key not configured, skipping scrape")
             return
 
         locations = config.target_locations or []
@@ -126,7 +126,7 @@ async def scrape_location_trade(
 
     # Create scrape job record
     job = ScrapeJob(
-        platform="google_maps",
+        platform="brave",
         trade_type=trade,
         location_query=f"{query} in {location_str}",
         city=city,
@@ -140,18 +140,12 @@ async def scrape_location_trade(
     total_cost = 0.0
     new_count = 0
     dupe_count = 0
-    all_results = []
 
     try:
-        # Search Google Maps
-        gm_results = await search_google_maps(query, location_str, settings.serpapi_api_key)
-        total_cost += gm_results.get("cost_usd", 0)
-        all_results.extend(gm_results.get("results", []))
-
-        # Search Yelp
-        yelp_results = await search_yelp(query, location_str, settings.serpapi_api_key)
-        total_cost += yelp_results.get("cost_usd", 0)
-        all_results.extend(yelp_results.get("results", []))
+        # Search via Brave
+        search_results = await search_local_businesses(query, location_str, settings.brave_api_key)
+        total_cost += search_results.get("cost_usd", 0)
+        all_results = search_results.get("results", [])
 
         # Process results
         for biz in all_results:
@@ -212,7 +206,7 @@ async def scrape_location_trade(
                 prospect_phone=phone,
                 prospect_trade_type=trade,
                 status="cold",
-                source="google_maps" if not place_id.startswith("yelp_") else "yelp",
+                source="brave",
                 source_place_id=place_id if place_id else None,
                 website=website,
                 google_rating=biz.get("rating"),

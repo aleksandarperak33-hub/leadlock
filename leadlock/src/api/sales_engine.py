@@ -425,12 +425,12 @@ async def trigger_scrape_job(
 ):
     """Manually trigger a scrape job for a specific location and trade."""
     from src.config import get_settings
-    from src.services.scraping import search_google_maps, search_yelp, parse_address_components
+    from src.services.scraping import search_local_businesses, parse_address_components
     from src.services.enrichment import find_email_hunter, guess_email_patterns, extract_domain
 
     settings = get_settings()
-    if not settings.serpapi_api_key:
-        raise HTTPException(status_code=400, detail="SerpAPI key not configured")
+    if not settings.brave_api_key:
+        raise HTTPException(status_code=400, detail="Brave API key not configured")
 
     city = payload.get("city", "")
     state = payload.get("state", "")
@@ -452,7 +452,7 @@ async def trigger_scrape_job(
 
     # Create job record
     job = ScrapeJob(
-        platform="google_maps",
+        platform="brave",
         trade_type=trade,
         location_query=f"{query} in {location_str}",
         city=city,
@@ -468,14 +468,11 @@ async def trigger_scrape_job(
     dupe_count = 0
 
     try:
-        # Search both platforms
-        gm = await search_google_maps(query, location_str, settings.serpapi_api_key)
-        total_cost += gm.get("cost_usd", 0)
+        # Search via Brave
+        search_results = await search_local_businesses(query, location_str, settings.brave_api_key)
+        total_cost += search_results.get("cost_usd", 0)
 
-        yelp = await search_yelp(query, location_str, settings.serpapi_api_key)
-        total_cost += yelp.get("cost_usd", 0)
-
-        all_results = gm.get("results", []) + yelp.get("results", [])
+        all_results = search_results.get("results", [])
 
         for biz in all_results:
             place_id = biz.get("place_id", "")
@@ -530,7 +527,7 @@ async def trigger_scrape_job(
                 prospect_phone=phone,
                 prospect_trade_type=trade,
                 status="cold",
-                source="google_maps" if not place_id.startswith("yelp_") else "yelp",
+                source="brave",
                 source_place_id=place_id if place_id else None,
                 website=website,
                 google_rating=biz.get("rating"),
