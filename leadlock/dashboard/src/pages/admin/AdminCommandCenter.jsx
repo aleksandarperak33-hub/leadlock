@@ -31,7 +31,7 @@ const FUNNEL_STAGES = [
   { key: 'cold',           label: 'Cold',           color: 'bg-gray-400' },
   { key: 'contacted',      label: 'Contacted',      color: 'bg-blue-500' },
   { key: 'demo_scheduled', label: 'Demo Scheduled', color: 'bg-orange-500' },
-  { key: 'demo_completed', label: 'Demo Completed', color: 'bg-purple-500' },
+  { key: 'demo_completed', label: 'Demo Completed', color: 'bg-orange-500' },
   { key: 'proposal_sent',  label: 'Proposal Sent',  color: 'bg-orange-500' },
   { key: 'won',            label: 'Won',            color: 'bg-emerald-500' },
   { key: 'lost',           label: 'Lost',           color: 'bg-red-400' },
@@ -186,7 +186,7 @@ export default function AdminCommandCenter() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-purple-600 shadow-md shadow-orange-500/20">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-600 shadow-md shadow-orange-500/20">
             <Radio className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="text-lg font-semibold tracking-tight text-gray-900">Command Center</h1>
