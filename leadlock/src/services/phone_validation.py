@@ -12,32 +12,17 @@ logger = logging.getLogger(__name__)
 def normalize_phone(phone: str) -> Optional[str]:
     """
     Normalize phone number to E.164 format (+1XXXXXXXXXX for US numbers).
+    Uses phonenumbers library when available, falls back to regex.
     Returns None if the number is invalid.
     """
-    # Strip all non-digit characters
-    digits = re.sub(r"\D", "", phone)
-
-    # Handle US numbers
-    if len(digits) == 10:
-        return f"+1{digits}"
-    elif len(digits) == 11 and digits.startswith("1"):
-        return f"+{digits}"
-    elif len(digits) > 11 and digits.startswith("1"):
-        return f"+{digits[:11]}"
-
-    # Already has country code
-    if phone.startswith("+") and len(digits) >= 10:
-        return f"+{digits}"
-
-    return None
+    from src.utils.phone import normalize_phone_e164
+    return normalize_phone_e164(phone)
 
 
 def is_valid_us_phone(phone: str) -> bool:
     """Check if phone number is a valid US number in E.164 format."""
-    if not phone or not phone.startswith("+1"):
-        return False
-    digits = re.sub(r"\D", "", phone)
-    return len(digits) == 11 and digits.startswith("1")
+    from src.utils.phone import is_valid_us_phone as _is_valid
+    return _is_valid(phone)
 
 
 async def lookup_phone(phone: str) -> dict:

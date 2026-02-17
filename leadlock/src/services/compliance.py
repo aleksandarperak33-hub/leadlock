@@ -20,23 +20,39 @@ from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
-# STOP keyword variants — must be recognized case-insensitively
+# Exact STOP keywords — recognized case-insensitively after normalization
 STOP_KEYWORDS = {"stop", "unsubscribe", "cancel", "end", "quit", "opt-out", "optout", "remove"}
 
-# Federal holidays where Florida restricts SMS (FTSA)
-# Updated annually — these are 2026 dates
-FLORIDA_HOLIDAYS = {
-    "2026-01-01",  # New Year's Day
-    "2026-01-19",  # MLK Day
-    "2026-02-16",  # Presidents' Day
-    "2026-05-25",  # Memorial Day
-    "2026-07-04",  # Independence Day (observed)
-    "2026-09-07",  # Labor Day
-    "2026-10-12",  # Columbus Day
-    "2026-11-11",  # Veterans Day
-    "2026-11-26",  # Thanksgiving
-    "2026-12-25",  # Christmas
-}
+# Phrase patterns that indicate opt-out intent (substring matching)
+STOP_PHRASES = [
+    "stop it",
+    "stop texting",
+    "stop messaging",
+    "stop contacting",
+    "stop sending",
+    "please stop",
+    "dont text",
+    "don't text",
+    "do not text",
+    "dont message",
+    "don't message",
+    "do not message",
+    "do not contact",
+    "dont contact",
+    "don't contact",
+    "take me off",
+    "remove me",
+    "leave me alone",
+    "opt out",
+    "opt me out",
+    "unsubscribe me",
+    "i want out",
+    "no more texts",
+    "no more messages",
+    "go away",
+]
+
+# Florida holidays are now dynamically computed — see src/utils/holidays.py
 
 # State timezone mapping
 STATE_TIMEZONES = {
@@ -67,9 +83,48 @@ class ComplianceResult:
 
 
 def is_stop_keyword(message: str) -> bool:
-    """Check if a message is a STOP/opt-out keyword."""
+    """
+    Check if a message indicates opt-out intent using fuzzy matching.
+
+    Detection layers:
+    1. Exact keyword match (after normalization: strip, lowercase, remove punctuation)
+    2. Repeated character detection (e.g., "STOPPPP" → "stop")
+    3. Substring phrase matching (e.g., "stop texting me", "leave me alone")
+
+    CRITICAL: When in doubt, treat as opt-out.
+    A false positive (unnecessary opt-out) costs us a lead.
+    A false negative costs $500-$1,500 per TCPA violation.
+    """
+    import re
+
+    if not message or not message.strip():
+        return False
+
+    # Normalize: strip whitespace, lowercase, remove leading/trailing punctuation
     normalized = message.strip().lower()
-    return normalized in STOP_KEYWORDS
+    # Remove all punctuation for keyword matching
+    cleaned = re.sub(r"[^\w\s]", "", normalized).strip()
+
+    # Layer 1: Exact keyword match on cleaned version
+    if cleaned in STOP_KEYWORDS:
+        return True
+
+    # Layer 2: Collapse repeated characters (STOPPPP → stop, QUIIIT → quit)
+    collapsed = re.sub(r"(.)\1{2,}", r"\1", cleaned)
+    if collapsed in STOP_KEYWORDS:
+        return True
+
+    # Layer 3: Substring phrase matching
+    for phrase in STOP_PHRASES:
+        if phrase in normalized:
+            return True
+
+    # Layer 4: Check if any stop keyword appears as a standalone word
+    words = set(cleaned.split())
+    if words & STOP_KEYWORDS:
+        return True
+
+    return False
 
 
 def check_consent(
@@ -139,7 +194,7 @@ def check_quiet_hours(
 
     local_time = now.time()
     day_of_week = now.weekday()  # 0=Monday, 6=Sunday
-    date_str = now.strftime("%Y-%m-%d")
+    local_date = now.date()
 
     # Texas SB 140: Sunday only noon–9 PM
     if state_code == "TX" and day_of_week == 6:
@@ -152,10 +207,11 @@ def check_quiet_hours(
 
     # Florida FTSA: 8 AM–8 PM, no state holidays
     if state_code == "FL":
-        if date_str in FLORIDA_HOLIDAYS:
+        from src.utils.holidays import is_florida_holiday
+        if is_florida_holiday(local_date):
             return ComplianceResult(
                 False,
-                f"Florida FTSA: No messages on state holidays ({date_str})",
+                f"Florida FTSA: No messages on state holidays ({local_date.isoformat()})",
                 "fl_ftsa_holiday",
             )
         if local_time < time(8, 0) or local_time >= time(20, 0):
@@ -282,3 +338,53 @@ def full_compliance_check(
         return content_result
 
     return ComplianceResult(True, "All compliance checks passed")
+
+
+# California SB 1001 AI disclosure
+CA_AI_DISCLOSURE_TEMPLATE = (
+    "This is an automated AI assistant responding on behalf of {business_name}. "
+)
+
+# California area codes (comprehensive list)
+CA_AREA_CODES = {
+    "209", "213", "279", "310", "323", "341", "350", "408", "415", "424",
+    "442", "510", "530", "559", "562", "619", "626", "628", "650", "657",
+    "661", "669", "707", "714", "747", "760", "805", "818", "820", "831",
+    "840", "858", "909", "916", "925", "949", "951",
+}
+
+
+def is_california_number(phone: str) -> bool:
+    """Check if a phone number has a California area code."""
+    if not phone or len(phone) < 5:
+        return False
+    # E.164 format: +1NXXNXXXXXX — area code is digits 2-4 (0-indexed)
+    if phone.startswith("+1") and len(phone) >= 5:
+        area_code = phone[2:5]
+        return area_code in CA_AREA_CODES
+    return False
+
+
+def needs_ai_disclosure(
+    phone: str,
+    state_code: Optional[str] = None,
+    ai_disclosure_sent: bool = False,
+) -> bool:
+    """
+    Check if California SB 1001 AI disclosure is needed.
+    Required on first message to California numbers.
+    """
+    if ai_disclosure_sent:
+        return False
+
+    # Check by state code first (most reliable)
+    if state_code == "CA":
+        return True
+
+    # Fall back to area code detection
+    return is_california_number(phone)
+
+
+def get_ai_disclosure(business_name: str) -> str:
+    """Get the AI disclosure text for California SB 1001."""
+    return CA_AI_DISCLOSURE_TEMPLATE.format(business_name=business_name)

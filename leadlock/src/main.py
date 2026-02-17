@@ -5,12 +5,30 @@ Main FastAPI application entry point.
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from src.config import get_settings
 from src.api.router import api_router
+from src.utils.logging import (
+    configure_structured_logging,
+    generate_correlation_id,
+    set_correlation_id,
+    get_correlation_id,
+)
 
 logger = logging.getLogger("leadlock")
+
+
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    """Injects a correlation ID into every request context and response header."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        cid = request.headers.get("X-Correlation-ID") or generate_correlation_id()
+        set_correlation_id(cid)
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = cid
+        return response
 
 
 @asynccontextmanager
@@ -39,6 +57,16 @@ async def lifespan(app: FastAPI):
     from src.workers.health_monitor import run_health_monitor
     worker_tasks.append(asyncio.create_task(run_health_monitor()))
     logger.info("Health monitor worker started")
+
+    # Dead letter queue retry worker always runs
+    from src.workers.retry_worker import run_retry_worker
+    worker_tasks.append(asyncio.create_task(run_retry_worker()))
+    logger.info("Retry worker started")
+
+    # Stuck lead sweeper always runs
+    from src.workers.stuck_lead_sweeper import run_stuck_lead_sweeper
+    worker_tasks.append(asyncio.create_task(run_stuck_lead_sweeper()))
+    logger.info("Stuck lead sweeper started")
 
     # Sales engine workers — gated behind config flag
     if settings.sales_engine_enabled:
@@ -107,12 +135,8 @@ def create_app() -> FastAPI:
     """Application factory."""
     settings = get_settings()
 
-    # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Configure structured JSON logging with correlation IDs
+    configure_structured_logging(settings.log_level)
 
     application = FastAPI(
         title="LeadLock",
@@ -133,6 +157,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Correlation ID middleware (must be added AFTER CORS so it runs on every request)
+    application.add_middleware(CorrelationIdMiddleware)
 
     # Include all routes
     application.include_router(api_router)

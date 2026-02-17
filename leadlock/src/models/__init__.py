@@ -14,6 +14,8 @@ from src.models.scrape_job import ScrapeJob
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
 from src.models.email_blacklist import EmailBlacklist
+from src.models.webhook_event import WebhookEvent
+from src.models.failed_lead import FailedLead
 
 __all__ = [
     "Client",
@@ -29,4 +31,6 @@ __all__ = [
     "OutreachEmail",
     "SalesEngineConfig",
     "EmailBlacklist",
+    "WebhookEvent",
+    "FailedLead",
 ]

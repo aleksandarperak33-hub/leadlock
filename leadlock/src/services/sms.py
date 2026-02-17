@@ -2,41 +2,117 @@
 SMS service — Twilio primary, Telnyx failover.
 Every message goes through compliance check before sending.
 Tracks delivery status, segment count, and cost.
+
+Carrier error handling:
+- 30006 (landline): Mark as landline, don't retry
+- 30007 (filtered/blocked): Retry once with alternate content
+- 30008 (unknown error): Retry with backoff
+- 21610 (unsubscribed via carrier): Auto opt-out
+- 21211 (invalid number): Mark as invalid, don't retry
 """
+import asyncio
 import logging
 import math
 from typing import Optional
+
 logger = logging.getLogger(__name__)
 
-# SMS segment limits (GSM-7 encoding)
+# SMS segment limits
 GSM_SINGLE_SEGMENT = 160
 GSM_MULTI_SEGMENT = 153
 UCS2_SINGLE_SEGMENT = 70
 UCS2_MULTI_SEGMENT = 67
+
+# Maximum segments allowed (hard cap at 3)
+MAX_SEGMENTS = 3
+MAX_GSM_CHARS = GSM_MULTI_SEGMENT * MAX_SEGMENTS  # 459
+MAX_UCS2_CHARS = UCS2_MULTI_SEGMENT * MAX_SEGMENTS  # 201
 
 # Per-segment cost estimates
 TWILIO_OUTBOUND_COST = 0.0079
 TWILIO_INBOUND_COST = 0.0075
 TELNYX_OUTBOUND_COST = 0.0040
 
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAYS_SECONDS = [5, 15, 45]
+
+# Carrier error classifications
+PERMANENT_ERRORS = {
+    "21211",  # Invalid "To" phone number
+    "21610",  # Unsubscribed recipient (carrier-level opt-out)
+    "30006",  # Landline or unreachable
+    "21612",  # Invalid "To" phone number for SMS
+}
+
+TRANSIENT_ERRORS = {
+    "30007",  # Message filtered by carrier
+    "30008",  # Unknown error
+    "30009",  # Missing segment
+    "30010",  # Message price exceeds max price
+}
+
+LANDLINE_ERRORS = {"30006"}
+OPT_OUT_ERRORS = {"21610"}
+INVALID_NUMBER_ERRORS = {"21211", "21612"}
+
+
+# GSM-7 basic character set (for encoding detection)
+_GSM7_BASIC = set(
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ ÆæßÉ"
+    " !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "ÄÖÑÜabcdefghijklmnopqrstuvwxyz"
+    "äöñüà§"
+)
+
+_GSM7_EXTENDED = set("^{}\\[~]|€")
+
+
+def is_gsm7(message: str) -> bool:
+    """Check if message can be encoded as GSM-7."""
+    return all(c in _GSM7_BASIC or c in _GSM7_EXTENDED for c in message)
+
 
 def count_segments(message: str) -> int:
     """Count SMS segments accounting for GSM-7 vs UCS-2 encoding."""
-    # Check if message contains non-GSM characters (requires UCS-2)
-    try:
-        message.encode("ascii")
-        is_gsm = True
-    except UnicodeEncodeError:
-        is_gsm = False
-
-    if is_gsm:
-        if len(message) <= GSM_SINGLE_SEGMENT:
+    if is_gsm7(message):
+        # Count extended chars as 2
+        length = sum(2 if c in _GSM7_EXTENDED else 1 for c in message)
+        if length <= GSM_SINGLE_SEGMENT:
             return 1
-        return math.ceil(len(message) / GSM_MULTI_SEGMENT)
+        return math.ceil(length / GSM_MULTI_SEGMENT)
     else:
         if len(message) <= UCS2_SINGLE_SEGMENT:
             return 1
         return math.ceil(len(message) / UCS2_MULTI_SEGMENT)
+
+
+def enforce_message_length(message: str) -> tuple[str, int, str]:
+    """
+    Enforce message length limits (max 3 segments).
+    Returns: (message, segment_count, encoding)
+    """
+    encoding = "gsm7" if is_gsm7(message) else "ucs2"
+    segments = count_segments(message)
+
+    if segments <= MAX_SEGMENTS:
+        return message, segments, encoding
+
+    # Truncate with ellipsis
+    if encoding == "gsm7":
+        max_len = MAX_GSM_CHARS - 3  # Room for "..."
+        truncated = message[:max_len] + "..."
+    else:
+        max_len = MAX_UCS2_CHARS - 3
+        truncated = message[:max_len] + "..."
+
+    new_segments = count_segments(truncated)
+    logger.warning(
+        "Message truncated from %d to %d segments (%s encoding)",
+        segments, new_segments, encoding,
+    )
+    return truncated, new_segments, encoding
 
 
 def mask_phone(phone: str) -> str:
@@ -46,6 +122,27 @@ def mask_phone(phone: str) -> str:
     return phone
 
 
+def classify_error(error_code: str | None) -> str:
+    """
+    Classify a Twilio error code.
+    Returns: "permanent", "transient", "landline", "opt_out", "invalid", or "unknown"
+    """
+    if not error_code:
+        return "unknown"
+    code = str(error_code)
+    if code in OPT_OUT_ERRORS:
+        return "opt_out"
+    if code in LANDLINE_ERRORS:
+        return "landline"
+    if code in INVALID_NUMBER_ERRORS:
+        return "invalid"
+    if code in PERMANENT_ERRORS:
+        return "permanent"
+    if code in TRANSIENT_ERRORS:
+        return "transient"
+    return "unknown"
+
+
 async def send_sms(
     to: str,
     body: str,
@@ -53,29 +150,78 @@ async def send_sms(
     messaging_service_sid: Optional[str] = None,
 ) -> dict:
     """
-    Send SMS via Twilio. Falls back to Telnyx on failure.
-    Returns: {"sid": str, "status": str, "provider": str, "segments": int, "cost_usd": float, "error": str|None}
+    Send SMS via Twilio with retry logic. Falls back to Telnyx after all retries exhausted.
+
+    Returns: {
+        "sid": str, "status": str, "provider": str,
+        "segments": int, "cost_usd": float,
+        "error": str|None, "error_code": str|None,
+        "encoding": str, "is_landline": bool,
+    }
     """
-    segments = count_segments(body)
+    # Enforce message length
+    body, segments, encoding = enforce_message_length(body)
     masked = mask_phone(to)
 
-    # Try Twilio first
-    try:
-        result = await _send_twilio(to, body, from_phone, messaging_service_sid)
-        logger.info(
-            "SMS sent via Twilio to %s (%d segments): %s",
-            masked, segments, result.get("sid", "unknown")
-        )
-        return {
-            "sid": result.get("sid"),
-            "status": result.get("status", "sent"),
-            "provider": "twilio",
-            "segments": segments,
-            "cost_usd": segments * TWILIO_OUTBOUND_COST,
-            "error": None,
-        }
-    except Exception as e:
-        logger.warning("Twilio failed for %s: %s. Trying Telnyx...", masked, str(e))
+    # Try Twilio with retries
+    last_error = None
+    last_error_code = None
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            result = await _send_twilio(to, body, from_phone, messaging_service_sid)
+            logger.info(
+                "SMS sent via Twilio to %s (%d segments, %s): %s",
+                masked, segments, encoding, result.get("sid", "unknown"),
+            )
+            return {
+                "sid": result.get("sid"),
+                "status": result.get("status", "sent"),
+                "provider": "twilio",
+                "segments": segments,
+                "cost_usd": segments * TWILIO_OUTBOUND_COST,
+                "error": None,
+                "error_code": None,
+                "encoding": encoding,
+                "is_landline": False,
+            }
+        except Exception as e:
+            error_code = _extract_error_code(e)
+            error_class = classify_error(error_code)
+            last_error = str(e)
+            last_error_code = error_code
+
+            # Permanent errors — don't retry
+            if error_class in ("permanent", "opt_out", "landline", "invalid"):
+                logger.warning(
+                    "Twilio permanent error for %s: code=%s class=%s",
+                    masked, error_code, error_class,
+                )
+                return {
+                    "sid": None,
+                    "status": "failed",
+                    "provider": "twilio",
+                    "segments": segments,
+                    "cost_usd": 0.0,
+                    "error": last_error,
+                    "error_code": error_code,
+                    "encoding": encoding,
+                    "is_landline": error_class == "landline",
+                }
+
+            # Transient error — retry with backoff
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS_SECONDS[min(attempt, len(RETRY_DELAYS_SECONDS) - 1)]
+                logger.warning(
+                    "Twilio transient error for %s (attempt %d/%d): %s. Retrying in %ds...",
+                    masked, attempt + 1, MAX_RETRIES + 1, error_code or str(e), delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.warning(
+                    "Twilio exhausted retries for %s: %s. Trying Telnyx...",
+                    masked, str(e),
+                )
 
     # Failover to Telnyx
     from src.config import get_settings
@@ -83,7 +229,9 @@ async def send_sms(
     if settings.telnyx_api_key:
         try:
             result = await _send_telnyx(to, body)
-            logger.info("SMS sent via Telnyx (failover) to %s (%d segments)", masked, segments)
+            logger.info(
+                "SMS sent via Telnyx (failover) to %s (%d segments)", masked, segments,
+            )
             return {
                 "sid": result.get("id"),
                 "status": "sent",
@@ -91,6 +239,9 @@ async def send_sms(
                 "segments": segments,
                 "cost_usd": segments * TELNYX_OUTBOUND_COST,
                 "error": None,
+                "error_code": None,
+                "encoding": encoding,
+                "is_landline": False,
             }
         except Exception as e:
             logger.error("Telnyx failover also failed for %s: %s", masked, str(e))
@@ -100,7 +251,10 @@ async def send_sms(
                 "provider": "none",
                 "segments": segments,
                 "cost_usd": 0.0,
-                "error": f"Both providers failed. Twilio: {str(e)}",
+                "error": f"All providers failed. Last: {str(e)}",
+                "error_code": last_error_code,
+                "encoding": encoding,
+                "is_landline": False,
             }
 
     return {
@@ -109,8 +263,25 @@ async def send_sms(
         "provider": "none",
         "segments": segments,
         "cost_usd": 0.0,
-        "error": "Twilio failed and Telnyx not configured",
+        "error": f"Twilio failed ({last_error}) and Telnyx not configured",
+        "error_code": last_error_code,
+        "encoding": encoding,
+        "is_landline": False,
     }
+
+
+def _extract_error_code(error: Exception) -> Optional[str]:
+    """Extract Twilio error code from exception."""
+    # Twilio REST exceptions have a .code attribute
+    code = getattr(error, "code", None)
+    if code is not None:
+        return str(code)
+    # Some Twilio errors embed the code in the message
+    msg = str(error)
+    for known_code in PERMANENT_ERRORS | TRANSIENT_ERRORS:
+        if known_code in msg:
+            return known_code
+    return None
 
 
 async def _send_twilio(
@@ -127,7 +298,9 @@ async def _send_twilio(
 
     kwargs = {"to": to, "body": body}
     if messaging_service_sid or settings.twilio_messaging_service_sid:
-        kwargs["messaging_service_sid"] = messaging_service_sid or settings.twilio_messaging_service_sid
+        kwargs["messaging_service_sid"] = (
+            messaging_service_sid or settings.twilio_messaging_service_sid
+        )
     elif from_phone:
         kwargs["from_"] = from_phone
     else:

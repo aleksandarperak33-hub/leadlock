@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     sales_daily_email_limit: int = 50
     sales_daily_scrape_limit: int = 100
 
+    # Alerting
+    alert_webhook_url: str = ""  # Discord/Slack webhook URL for critical alerts
+
     # Operational limits
     max_cold_followups: int = 3
     max_conversation_turns: int = 10

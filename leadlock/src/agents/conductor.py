@@ -28,11 +28,14 @@ from src.schemas.client_config import ClientConfig
 from src.services.compliance import (
     full_compliance_check,
     is_stop_keyword,
+    needs_ai_disclosure,
+    get_ai_disclosure,
 )
 from src.services.sms import send_sms, mask_phone
 from src.services.phone_validation import normalize_phone
 from src.utils.emergency import detect_emergency
 from src.utils.dedup import is_duplicate
+from src.utils.locks import lead_lock, LockTimeoutError
 from src.utils.metrics import Timer
 from src.agents.intake import process_intake
 from src.agents.qualify import process_qualify
@@ -207,10 +210,17 @@ async def handle_new_lead(
             "response_ms": timer.elapsed_ms,
         }
 
+    # California SB 1001: Prepend AI disclosure on first message to CA numbers
+    sms_body = intake_response.message
+    if needs_ai_disclosure(phone, state_code=lead.state_code, ai_disclosure_sent=False):
+        disclosure = get_ai_disclosure(client.business_name)
+        sms_body = disclosure + sms_body
+        logger.info("CA SB 1001: AI disclosure prepended for lead %s", str(lead.id)[:8])
+
     # SEND THE SMS — this is the critical path
     sms_result = await send_sms(
         to=phone,
-        body=intake_response.message,
+        body=sms_body,
         from_phone=client.twilio_phone,
         messaging_service_sid=None,
     )
@@ -222,7 +232,7 @@ async def handle_new_lead(
         lead_id=lead.id,
         client_id=client.id,
         direction="outbound",
-        content=intake_response.message,
+        content=sms_body,
         from_phone=client.twilio_phone or "",
         to_phone=phone,
         agent_id="intake",
@@ -281,13 +291,36 @@ async def handle_inbound_reply(
     """
     Process an inbound SMS reply from an existing lead.
     Routes to the appropriate agent based on lead state.
+    Uses Redis lock to prevent race conditions from simultaneous webhooks.
     """
     timer = Timer().start()
     config = ClientConfig(**client.config) if client.config else ClientConfig()
 
-    # Check for opt-out FIRST — this overrides everything
+    # Check for opt-out FIRST — this overrides everything (no lock needed)
     if is_stop_keyword(message_text):
         return await _handle_opt_out(db, lead, client, message_text, timer)
+
+    # Acquire lead lock to prevent concurrent processing
+    try:
+        async with lead_lock(str(lead.id)):
+            return await _process_reply_locked(db, lead, client, config, message_text, timer)
+    except LockTimeoutError:
+        logger.warning(
+            "Lead %s lock timeout — another webhook is processing this lead",
+            str(lead.id)[:8],
+        )
+        return {"lead_id": str(lead.id), "status": "lock_timeout", "response_ms": timer.elapsed_ms}
+
+
+async def _process_reply_locked(
+    db: AsyncSession,
+    lead: Lead,
+    client: Client,
+    config: ClientConfig,
+    message_text: str,
+    timer: Timer,
+) -> dict:
+    """Process a reply while holding the lead lock."""
 
     # Check for emergency
     emergency = detect_emergency(message_text, config.emergency_keywords)

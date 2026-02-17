@@ -13,6 +13,12 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   postgres:
     image: postgres:16-alpine
@@ -40,5 +46,45 @@ services:
       timeout: 3s
       retries: 5
 
+  db-backup:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: leadlock
+      PGPASSWORD: leadlock_dev
+      PGDATABASE: leadlock
+      BACKUP_DIR: /backups
+      BACKUP_RETAIN_DAYS: "7"
+      S3_BUCKET: "${BACKUP_S3_BUCKET:-}"
+    volumes:
+      - db_backups:/backups
+      - ./scripts/backup_db.sh:/scripts/backup_db.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "DB backup service started. Running daily at 3 AM UTC."
+        while true; do
+          # Calculate seconds until next 3 AM UTC
+          CURRENT_HOUR=$$(date -u +%H)
+          CURRENT_MIN=$$(date -u +%M)
+          CURRENT_SEC=$$(date -u +%S)
+          SECS_TODAY=$$(( CURRENT_HOUR * 3600 + CURRENT_MIN * 60 + CURRENT_SEC ))
+          TARGET_SECS=$$(( 3 * 3600 ))
+          if [ $$SECS_TODAY -lt $$TARGET_SECS ]; then
+            WAIT=$$(( TARGET_SECS - SECS_TODAY ))
+          else
+            WAIT=$$(( 86400 - SECS_TODAY + TARGET_SECS ))
+          fi
+          echo "Next backup in $$WAIT seconds..."
+          sleep $$WAIT
+          /bin/bash /scripts/backup_db.sh
+        done
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  db_backups:
