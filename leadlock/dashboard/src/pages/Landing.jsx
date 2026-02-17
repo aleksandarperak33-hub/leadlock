@@ -5,7 +5,7 @@ import {
   Zap, MessageSquare, Clock, Shield, Calendar, BarChart3,
   CheckCircle2, ChevronDown, ChevronRight, ArrowRight, Star,
   Phone, Bot, Users, TrendingUp, Lock, Globe, Headphones,
-  Menu, X,
+  Menu, X, Rocket,
 } from 'lucide-react';
 
 // ─── Animation Helpers ──────────────────────────────────────────────────────
@@ -773,6 +773,30 @@ export default function Landing() {
               </FadeUp>
             ))}
           </div>
+
+          {/* Growth Program CTA */}
+          <FadeUp delay={0.3}>
+            <div className="mt-16 relative rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] to-transparent p-10 sm:p-12 text-center overflow-hidden max-w-3xl mx-auto">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(249,115,22,0.06),transparent_60%)]" />
+              <div className="relative z-10">
+                <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mx-auto mb-5">
+                  <Rocket className="w-6 h-6 text-orange-400" />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-[#F8F8FC] mb-3">
+                  Want us to generate the leads too?
+                </h3>
+                <p className="text-[#A1A1BC] max-w-xl mx-auto mb-6 leading-relaxed">
+                  Our <span className="text-orange-400 font-semibold">Growth Program</span> combines AI-powered lead generation with instant response. We run the ads, build the funnels, and LeadLock closes. Typical ROI: 5-8x.
+                </p>
+                <a
+                  href="mailto:growth@leadlock.org?subject=Growth%20Program%20Inquiry"
+                  className="ld-btn-primary px-8 py-3.5 text-sm font-semibold inline-flex items-center gap-2"
+                >
+                  Talk to Sales <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </FadeUp>
         </div>
       </section>
 
