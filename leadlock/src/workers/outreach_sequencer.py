@@ -30,6 +30,21 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
 
+def sanitize_dashes(text: str) -> str:
+    """Replace em dashes, en dashes, and other unicode dashes with regular hyphens."""
+    if not text:
+        return text
+    return (
+        text
+        .replace("\u2014", "-")   # em dash —
+        .replace("\u2013", "-")   # en dash –
+        .replace("\u2012", "-")   # figure dash ‒
+        .replace("\u2015", "-")   # horizontal bar ―
+        .replace("\u2010", "-")   # hyphen ‐
+        .replace("\u2011", "-")   # non-breaking hyphen ‑
+    )
+
+
 def is_within_send_window(config: SalesEngineConfig) -> bool:
     """
     Check if the current time is within the configured send window.
@@ -451,9 +466,9 @@ async def _generate_email_with_template(
         body_html = body_text.replace("\n", "<br>")
 
         return {
-            "subject": subject,
-            "body_html": body_html,
-            "body_text": body_text,
+            "subject": sanitize_dashes(subject),
+            "body_html": sanitize_dashes(body_html),
+            "body_text": sanitize_dashes(body_text),
             "ai_cost_usd": 0.0,
         }
 
@@ -529,6 +544,14 @@ async def send_sequence_email(
             str(prospect.id)[:8], email_result["error"],
         )
         return
+
+    # Sanitize dashes from AI-generated content
+    email_result = {
+        **email_result,
+        "subject": sanitize_dashes(email_result.get("subject", "")),
+        "body_html": sanitize_dashes(email_result.get("body_html", "")),
+        "body_text": sanitize_dashes(email_result.get("body_text", "")),
+    }
 
     # Build unsubscribe URL
     base_url = settings.app_base_url.rstrip("/")

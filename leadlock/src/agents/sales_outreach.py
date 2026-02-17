@@ -20,6 +20,7 @@ RULES:
 - Focus on ONE pain point: slow lead response = lost revenue
 - No exclamation marks. No "game-changer" or "revolutionary"
 - No emojis
+- NEVER use em dashes or en dashes. Use regular hyphens (-) or rewrite the sentence instead
 - Keep it SHORT — contractors are busy
 - End with a soft CTA (reply or link to learn more)
 - Output valid JSON only
