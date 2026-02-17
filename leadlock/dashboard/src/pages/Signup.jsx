@@ -54,7 +54,7 @@ export default function Signup() {
       localStorage.setItem('ll_is_admin', data.is_admin ? 'true' : 'false');
       localStorage.setItem('ll_client_id', data.client_id);
       localStorage.setItem('ll_trade_type', form.trade_type);
-      navigate('/onboarding');
+      window.location.href = '/onboarding';
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {

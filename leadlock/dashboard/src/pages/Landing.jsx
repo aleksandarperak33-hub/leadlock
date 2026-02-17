@@ -145,46 +145,63 @@ function SMSMockup() {
 const PRICING_TIERS = [
   {
     name: 'Starter',
-    price: 497,
+    price: 297,
     badge: null,
     features: [
-      'Up to 200 leads/month',
-      'Sub-60s response time',
+      'Up to 50 leads/month',
+      'Sub-60s AI response',
       '1 CRM integration',
       '3-step follow-up sequences',
-      'Standard TCPA compliance',
+      'TCPA compliance built in',
       'Email support',
     ],
   },
   {
     name: 'Professional',
-    price: 997,
+    price: 597,
     badge: 'MOST POPULAR',
     features: [
-      'Unlimited leads',
-      'Sub-60s response time',
+      'Up to 200 leads/month',
+      'Sub-60s AI response',
       'All CRM integrations',
       '5-step advanced sequences',
       'Full compliance (all states)',
       'Priority support',
-      'Priority AI conversations',
-      'Team dashboard (up to 5 users)',
+      'AI conversation analytics',
+      'Team dashboard (up to 5)',
+    ],
+  },
+  {
+    name: 'Business',
+    price: 997,
+    badge: null,
+    features: [
+      'Up to 500 leads/month',
+      'Sub-30s AI response',
+      'All CRM integrations',
+      'Unlimited sequences',
+      'Full compliance + audit logs',
+      'Priority support + Slack',
+      'Advanced analytics & reports',
+      'Team dashboard (up to 15)',
+      'Multi-location support',
     ],
   },
   {
     name: 'Enterprise',
-    price: 3500,
+    price: 2497,
     badge: null,
     features: [
       'Unlimited leads',
-      'Sub-30s response time',
+      'Sub-15s AI response',
       'All + custom integrations',
-      'Custom sequences',
+      'Custom sequences & workflows',
       'Full compliance + audit logs',
       'Dedicated account manager',
       'Unlimited team members',
       'White-label branding',
-      'Custom AI persona',
+      'Custom AI persona & training',
+      'SLA guarantee',
     ],
   },
 ];
@@ -229,31 +246,46 @@ const FEATURES = [
     icon: Zap,
     title: 'Sub-60s Response',
     desc: 'Every lead gets a personalized SMS in under 60 seconds. Our median is 8 seconds.',
-    size: 'large',
   },
   {
     icon: Bot,
     title: 'AI Qualification',
     desc: 'Intelligent 4-message conversation that identifies service needs, urgency, and books appointments.',
-    size: 'large',
   },
   {
     icon: Calendar,
     title: 'Auto-Booking',
     desc: 'Books directly into ServiceTitan, Housecall Pro, Jobber, or GoHighLevel. No double-booking.',
-    size: 'medium',
   },
   {
     icon: Shield,
     title: 'TCPA Compliance',
     desc: 'Every message audited. Consent tracking, opt-out, quiet hours, state-specific rules.',
-    size: 'medium',
   },
   {
     icon: TrendingUp,
     title: 'Follow-Up Sequences',
     desc: 'Automated nurture for cold leads. Up to 5 touchpoints that respect compliance limits.',
-    size: 'medium',
+  },
+  {
+    icon: BarChart3,
+    title: 'Real-Time Analytics',
+    desc: 'Track response times, booking rates, lead sources, and ROI — all in one dashboard.',
+  },
+  {
+    icon: Clock,
+    title: '24/7 Coverage',
+    desc: 'Never miss a lead again. AI handles after-hours, weekends, and holidays automatically.',
+  },
+  {
+    icon: Users,
+    title: 'Team Dashboard',
+    desc: 'Multi-user access with role-based permissions. Dispatchers, owners, and techs get the views they need.',
+  },
+  {
+    icon: Phone,
+    title: 'Emergency Routing',
+    desc: 'Gas leaks, flooding, no heat — emergency keywords trigger instant priority routing to your on-call team.',
   },
 ];
 
@@ -473,7 +505,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: 47, suffix: 's', label: 'Median Response Time' },
+              { value: 8, suffix: 's', label: 'Median Response Time' },
               { value: 3, suffix: 'x', label: 'More Bookings' },
               { value: 98, suffix: '.7%', label: 'Compliance Rate' },
               { value: 500, suffix: '+', label: 'Contractors Served' },
@@ -498,11 +530,11 @@ export default function Landing() {
               <div className="relative z-10">
                 <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-4">Average contractor savings</p>
                 <div className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.04em] text-[#F8F8FC] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
-                  $<CountUp target={4200} /><span className="text-[#52526B]">/mo</span>
+                  $<CountUp target={8500} /><span className="text-[#52526B]">/mo</span>
                 </div>
                 <p className="text-base sm:text-lg text-[#A1A1BC] max-w-2xl mx-auto leading-relaxed">
-                  in recovered revenue from leads that would have gone cold.
-                  The average contractor loses <span className="text-orange-400 font-semibold">$50,000+ per year</span> to slow follow-up.
+                  in recovered revenue from leads that would have gone cold. Speed-to-lead data shows first responders are <span className="font-bold text-[#F8F8FC]">21x more likely</span> to book the job.
+                  The average contractor loses <span className="text-orange-400 font-semibold">$100,000+ per year</span> to slow follow-up.
                 </p>
               </div>
             </div>
@@ -619,9 +651,9 @@ export default function Landing() {
             </h2>
           </FadeUp>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((feat, i) => (
-              <FadeUp key={i} delay={i * 0.08} className={feat.size === 'large' ? 'lg:col-span-1' : ''}>
+              <FadeUp key={i} delay={i * 0.06}>
                 <div className="ld-card p-6 h-full">
                   <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4">
                     <feat.icon className="w-5 h-5 text-orange-400" />
@@ -714,7 +746,7 @@ export default function Landing() {
             </p>
           </FadeUp>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {PRICING_TIERS.map((tier, i) => (
               <FadeUp key={i} delay={i * 0.1}>
                 <div className={`ld-card p-8 h-full flex flex-col relative ${

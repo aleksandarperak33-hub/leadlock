@@ -220,7 +220,9 @@ async def _handle_send_sms_followup(payload: dict) -> dict:
 async def _handle_send_sequence_email(payload: dict) -> dict:
     """Send a deferred outreach email (smart timing). Re-runs the send logic."""
     import uuid
+    from sqlalchemy import func as sqla_func
     from src.models.outreach import Outreach
+    from src.models.outreach_email import OutreachEmail
     from src.models.sales_config import SalesEngineConfig
     from src.workers.outreach_sequencer import send_sequence_email, is_within_send_window
     from src.config import get_settings
@@ -258,6 +260,39 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
                 delay_seconds=1800,
             )
             return {"status": "re-queued", "reason": "outside send window"}
+
+        # Check daily limit before sending deferred email
+        daily_limit = config.daily_email_limit or 50
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        count_result = await db.execute(
+            select(sqla_func.count()).select_from(OutreachEmail).where(
+                and_(
+                    OutreachEmail.sent_at >= today_start,
+                    OutreachEmail.direction == "outbound",
+                )
+            )
+        )
+        today_count = count_result.scalar() or 0
+
+        if today_count >= daily_limit:
+            # Re-enqueue for tomorrow morning
+            from src.services.task_dispatch import enqueue_task
+
+            tomorrow_9am = (today_start + timedelta(days=1)).replace(hour=9)
+            delay_seconds = int((tomorrow_9am - datetime.utcnow()).total_seconds())
+            delay_seconds = max(60, delay_seconds)  # At least 60 seconds
+
+            await enqueue_task(
+                task_type="send_sequence_email",
+                payload={"outreach_id": outreach_id},
+                priority=5,
+                delay_seconds=delay_seconds,
+            )
+            logger.info(
+                "Daily email limit (%d) reached — deferring task for prospect %s to tomorrow",
+                daily_limit, outreach_id[:8],
+            )
+            return {"status": "re-queued", "reason": "daily limit reached"}
 
         settings = get_settings()
         await send_sequence_email(db, config, settings, prospect)

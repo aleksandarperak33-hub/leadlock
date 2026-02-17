@@ -50,7 +50,13 @@ async def run_outreach_cleanup():
 
 
 async def cleanup_cycle():
-    """Mark exhausted outreach sequences as lost."""
+    """
+    Mark exhausted outreach sequences as lost.
+
+    Two passes:
+    1. Campaign-bound prospects — use each campaign's sequence_steps length.
+    2. Unbound prospects — use global config.max_sequence_steps.
+    """
     async with async_session_factory() as db:
         # Load config
         result = await db.execute(select(SalesEngineConfig).limit(1))
@@ -60,14 +66,55 @@ async def cleanup_cycle():
             return
 
         delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
+        total_marked = 0
 
-        # Find prospects that have completed all steps with no reply
-        # IMPORTANT: must check last_email_sent_at IS NOT NULL to avoid marking
-        # never-contacted prospects as "lost"
+        # === PASS 1: Campaign-bound prospects ===
+        # Each campaign defines its own step count via sequence_steps JSON array.
+        from src.models.campaign import Campaign
+
+        campaigns_result = await db.execute(
+            select(Campaign).where(
+                Campaign.status.in_(["active", "paused", "completed"])
+            )
+        )
+        all_campaigns = campaigns_result.scalars().all()
+
+        for campaign in all_campaigns:
+            steps = campaign.sequence_steps or []
+            campaign_max_steps = len(steps)
+            if campaign_max_steps == 0:
+                continue
+
+            stmt = (
+                update(Outreach)
+                .where(
+                    and_(
+                        Outreach.campaign_id == campaign.id,
+                        Outreach.outreach_sequence_step >= campaign_max_steps,
+                        Outreach.status.in_(["cold", "contacted"]),
+                        Outreach.last_email_replied_at.is_(None),
+                        Outreach.last_email_sent_at.isnot(None),
+                        Outreach.last_email_sent_at <= delay_cutoff,
+                    )
+                )
+                .values(status="lost", updated_at=datetime.utcnow())
+            )
+            result = await db.execute(stmt)
+            campaign_marked = result.rowcount
+            if campaign_marked > 0:
+                logger.info(
+                    "Campaign %s: marked %d exhausted sequences as lost (max_steps=%d)",
+                    str(campaign.id)[:8], campaign_marked, campaign_max_steps,
+                )
+                total_marked += campaign_marked
+
+        # === PASS 2: Unbound prospects (no campaign) ===
+        # Use global config.max_sequence_steps
         stmt = (
             update(Outreach)
             .where(
                 and_(
+                    Outreach.campaign_id.is_(None),
                     Outreach.outreach_sequence_step >= config.max_sequence_steps,
                     Outreach.status.in_(["cold", "contacted"]),
                     Outreach.last_email_replied_at.is_(None),
@@ -79,9 +126,16 @@ async def cleanup_cycle():
         )
 
         result = await db.execute(stmt)
-        count = result.rowcount
+        unbound_marked = result.rowcount
+        total_marked += unbound_marked
 
-        if count > 0:
-            logger.info("Marked %d exhausted outreach sequences as lost", count)
+        if unbound_marked > 0:
+            logger.info(
+                "Unbound prospects: marked %d exhausted sequences as lost (max_steps=%d)",
+                unbound_marked, config.max_sequence_steps,
+            )
+
+        if total_marked > 0:
+            logger.info("Total marked %d exhausted outreach sequences as lost", total_marked)
 
         await db.commit()

@@ -1,16 +1,58 @@
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, AlertTriangle, XCircle, Clock, Users } from 'lucide-react';
+import {
+  Shield,
+  ShieldAlert,
+  ShieldX,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Users,
+} from 'lucide-react';
 import { api } from '../api/client';
+import PageHeader from '../components/ui/PageHeader';
+import Badge from '../components/ui/Badge';
 
-const STATUS_LEVELS = {
-  green: { icon: CheckCircle, label: 'Compliant', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', dot: 'bg-emerald-500' },
-  yellow: { icon: AlertTriangle, label: 'Warning', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', dot: 'bg-amber-500' },
-  red: { icon: XCircle, label: 'Action Required', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100', dot: 'bg-red-500' },
+const STATUS_CONFIGS = {
+  green: {
+    icon: Shield,
+    title: 'Compliant',
+    description: 'All TCPA compliance checks are passing.',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+    iconColor: 'text-emerald-600',
+    titleColor: 'text-emerald-700',
+  },
+  yellow: {
+    icon: ShieldAlert,
+    title: 'Warning',
+    description: 'Some compliance metrics need attention.',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
+    iconColor: 'text-amber-600',
+    titleColor: 'text-amber-700',
+  },
+  red: {
+    icon: ShieldX,
+    title: 'Action Required',
+    description: 'Compliance violations detected. Immediate action required.',
+    bg: 'bg-red-50',
+    border: 'border-red-200',
+    iconColor: 'text-red-600',
+    titleColor: 'text-red-700',
+  },
+};
+
+const METRIC_STATUS_COLORS = {
+  green: 'text-gray-900',
+  yellow: 'text-amber-600',
+  red: 'text-red-600',
 };
 
 export default function Compliance() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadCompliance();
@@ -20,8 +62,10 @@ export default function Compliance() {
     try {
       const data = await api.getComplianceSummary();
       setSummary(data);
+      setError(null);
     } catch (err) {
       console.error('Failed to load compliance:', err);
+      setError(err.message || 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -35,120 +79,55 @@ export default function Compliance() {
     );
   }
 
-  // Determine overall TCPA status
-  const getOverallStatus = () => {
-    if (!summary) return 'yellow';
-    if (summary.cold_outreach_violations > 0 || summary.messages_in_quiet_hours > 0) return 'red';
-    if (summary.opted_out_count > 0 && summary.total_consent_records > 0) {
-      const optOutRate = summary.opted_out_count / summary.total_consent_records;
-      if (optOutRate > 0.1) return 'yellow';
-    }
-    return 'green';
-  };
+  const overallStatus = getOverallStatus(summary);
+  const config = STATUS_CONFIGS[overallStatus];
+  const StatusIcon = config.icon;
 
-  const overallStatus = getOverallStatus();
-  const StatusIcon = STATUS_LEVELS[overallStatus].icon;
-  const statusConfig = STATUS_LEVELS[overallStatus];
+  const optOutRate =
+    summary?.total_consent_records > 0
+      ? ((summary.opted_out_count / summary.total_consent_records) * 100).toFixed(1)
+      : '0.0';
+
+  const metrics = buildMetrics(summary, optOutRate);
+  const checklist = buildChecklist(summary);
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-8">
-        <Shield className="w-5 h-5 text-orange-500" />
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900">Compliance</h1>
-          <p className="text-sm text-gray-500">TCPA compliance monitoring and audit trail</p>
-        </div>
-      </div>
+      <PageHeader title="TCPA Compliance" />
 
-      {/* Overall status banner */}
-      <div className={`rounded-xl p-5 mb-6 border ${statusConfig.bg} ${statusConfig.border}`}>
+      {error && (
+        <div className="mb-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60 text-red-600 text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          Failed to load compliance data. <button onClick={() => { setError(null); loadCompliance(); }} className="underline font-medium cursor-pointer">Retry</button>
+        </div>
+      )}
+
+      <div
+        className={`rounded-2xl p-6 mb-8 border ${config.bg} ${config.border}`}
+      >
         <div className="flex items-center gap-3">
-          <StatusIcon className={`w-6 h-6 ${statusConfig.color}`} />
+          <StatusIcon className={`w-6 h-6 ${config.iconColor}`} />
           <div>
-            <p className={`text-base font-semibold ${statusConfig.color}`}>
-              {statusConfig.label}
+            <p className={`text-base font-semibold ${config.titleColor}`}>
+              {config.title}
             </p>
             <p className="text-sm text-gray-600 mt-0.5">
-              {overallStatus === 'green' && 'All TCPA compliance checks are passing.'}
-              {overallStatus === 'yellow' && 'Some compliance metrics need attention.'}
-              {overallStatus === 'red' && 'Compliance violations detected. Immediate action required.'}
+              {config.description}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Compliance metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <ComplianceCard
-          title="Consent Records"
-          value={summary?.total_consent_records || 0}
-          icon={Users}
-          description="Total active consent records on file"
-          status="green"
-        />
-        <ComplianceCard
-          title="Opt-Out Count"
-          value={summary?.opted_out_count || 0}
-          icon={XCircle}
-          description="Contacts who opted out of messaging"
-          status={summary?.opted_out_count > 0 ? 'yellow' : 'green'}
-        />
-        <ComplianceCard
-          title="Quiet Hours Violations"
-          value={summary?.messages_in_quiet_hours || 0}
-          icon={Clock}
-          description="Messages sent outside allowed hours"
-          status={summary?.messages_in_quiet_hours > 0 ? 'red' : 'green'}
-        />
-        <ComplianceCard
-          title="Cold Outreach Violations"
-          value={summary?.cold_outreach_violations || 0}
-          icon={AlertTriangle}
-          description="Messages exceeding per-lead limits"
-          status={summary?.cold_outreach_violations > 0 ? 'red' : 'green'}
-        />
-        <ComplianceCard
-          title="Pending Follow-ups"
-          value={summary?.pending_followups || 0}
-          icon={Clock}
-          description="Queued follow-up messages"
-          status="green"
-        />
-        <ComplianceCard
-          title="Opt-Out Rate"
-          value={summary?.total_consent_records > 0
-            ? `${((summary.opted_out_count / summary.total_consent_records) * 100).toFixed(1)}%`
-            : '0%'}
-          icon={Shield}
-          description="Percentage of contacts who opted out"
-          status={summary?.total_consent_records > 0 && (summary.opted_out_count / summary.total_consent_records) > 0.1 ? 'yellow' : 'green'}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {metrics.map((metric) => (
+          <MetricCard key={metric.label} {...metric} />
+        ))}
       </div>
 
-      {/* Compliance checklist */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-5">Compliance Checklist</h2>
-        <div className="space-y-3.5">
-          {[
-            { label: 'STOP keyword processing active', ok: true },
-            { label: 'Consent records retained (5yr FTC TSR)', ok: true },
-            { label: 'Business name in first message', ok: true },
-            { label: 'Opt-out instructions in first message', ok: true },
-            { label: 'Quiet hours enforcement (8AM-9PM local)', ok: true },
-            { label: 'Max 3 cold outreach messages per lead', ok: true },
-            { label: 'AI disclosure included (CA SB 1001)', ok: true },
-            { label: 'No URL shorteners in messages', ok: true },
-          ].map(({ label, ok }) => (
-            <div key={label} className="flex items-center gap-3">
-              <CheckCircle className={`w-4 h-4 flex-shrink-0 ${ok ? 'text-emerald-500' : 'text-red-500'}`} />
-              <span className="text-sm text-gray-600">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ComplianceChecklist items={checklist} />
 
       {summary?.last_audit && (
-        <p className="text-xs text-gray-400 mt-4">
+        <p className="text-xs text-gray-400 mt-6">
           Last audit: {new Date(summary.last_audit).toLocaleString()}
         </p>
       )}
@@ -156,19 +135,161 @@ export default function Compliance() {
   );
 }
 
-function ComplianceCard({ title, value, icon: Icon, description, status }) {
-  const config = STATUS_LEVELS[status] || STATUS_LEVELS.green;
+function getOverallStatus(summary) {
+  if (!summary) return 'yellow';
+  if (summary.cold_outreach_violations > 0 || summary.messages_in_quiet_hours > 0) {
+    return 'red';
+  }
+  if (summary.opted_out_count > 0 && summary.total_consent_records > 0) {
+    const optOutRate = summary.opted_out_count / summary.total_consent_records;
+    if (optOutRate > 0.1) return 'yellow';
+  }
+  return 'green';
+}
+
+function buildMetrics(summary, optOutRate) {
+  const quietStatus = (summary?.messages_in_quiet_hours || 0) > 0 ? 'red' : 'green';
+  const coldStatus = (summary?.cold_outreach_violations || 0) > 0 ? 'red' : 'green';
+  const optOutStatus =
+    summary?.total_consent_records > 0 &&
+    summary.opted_out_count / summary.total_consent_records > 0.1
+      ? 'yellow'
+      : 'green';
+
+  return [
+    {
+      label: 'Consent Records',
+      value: summary?.total_consent_records || 0,
+      subtitle: 'Total active consent records on file',
+      icon: Users,
+      status: 'green',
+    },
+    {
+      label: 'Opt-Out Count',
+      value: summary?.opted_out_count || 0,
+      subtitle: 'Contacts who opted out of messaging',
+      icon: XCircle,
+      status: (summary?.opted_out_count || 0) > 0 ? 'yellow' : 'green',
+    },
+    {
+      label: 'Quiet Hours Violations',
+      value: summary?.messages_in_quiet_hours || 0,
+      subtitle: 'Messages sent outside allowed hours',
+      icon: Clock,
+      status: quietStatus,
+    },
+    {
+      label: 'Cold Outreach Violations',
+      value: summary?.cold_outreach_violations || 0,
+      subtitle: 'Messages exceeding per-lead limits',
+      icon: AlertCircle,
+      status: coldStatus,
+    },
+    {
+      label: 'Pending Follow-ups',
+      value: summary?.pending_followups || 0,
+      subtitle: 'Queued follow-up messages',
+      icon: Clock,
+      status: 'green',
+    },
+    {
+      label: 'Opt-Out Rate',
+      value: `${optOutRate}%`,
+      subtitle: 'Percentage of contacts who opted out',
+      icon: Shield,
+      status: optOutStatus,
+    },
+  ];
+}
+
+function buildChecklist(summary) {
+  if (!summary) return [];
+  return [
+    {
+      label: 'Consent records retained (5-year FTC TSR 2024)',
+      status: summary.total_consent_records > 0 ? 'pass' : 'warn',
+    },
+    {
+      label: 'Opt-out processing active',
+      status: 'pass',
+    },
+    {
+      label: 'AI disclosure included (California SB 1001)',
+      status: summary.messages_with_ai_disclosure != null ? 'pass' : 'warn',
+    },
+    {
+      label: 'Quiet hours enforcement (state-specific)',
+      status: (summary.messages_in_quiet_hours || 0) === 0 ? 'pass' : 'fail',
+    },
+    {
+      label: 'Business name in first message',
+      status: 'pass',
+    },
+    {
+      label: 'STOP opt-out in first message',
+      status: 'pass',
+    },
+  ];
+}
+
+function MetricCard({ label, value, subtitle, icon: Icon, status }) {
+  const valueColor = METRIC_STATUS_COLORS[status] || 'text-gray-900';
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-gray-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">{title}</span>
-        </div>
-        <div className={`w-2 h-2 rounded-full ${config.dot}`} />
+    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className="w-4 h-4 text-gray-400" />
+        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+          {label}
+        </span>
       </div>
-      <p className={`text-2xl font-bold ${config.color}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-1.5">{description}</p>
+      <p className={`text-2xl font-bold font-mono ${valueColor}`}>{value}</p>
+      <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>
+    </div>
+  );
+}
+
+function ComplianceChecklist({ items }) {
+  const iconMap = {
+    pass: <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />,
+    fail: <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />,
+    warn: <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />,
+    warning: <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />,
+  };
+
+  const badgeVariantMap = {
+    pass: 'success',
+    fail: 'danger',
+    warn: 'warning',
+    warning: 'warning',
+  };
+
+  const badgeLabelMap = {
+    pass: 'Pass',
+    fail: 'Fail',
+    warn: 'Warning',
+    warning: 'Warning',
+  };
+
+  return (
+    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-gray-900 mb-5">
+        Compliance Checklist
+      </h2>
+      <div>
+        {items.map(({ label, status }) => (
+          <div
+            key={label}
+            className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0"
+          >
+            {iconMap[status]}
+            <span className="text-sm text-gray-700 flex-1">{label}</span>
+            <Badge variant={badgeVariantMap[status]} size="sm">
+              {badgeLabelMap[status]}
+            </Badge>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

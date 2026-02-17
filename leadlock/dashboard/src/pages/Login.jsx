@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { AlertCircle, Zap, ArrowRight } from 'lucide-react';
 
 export default function Login() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,7 +19,7 @@ export default function Login() {
       localStorage.setItem('ll_business', data.business_name);
       localStorage.setItem('ll_is_admin', data.is_admin ? 'true' : 'false');
       localStorage.setItem('ll_client_id', data.client_id);
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err) {
       setError('Invalid email or password');
     } finally {
@@ -30,37 +28,29 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#f8f9fb] relative overflow-hidden">
-      {/* Decorative gradient blobs */}
-      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-orange-500/[0.04] blur-3xl" />
-      <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full bg-orange-500/[0.04] blur-3xl" />
-      <div className="absolute top-[30%] left-[20%] w-[300px] h-[300px] rounded-full bg-emerald-500/[0.03] blur-3xl" />
-
-      {/* Subtle dot grid */}
-      <div className="absolute inset-0 bg-dot-pattern opacity-40" />
-
-      <div className="w-full max-w-[420px] relative z-10 animate-page-in">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#FAFAFA] animate-[fade-up_0.4s_ease-out]">
+      <div className="w-full max-w-[400px]">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-500 shadow-lg shadow-orange-500/25">
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-2xl font-bold tracking-tight text-gray-900">
-            Lead<span className="gradient-text">Lock</span>
+          <span className="text-xl font-semibold text-gray-900">
+            LeadLock
           </span>
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-gray-200/80 rounded-2xl p-8 shadow-xl shadow-gray-900/[0.06] card-accent-top">
-          <h2 className="text-lg font-semibold text-center mb-1 text-gray-900">
+        <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm">
+          <h2 className="text-lg font-semibold text-center text-gray-900 mb-1">
             Welcome back
           </h2>
-          <p className="text-sm text-center mb-8 text-gray-400">
+          <p className="text-sm text-center text-gray-400 mb-6">
             Sign in to your dashboard
           </p>
 
           {error && (
-            <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm bg-red-50 border border-red-100 text-red-600">
+            <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm bg-red-50 border border-red-200/60 text-red-600">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
@@ -68,7 +58,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-gray-400">
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                 Email
               </label>
               <input
@@ -76,12 +66,12 @@ export default function Login() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 input-premium"
+                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-white border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                 placeholder="you@company.com"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-gray-400">
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                 Password
               </label>
               <input
@@ -89,14 +79,14 @@ export default function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 input-premium"
+                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-white border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                 placeholder={'\u2022'.repeat(10)}
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/30 hover:-translate-y-[1px] active:translate-y-0 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -110,8 +100,8 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-xs mt-8 font-medium text-gray-400">
-          Powered by <span className="gradient-text font-semibold">LeadLock AI</span>
+        <p className="text-xs text-gray-400 text-center mt-8">
+          Powered by <span className="text-orange-500 font-semibold">LeadLock AI</span>
         </p>
       </div>
     </div>

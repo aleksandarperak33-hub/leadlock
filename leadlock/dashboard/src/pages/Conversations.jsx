@@ -1,11 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import PageHeader from '../components/ui/PageHeader';
+import SearchInput from '../components/ui/SearchInput';
+import StatusDot from '../components/ui/StatusDot';
 import ConversationThread from '../components/ConversationThread';
 import LeadStatusBadge from '../components/LeadStatusBadge';
 import { MessageSquare, User, Calendar, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 
+/**
+ * Maps a lead state to a StatusDot color.
+ */
+const stateToColor = (state) => {
+  if (['booked', 'qualified', 'completed'].includes(state)) return 'green';
+  if (['qualifying', 'booking', 'follow_up'].includes(state)) return 'yellow';
+  if (['opted_out'].includes(state)) return 'red';
+  return 'gray';
+};
+
+/**
+ * Conversations -- Split-pane view with lead list (left) and message thread (right).
+ * Fetches leads on mount and conversation data with 10-second auto-refresh.
+ */
 export default function Conversations() {
   const { leadId } = useParams();
   const navigate = useNavigate();
@@ -14,6 +31,7 @@ export default function Conversations() {
   const [conversations, setConversations] = useState([]);
   const [leadDetail, setLeadDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -57,23 +75,36 @@ export default function Conversations() {
     navigate(`/conversations/${id}`, { replace: true });
   };
 
-  return (
-    <div className="animate-page-in">
-      {/* Header */}
-      <h1 className="text-xl font-bold tracking-tight text-gray-900 mb-6">
-        Conversations
-      </h1>
+  const filteredLeads = searchQuery
+    ? leads.filter((lead) => {
+        const name =
+          `${lead.first_name || ''} ${lead.last_name || ''}`.toLowerCase();
+        return name.includes(searchQuery.toLowerCase());
+      })
+    : leads;
 
-      <div className="flex gap-4 h-[calc(100vh-180px)]">
-        {/* Lead sidebar */}
-        <div className="w-72 flex-shrink-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden hidden lg:flex lg:flex-col">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Recent Leads
-            </p>
+  return (
+    <div className="space-y-0">
+      <PageHeader title="Conversations" />
+
+      <div className="flex h-[calc(100vh-180px)]">
+        {/* Left panel - Lead list */}
+        <div className="w-80 flex-shrink-0 border-r border-gray-200/60 bg-white hidden lg:flex lg:flex-col">
+          <div className="p-3 border-b border-gray-200/60">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search leads..."
+            />
           </div>
+
           <div className="flex-1 overflow-y-auto">
-            {leads.map(lead => {
+            {filteredLeads.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">
+                No leads found
+              </p>
+            )}
+            {filteredLeads.map((lead) => {
               const isSelected = selectedLead === lead.id;
               return (
                 <button
@@ -81,20 +112,28 @@ export default function Conversations() {
                   onClick={() => selectLead(lead.id)}
                   className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer ${
                     isSelected
-                      ? 'bg-orange-50'
-                      : 'hover:bg-gray-50'
+                      ? 'bg-orange-50/50 border-l-2 border-l-orange-500'
+                      : 'hover:bg-gray-50/50 border-l-2 border-l-transparent'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium truncate ${
-                      isSelected ? 'text-orange-700' : 'text-gray-900'
-                    }`}>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-medium text-gray-900 truncate">
                       {lead.first_name || 'Unknown'} {lead.last_name || ''}
                     </span>
-                    <LeadStatusBadge status={lead.state} />
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                      {lead.created_at
+                        ? format(new Date(lead.created_at), 'MMM d')
+                        : '\u2014'}
+                    </span>
                   </div>
-                  <p className="text-[11px] mt-0.5 text-gray-400">
-                    {lead.source?.replace('_', ' ')} &middot; {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '\u2014'}
+                  <div className="flex items-center gap-1.5">
+                    <StatusDot color={stateToColor(lead.state)} />
+                    <span className="text-xs text-gray-400 capitalize">
+                      {lead.state?.replaceAll('_', ' ')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                    {lead.source?.replaceAll('_', ' ')}
                   </p>
                 </button>
               );
@@ -102,55 +141,63 @@ export default function Conversations() {
           </div>
         </div>
 
-        {/* Conversation panel */}
-        <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
+        {/* Right panel - Conversation thread */}
+        <div className="flex-1 bg-[#FAFAFA] flex flex-col overflow-hidden">
           {!selectedLead ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-              <MessageSquare className="w-8 h-8 mb-3" strokeWidth={1.5} />
-              <p className="text-sm">Select a lead to view their conversation</p>
+              <MessageSquare className="w-10 h-10 mb-3" strokeWidth={1.5} />
+              <p className="text-sm">
+                Select a lead to view their conversation
+              </p>
             </div>
           ) : (
             <>
               {/* Conversation header */}
               {leadDetail?.lead && (
-                <div className="px-5 py-4 border-b border-gray-100">
+                <div className="px-6 py-4 border-b border-gray-200/60 bg-white">
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => { setSelectedLead(null); navigate('/conversations'); }}
+                      onClick={() => {
+                        setSelectedLead(null);
+                        navigate('/conversations');
+                      }}
                       className="lg:hidden text-gray-400 hover:text-gray-600 cursor-pointer"
                     >
                       <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center">
                       <User className="w-4 h-4 text-orange-500" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {leadDetail.lead.first_name || 'Unknown'} {leadDetail.lead.last_name || ''}
+                        {leadDetail.lead.first_name || 'Unknown'}{' '}
+                        {leadDetail.lead.last_name || ''}
                       </p>
-                      <p className="text-[11px] font-mono text-gray-400">
+                      <p className="text-xs font-mono text-gray-400">
                         {leadDetail.lead.phone_masked}
                       </p>
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-3">
                       <LeadStatusBadge status={leadDetail.lead.state} />
-                      <span className="text-[11px] capitalize text-gray-400">
-                        {leadDetail.lead.source?.replace('_', ' ')}
+                      <span className="text-xs capitalize text-gray-400">
+                        {leadDetail.lead.source?.replaceAll('_', ' ')}
                       </span>
                     </div>
                   </div>
 
                   {/* Booking info */}
                   {leadDetail.booking && (
-                    <div className="mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <div className="mt-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 mb-0.5">
                         <Calendar className="w-3.5 h-3.5" />
                         Appointment Booked
                       </div>
-                      <p className="text-[11px] text-gray-500">
+                      <p className="text-xs text-gray-500">
                         {leadDetail.booking.appointment_date}
-                        {leadDetail.booking.time_window_start && ` at ${leadDetail.booking.time_window_start}`}
-                        {leadDetail.booking.tech_name && ` with ${leadDetail.booking.tech_name}`}
+                        {leadDetail.booking.time_window_start &&
+                          ` at ${leadDetail.booking.time_window_start}`}
+                        {leadDetail.booking.tech_name &&
+                          ` with ${leadDetail.booking.tech_name}`}
                       </p>
                     </div>
                   )}
@@ -158,22 +205,25 @@ export default function Conversations() {
               )}
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-5">
+              <div className="flex-1 overflow-y-auto px-6">
                 <ConversationThread messages={conversations} />
               </div>
 
               {/* Timeline */}
               {leadDetail?.events?.length > 0 && (
-                <div className="px-5 py-3 max-h-28 overflow-y-auto border-t border-gray-100 bg-gray-50">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                <div className="px-6 py-3 max-h-28 overflow-y-auto border-t border-gray-200/60 bg-white">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                     Timeline
                   </p>
                   <div className="space-y-1">
-                    {leadDetail.events.slice(-5).map(event => (
-                      <div key={event.id} className="flex items-center gap-2 text-[11px]">
+                    {leadDetail.events.slice(-5).map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex items-center gap-2 text-xs"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                         <span className="text-gray-500">
-                          {event.action.replace('_', ' ')}
+                          {event.action?.replaceAll('_', ' ')}
                         </span>
                         {event.duration_ms && (
                           <span className="font-mono text-gray-400">

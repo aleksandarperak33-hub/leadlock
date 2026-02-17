@@ -1,76 +1,468 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
-import { Zap, Play, Settings as SettingsIcon, BarChart3, RefreshCw, ChevronDown, ChevronUp, X, Users, Activity, Mail, Trash2, Ban, Plus, Search } from 'lucide-react';
+import {
+  Zap, Play, X, Users, Mail, Trash2, Ban, Plus,
+} from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
+import StatCard from '../../components/ui/StatCard';
+import Badge from '../../components/ui/Badge';
+import DataTable from '../../components/ui/DataTable';
+import Tabs from '../../components/ui/Tabs';
+import SearchInput from '../../components/ui/SearchInput';
+import StatusDot from '../../components/ui/StatusDot';
+import EmptyState from '../../components/ui/EmptyState';
+import SalesEngineSettings from './SalesEngineSettings';
 
 const TRADE_TYPES = ['hvac', 'plumbing', 'roofing', 'electrical', 'solar', 'general'];
 const STATUS_OPTIONS = ['cold', 'contacted', 'demo_scheduled', 'demo_completed', 'proposal_sent', 'won', 'lost'];
 
-const JOB_STATUS_BADGE = {
-  pending: 'bg-gray-50 text-gray-600 border border-gray-100',
-  running: 'bg-amber-50 text-amber-700 border border-amber-100',
-  completed: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-  failed: 'bg-red-50 text-red-700 border border-red-100',
+const INPUT_CLASSES = 'bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all';
+
+const JOB_STATUS_VARIANT = {
+  pending: 'neutral',
+  running: 'warning',
+  completed: 'success',
+  failed: 'danger',
 };
 
-const PROSPECT_STATUS_BADGE = {
-  cold: 'bg-gray-50 text-gray-600 border border-gray-100',
-  contacted: 'bg-blue-50 text-blue-700 border border-blue-100',
-  demo_scheduled: 'bg-orange-50 text-orange-700 border border-orange-100',
-  demo_completed: 'bg-orange-50 text-orange-700 border border-orange-100',
-  proposal_sent: 'bg-amber-50 text-amber-700 border border-amber-100',
-  won: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-  lost: 'bg-red-50 text-red-700 border border-red-100',
+const PROSPECT_STATUS_VARIANT = {
+  cold: 'neutral',
+  contacted: 'info',
+  demo_scheduled: 'warning',
+  demo_completed: 'warning',
+  proposal_sent: 'warning',
+  won: 'success',
+  lost: 'danger',
 };
 
-const PROSPECT_STATUS_DOT = {
-  cold: 'bg-gray-400',
-  contacted: 'bg-blue-500',
-  demo_scheduled: 'bg-orange-500',
-  demo_completed: 'bg-orange-500',
-  proposal_sent: 'bg-amber-500',
-  won: 'bg-emerald-500',
-  lost: 'bg-red-500',
+const PROSPECT_DOT_COLOR = {
+  cold: 'gray',
+  contacted: 'yellow',
+  demo_scheduled: 'yellow',
+  demo_completed: 'yellow',
+  proposal_sent: 'yellow',
+  won: 'green',
+  lost: 'red',
 };
 
-const HEALTH_COLORS = {
-  healthy: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  unhealthy: 'bg-red-500',
-  unknown: 'bg-gray-400',
+const HEALTH_DOT_MAP = {
+  healthy: 'green',
+  warning: 'yellow',
+  unhealthy: 'red',
+  unknown: 'gray',
 };
 
-const HEALTH_TEXT = {
-  healthy: 'text-emerald-700',
-  warning: 'text-amber-700',
-  unhealthy: 'text-red-700',
-  unknown: 'text-gray-500',
-};
+function formatStatus(status) {
+  return (status || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-function MetricCard({ label, value, sub, variant }) {
-  const textColor = variant === 'success' ? 'text-emerald-600'
-    : variant === 'warning' ? 'text-amber-600'
-    : variant === 'danger' ? 'text-red-600'
-    : variant === 'accent' ? 'text-orange-600'
-    : 'text-gray-900';
+/* ---------- Scrape Form Modal ---------- */
+
+function ScrapeFormModal({ show, form, onChange, onSubmit, onClose, scraping }) {
+  if (!show) return null;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</p>
-      <p className={`text-xl font-semibold font-mono ${textColor}`}>{value}</p>
-      {sub && <p className="text-xs mt-0.5 text-gray-400">{sub}</p>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-sm bg-white border border-gray-200/60 rounded-2xl shadow-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-gray-900">Run Manual Scrape</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">City</label>
+            <input
+              type="text"
+              value={form.city}
+              onChange={(e) => onChange({ ...form, city: e.target.value })}
+              className={`w-full px-3 py-2.5 rounded-xl text-sm ${INPUT_CLASSES}`}
+              placeholder="Austin"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">State</label>
+            <input
+              type="text"
+              value={form.state}
+              onChange={(e) => onChange({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })}
+              className={`w-full px-3 py-2.5 rounded-xl text-sm ${INPUT_CLASSES}`}
+              placeholder="TX"
+              maxLength={2}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Trade Type</label>
+            <select
+              value={form.trade_type}
+              onChange={(e) => onChange({ ...form, trade_type: e.target.value })}
+              className={`w-full px-3 py-2.5 rounded-xl text-sm cursor-pointer ${INPUT_CLASSES}`}
+            >
+              {TRADE_TYPES.map((t) => (
+                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={onSubmit}
+            disabled={scraping || !form.city || !form.state}
+            className="w-full py-2.5 rounded-xl text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {scraping ? 'Scraping...' : 'Start Scrape'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function StatusBadge({ status, type }) {
-  const styles = type === 'job' ? JOB_STATUS_BADGE : PROSPECT_STATUS_BADGE;
-  const cls = styles[status] || 'bg-gray-50 text-gray-600 border border-gray-100';
+/* ---------- Metrics Tab ---------- */
+
+function MetricsTab({ metrics }) {
+  if (!metrics) return null;
+
   return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-md capitalize ${cls}`}>
-      {(status || '').replace('_', ' ')}
-    </span>
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Prospects Scraped" value={metrics.prospects?.total || 0} />
+        <StatCard label="Emails Sent" value={metrics.emails?.sent || 0} />
+        <StatCard
+          label="Open Rate"
+          value={`${metrics.emails?.open_rate || 0}%`}
+          color={metrics.emails?.open_rate > 20 ? 'green' : 'yellow'}
+        />
+        <StatCard
+          label="Reply Rate"
+          value={`${metrics.emails?.reply_rate || 0}%`}
+          color={metrics.emails?.reply_rate > 5 ? 'green' : 'yellow'}
+        />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Demos Booked" value={metrics.conversions?.demos_booked || 0} color="brand" />
+        <StatCard label="Won" value={metrics.conversions?.won || 0} color="green" />
+        <StatCard label="Total Cost" value={`$${metrics.cost?.total || 0}`} />
+        <StatCard
+          label="Bounced"
+          value={metrics.emails?.bounced || 0}
+          color={metrics.emails?.bounced > 0 ? 'red' : 'brand'}
+        />
+      </div>
+      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4">Pipeline Breakdown</p>
+        <div className="flex flex-wrap gap-4">
+          {Object.entries(metrics.prospects?.by_status || {}).map(([status, count]) => (
+            <div key={status} className="flex items-center gap-2">
+              <StatusDot color={PROSPECT_DOT_COLOR[status] || 'gray'} />
+              <span className="text-sm capitalize text-gray-600">{formatStatus(status)}</span>
+              <span className="text-sm font-mono font-medium text-gray-900">{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
+
+/* ---------- Prospects Tab ---------- */
+
+function ProspectsTab({
+  prospects, prospectsTotal, prospectsPage, prospectsFilter,
+  onFilterChange, onPageChange, selectedProspect, prospectEmails,
+  onSelectProspect, onCloseDetail, onDeleteProspect, onBlacklistProspect,
+  maxSequenceSteps,
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="flex-1 min-w-[220px]">
+          <SearchInput
+            value={prospectsFilter.search}
+            onChange={(val) => { onFilterChange({ ...prospectsFilter, search: val }); onPageChange(1); }}
+            placeholder="Search name, company, email..."
+          />
+        </div>
+        <select
+          value={prospectsFilter.status}
+          onChange={(e) => { onFilterChange({ ...prospectsFilter, status: e.target.value }); onPageChange(1); }}
+          className={`px-3 py-2.5 rounded-xl text-sm cursor-pointer ${INPUT_CLASSES}`}
+        >
+          <option value="">All Statuses</option>
+          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{formatStatus(s)}</option>)}
+        </select>
+        <select
+          value={prospectsFilter.trade_type}
+          onChange={(e) => { onFilterChange({ ...prospectsFilter, trade_type: e.target.value }); onPageChange(1); }}
+          className={`px-3 py-2.5 rounded-xl text-sm cursor-pointer ${INPUT_CLASSES}`}
+        >
+          <option value="">All Trades</option>
+          {TRADE_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+        </select>
+      </div>
+
+      <div className="flex gap-4">
+        {/* Table */}
+        <div className={`${selectedProspect ? 'flex-1' : 'w-full'}`}>
+          <ProspectsTable
+            prospects={prospects}
+            selectedId={selectedProspect?.id}
+            onSelect={onSelectProspect}
+            maxSteps={maxSequenceSteps}
+          />
+          {prospectsTotal > 25 && (
+            <div className="flex items-center justify-between px-4 py-3 mt-2">
+              <span className="text-xs text-gray-400 font-mono">{prospectsTotal} total</span>
+              <div className="flex gap-1">
+                <button
+                  disabled={prospectsPage <= 1}
+                  onClick={() => onPageChange(prospectsPage - 1)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 cursor-pointer transition-colors"
+                >
+                  Prev
+                </button>
+                <span className="px-2.5 py-1.5 text-xs font-mono text-gray-500">{prospectsPage}</span>
+                <button
+                  onClick={() => onPageChange(prospectsPage + 1)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-xl bg-white border border-gray-200 text-gray-600 hover:border-gray-300 cursor-pointer transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Detail Panel */}
+        {selectedProspect && (
+          <ProspectDetailPanel
+            prospect={selectedProspect}
+            emails={prospectEmails}
+            onClose={onCloseDetail}
+            onDelete={onDeleteProspect}
+            onBlacklist={onBlacklistProspect}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProspectsTable({ prospects, selectedId, onSelect, maxSteps }) {
+  const columns = [
+    {
+      key: 'prospect_name',
+      label: 'Name',
+      render: (val, row) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900">{val}</div>
+          {row.prospect_company && row.prospect_company !== val && (
+            <div className="text-xs text-gray-400">{row.prospect_company}</div>
+          )}
+        </div>
+      ),
+    },
+    { key: 'prospect_email', label: 'Email', render: (val) => <span className="text-gray-500">{val || '\u2014'}</span> },
+    { key: 'prospect_trade_type', label: 'Trade', render: (val) => <span className="text-gray-500 capitalize">{val}</span> },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (val) => <Badge variant={PROSPECT_STATUS_VARIANT[val] || 'neutral'} size="sm">{formatStatus(val)}</Badge>,
+    },
+    {
+      key: 'outreach_sequence_step',
+      label: 'Step',
+      render: (val) => <span className="font-mono text-gray-500">{val}/{maxSteps || 3}</span>,
+    },
+    {
+      key: 'last_email_opened_at',
+      label: 'Opened',
+      render: (val) => val
+        ? <span className="text-emerald-600 font-medium">Yes</span>
+        : <span className="text-gray-400">{'\u2014'}</span>,
+    },
+    {
+      key: 'total_cost_usd',
+      label: 'Cost',
+      align: 'right',
+      render: (val) => <span className="font-mono text-gray-500">${(val || 0).toFixed(3)}</span>,
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      data={prospects}
+      emptyMessage="No prospects found."
+      onRowClick={onSelect}
+    />
+  );
+}
+
+function ProspectDetailPanel({ prospect, emails, onClose, onDelete, onBlacklist }) {
+  return (
+    <div className="w-[400px] flex-shrink-0 bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-y-auto" style={{ maxHeight: '80vh' }}>
+      <div className="p-5 border-b border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-900">{prospect.prospect_name}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="space-y-1 text-sm text-gray-500">
+          {prospect.prospect_email && <div>Email: {prospect.prospect_email}</div>}
+          {prospect.prospect_phone && <div>Phone: <span className="font-mono">{prospect.prospect_phone}</span></div>}
+          {prospect.website && <div>Web: {prospect.website}</div>}
+          {prospect.city && <div>Location: {prospect.city}, {prospect.state_code}</div>}
+          {prospect.google_rating && <div>Rating: <span className="font-mono">{prospect.google_rating}/5</span> ({prospect.review_count} reviews)</div>}
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={() => onDelete(prospect.id)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-red-50 text-red-700 border border-red-200/60 hover:bg-red-100 cursor-pointer transition-colors"
+          >
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
+          <button
+            onClick={() => onBlacklist(prospect.id)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200/60 hover:bg-gray-100 cursor-pointer transition-colors"
+          >
+            <Ban className="w-3 h-3" /> Blacklist
+          </button>
+        </div>
+      </div>
+
+      {/* Email Thread */}
+      <div className="p-5">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+          <Mail className="w-3.5 h-3.5" /> Email Thread ({emails.length})
+        </p>
+        {emails.length === 0 ? (
+          <p className="text-sm text-gray-400">No emails yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {emails.map((email) => (
+              <div
+                key={email.id}
+                className={`rounded-xl p-4 border ${
+                  email.direction === 'outbound'
+                    ? 'bg-white border-gray-200/60'
+                    : 'bg-orange-50/50 border-orange-200/60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-xs font-medium ${
+                    email.direction === 'outbound' ? 'text-gray-500' : 'text-orange-600'
+                  }`}>
+                    {email.direction === 'outbound' ? `Step ${email.sequence_step} \u2014 Sent` : 'Reply'}
+                  </span>
+                  <span className="text-xs text-gray-400 font-mono">
+                    {email.sent_at ? new Date(email.sent_at).toLocaleString() : ''}
+                  </span>
+                </div>
+                <p className="text-sm font-medium mb-1 text-gray-900">{email.subject}</p>
+                <p className="text-sm leading-relaxed text-gray-500">
+                  {email.body_text ? email.body_text.slice(0, 300) : ''}
+                  {email.body_text && email.body_text.length > 300 ? '...' : ''}
+                </p>
+                {email.direction === 'outbound' && (
+                  <div className="flex gap-2 mt-2.5">
+                    {email.delivered_at && <Badge variant="success" size="sm">Delivered</Badge>}
+                    {email.opened_at && <Badge variant="info" size="sm">Opened</Badge>}
+                    {email.clicked_at && <Badge variant="warning" size="sm">Clicked</Badge>}
+                    {email.bounced_at && <Badge variant="danger" size="sm">Bounced</Badge>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Scrape Jobs Tab ---------- */
+
+function ScrapeJobsTab({ scrapeJobs }) {
+  const columns = [
+    { key: 'platform', label: 'Platform', render: (val) => <span className="text-gray-500 capitalize">{(val || '').replace('_', ' ')}</span> },
+    { key: 'trade_type', label: 'Trade', render: (val) => <span className="text-gray-500 capitalize">{val}</span> },
+    { key: 'city', label: 'Location', render: (_, row) => <span className="text-gray-900">{row.city}, {row.state_code}</span> },
+    { key: 'status', label: 'Status', render: (val) => <Badge variant={JOB_STATUS_VARIANT[val] || 'neutral'} size="sm">{formatStatus(val)}</Badge> },
+    { key: 'results_found', label: 'Found', align: 'right', render: (val) => <span className="font-mono">{val}</span> },
+    { key: 'new_prospects_created', label: 'New', align: 'right', render: (val) => <span className="font-mono text-emerald-600">{val}</span> },
+    { key: 'duplicates_skipped', label: 'Dupes', align: 'right', render: (val) => <span className="font-mono text-gray-400">{val}</span> },
+    { key: 'api_cost_usd', label: 'Cost', align: 'right', render: (val) => <span className="font-mono">${(val ?? 0).toFixed(3)}</span> },
+    { key: 'created_at', label: 'Date', render: (val) => <span className="text-gray-400">{val ? new Date(val).toLocaleDateString() : '\u2014'}</span> },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      data={scrapeJobs}
+      emptyMessage="No scrape jobs yet. Run your first scrape."
+    />
+  );
+}
+
+/* ---------- Status Tab ---------- */
+
+function StatusTab({ workerStatus }) {
+  if (!workerStatus) {
+    return <p className="text-sm text-gray-400">Loading worker status...</p>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {workerStatus.workers && Object.entries(workerStatus.workers).map(([name, info]) => (
+          <div key={name} className="bg-white border border-gray-200/60 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <StatusDot color={HEALTH_DOT_MAP[info.health] || 'gray'} />
+              <span className="text-sm font-medium capitalize text-gray-900">
+                {name.replace(/_/g, ' ')}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 font-mono">
+              {info.health === 'unknown'
+                ? 'No heartbeat'
+                : info.last_heartbeat
+                  ? `Last: ${new Date(info.last_heartbeat).toLocaleTimeString()}`
+                  : 'N/A'}
+            </p>
+            <p className={`text-xs capitalize font-semibold mt-1 ${
+              info.health === 'healthy' ? 'text-emerald-700'
+              : info.health === 'warning' ? 'text-amber-700'
+              : info.health === 'unhealthy' ? 'text-red-700'
+              : 'text-gray-500'
+            }`}>
+              {info.health}
+            </p>
+          </div>
+        ))}
+      </div>
+      {workerStatus.alerts && (
+        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Alerts</p>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">Bounce Rate:</span>
+            <span className={`text-sm font-mono font-medium ${
+              workerStatus.alerts.bounce_rate_alert ? 'text-red-600' : 'text-emerald-600'
+            }`}>
+              {workerStatus.alerts.bounce_rate || 0}%
+            </span>
+            {workerStatus.alerts.bounce_rate_alert && (
+              <Badge variant="danger" size="sm">HIGH</Badge>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Main Component ---------- */
 
 export default function AdminSalesEngine() {
   const [metrics, setMetrics] = useState(null);
@@ -84,7 +476,6 @@ export default function AdminSalesEngine() {
   const [saving, setSaving] = useState(false);
   const [newLocation, setNewLocation] = useState({ city: '', state: '' });
 
-  // Prospects state
   const [prospects, setProspects] = useState([]);
   const [prospectsTotal, setProspectsTotal] = useState(0);
   const [prospectsPage, setProspectsPage] = useState(1);
@@ -92,11 +483,12 @@ export default function AdminSalesEngine() {
   const [selectedProspect, setSelectedProspect] = useState(null);
   const [prospectEmails, setProspectEmails] = useState([]);
 
-  // Worker status state
   const [workerStatus, setWorkerStatus] = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchAll = async () => {
     try {
+      setError(null);
       const [m, c, j] = await Promise.all([
         api.getSalesMetrics(),
         api.getSalesConfig(),
@@ -107,6 +499,7 @@ export default function AdminSalesEngine() {
       setScrapeJobs(j.jobs || []);
     } catch (e) {
       console.error('Failed to fetch sales engine data:', e);
+      setError(e.message || 'Failed to load sales engine data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -142,7 +535,7 @@ export default function AdminSalesEngine() {
   const handleToggle = async () => {
     try {
       await api.updateSalesConfig({ is_active: !config.is_active });
-      setConfig(c => ({ ...c, is_active: !c.is_active }));
+      setConfig((c) => ({ ...c, is_active: !c.is_active }));
     } catch (e) {
       console.error('Failed to toggle sales engine:', e);
     }
@@ -176,21 +569,24 @@ export default function AdminSalesEngine() {
   };
 
   const addLocation = () => {
+    if (!config) return;
     if (!newLocation.city || !newLocation.state) return;
     const locations = [...(config.target_locations || []), { ...newLocation }];
-    setConfig(c => ({ ...c, target_locations: locations }));
+    setConfig((c) => ({ ...c, target_locations: locations }));
     setNewLocation({ city: '', state: '' });
   };
 
   const removeLocation = (idx) => {
+    if (!config) return;
     const locations = (config.target_locations || []).filter((_, i) => i !== idx);
-    setConfig(c => ({ ...c, target_locations: locations }));
+    setConfig((c) => ({ ...c, target_locations: locations }));
   };
 
   const toggleTradeType = (trade) => {
+    if (!config) return;
     const types = config.target_trade_types || [];
-    const updated = types.includes(trade) ? types.filter(t => t !== trade) : [...types, trade];
-    setConfig(c => ({ ...c, target_trade_types: updated }));
+    const updated = types.includes(trade) ? types.filter((t) => t !== trade) : [...types, trade];
+    setConfig((c) => ({ ...c, target_trade_types: updated }));
   };
 
   const handleSelectProspect = async (prospect) => {
@@ -224,480 +620,109 @@ export default function AdminSalesEngine() {
   };
 
   const tabs = [
-    { key: 'metrics', label: 'Metrics', icon: BarChart3 },
-    { key: 'prospects', label: 'Prospects', icon: Users },
-    { key: 'scraping', label: 'Scrape Jobs', icon: RefreshCw },
-    { key: 'status', label: 'Status', icon: Activity },
-    { key: 'settings', label: 'Settings', icon: SettingsIcon },
+    { id: 'metrics', label: 'Metrics' },
+    { id: 'prospects', label: 'Prospects', count: prospectsTotal || undefined },
+    { id: 'scraping', label: 'Scrape Jobs', count: scrapeJobs.length || undefined },
+    { id: 'status', label: 'Status' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   if (loading) {
-    return <div className="h-64 bg-gray-100 rounded-xl animate-pulse" />;
+    return (
+      <div className="min-h-screen bg-[#FAFAFA]">
+        <div className="h-8 w-48 rounded-lg bg-gray-100 animate-pulse mb-6" />
+        <div className="h-64 bg-gray-100 rounded-2xl animate-pulse" />
+      </div>
+    );
   }
 
   return (
-    <div style={{ backgroundColor: '#f8f9fb' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold tracking-tight text-gray-900">Sales Engine</h1>
-          <button
-            onClick={handleToggle}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-              config?.is_active
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-gray-50 text-gray-500 border border-gray-200'
-            }`}
-          >
-            <Zap className="w-3 h-3" />
-            {config?.is_active ? 'Active' : 'Inactive'}
-          </button>
-        </div>
-        <button
-          onClick={() => { setShowScrapeForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
-        >
-          <Play className="w-3.5 h-3.5" />
-          Run Scrape
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 overflow-x-auto">
-        {tabs.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === key
-                ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Scrape Form Modal */}
-      {showScrapeForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-sm bg-white border border-gray-200 rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-900">Run Manual Scrape</h2>
-              <button onClick={() => setShowScrapeForm(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">City</label>
-                <input
-                  type="text" value={scrapeForm.city} onChange={e => setScrapeForm(f => ({ ...f, city: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                  placeholder="Austin"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">State</label>
-                <input
-                  type="text" value={scrapeForm.state} onChange={e => setScrapeForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                  placeholder="TX" maxLength={2}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Trade Type</label>
-                <select value={scrapeForm.trade_type} onChange={e => setScrapeForm(f => ({ ...f, trade_type: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer">
-                  {TRADE_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                </select>
-              </div>
-              <button
-                onClick={handleScrape} disabled={scraping || !scrapeForm.city || !scrapeForm.state}
-                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                {scraping ? 'Scraping...' : 'Start Scrape'}
-              </button>
-            </div>
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <PageHeader
+        title="Sales Engine"
+        actions={
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggle}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                config?.is_active
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                  : 'bg-gray-50 text-gray-500 border border-gray-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {config?.is_active ? 'Active' : 'Inactive'}
+            </button>
+            <button
+              onClick={() => setShowScrapeForm(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 transition-colors cursor-pointer"
+            >
+              <Play className="w-4 h-4" />
+              Run Scrape
+            </button>
           </div>
+        }
+      />
+
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60 text-sm text-red-700">
+          <span>{error}</span>
+          <button
+            onClick={() => { setLoading(true); fetchAll(); }}
+            className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
         </div>
       )}
 
-      {/* Metrics Tab */}
-      {activeTab === 'metrics' && metrics && (
-        <div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Prospects Scraped" value={metrics.prospects?.total || 0} />
-            <MetricCard label="Emails Sent" value={metrics.emails?.sent || 0} />
-            <MetricCard label="Open Rate" value={`${metrics.emails?.open_rate || 0}%`} variant={metrics.emails?.open_rate > 20 ? 'success' : 'warning'} />
-            <MetricCard label="Reply Rate" value={`${metrics.emails?.reply_rate || 0}%`} variant={metrics.emails?.reply_rate > 5 ? 'success' : 'warning'} />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Demos Booked" value={metrics.conversions?.demos_booked || 0} variant="accent" />
-            <MetricCard label="Won" value={metrics.conversions?.won || 0} variant="success" />
-            <MetricCard label="Total Cost" value={`$${metrics.cost?.total || 0}`} />
-            <MetricCard label="Bounced" value={metrics.emails?.bounced || 0} variant={metrics.emails?.bounced > 0 ? 'danger' : undefined} />
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-3">Pipeline Breakdown</p>
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(metrics.prospects?.by_status || {}).map(([status, count]) => (
-                <div key={status} className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${PROSPECT_STATUS_DOT[status] || 'bg-gray-400'}`} />
-                  <span className="text-xs capitalize text-gray-500">{status.replace('_', ' ')}</span>
-                  <span className="text-xs font-mono font-medium text-gray-900">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <ScrapeFormModal
+        show={showScrapeForm}
+        form={scrapeForm}
+        onChange={setScrapeForm}
+        onSubmit={handleScrape}
+        onClose={() => setShowScrapeForm(false)}
+        scraping={scraping}
+      />
 
-      {/* Prospects Tab */}
+      <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'metrics' && <MetricsTab metrics={metrics} />}
+
       {activeTab === 'prospects' && (
-        <div>
-          {/* Filters */}
-          <div className="flex gap-2 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
-              <input
-                type="text" value={prospectsFilter.search}
-                onChange={e => { setProspectsFilter(f => ({ ...f, search: e.target.value })); setProspectsPage(1); }}
-                className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                placeholder="Search name, company, email..."
-              />
-            </div>
-            <select
-              value={prospectsFilter.status}
-              onChange={e => { setProspectsFilter(f => ({ ...f, status: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-            </select>
-            <select
-              value={prospectsFilter.trade_type}
-              onChange={e => { setProspectsFilter(f => ({ ...f, trade_type: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
-            >
-              <option value="">All Trades</option>
-              {TRADE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-
-          <div className="flex gap-4">
-            {/* Prospects Table */}
-            <div className={`bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden ${selectedProspect ? 'flex-1' : 'w-full'}`}>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      {['Name', 'Email', 'Trade', 'Status', 'Step', 'Opened', 'Cost'].map(h => (
-                        <th key={h} className="text-left px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {prospects.length === 0 ? (
-                      <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">No prospects found.</td></tr>
-                    ) : prospects.map(p => (
-                      <tr
-                        key={p.id}
-                        onClick={() => handleSelectProspect(p)}
-                        className={`cursor-pointer transition-colors border-b border-gray-100 ${
-                          selectedProspect?.id === p.id ? 'bg-orange-50' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <td className="px-3 py-2.5">
-                          <div className="text-xs font-medium text-gray-900">{p.prospect_name}</div>
-                          {p.prospect_company && p.prospect_company !== p.prospect_name && (
-                            <div className="text-xs text-gray-400">{p.prospect_company}</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-gray-500">{p.prospect_email || '\u2014'}</td>
-                        <td className="px-3 py-2.5 text-xs capitalize text-gray-500">{p.prospect_trade_type}</td>
-                        <td className="px-3 py-2.5"><StatusBadge status={p.status} /></td>
-                        <td className="px-3 py-2.5 text-xs font-mono text-gray-500">{p.outreach_sequence_step}/{config?.max_sequence_steps || 3}</td>
-                        <td className="px-3 py-2.5 text-xs">
-                          {p.last_email_opened_at
-                            ? <span className="text-emerald-600 font-medium">Yes</span>
-                            : <span className="text-gray-400">\u2014</span>
-                          }
-                        </td>
-                        <td className="px-3 py-2.5 text-xs font-mono text-gray-500">${(p.total_cost_usd || 0).toFixed(3)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Pagination */}
-              {prospectsTotal > 25 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">{prospectsTotal} total</span>
-                  <div className="flex gap-1">
-                    <button disabled={prospectsPage <= 1} onClick={() => setProspectsPage(p => p - 1)}
-                      className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 disabled:opacity-40 cursor-pointer transition-colors">
-                      Prev
-                    </button>
-                    <span className="px-2 py-1 text-xs font-mono text-gray-500">{prospectsPage}</span>
-                    <button onClick={() => setProspectsPage(p => p + 1)}
-                      className="px-2.5 py-1 text-xs rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300 cursor-pointer transition-colors">
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Prospect Detail Panel */}
-            {selectedProspect && (
-              <div className="w-[400px] flex-shrink-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-y-auto" style={{ maxHeight: '80vh' }}>
-                <div className="p-4 border-b border-gray-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-900">{selectedProspect.prospect_name}</h3>
-                    <button onClick={() => setSelectedProspect(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-1 text-xs text-gray-500">
-                    {selectedProspect.prospect_email && <div>Email: {selectedProspect.prospect_email}</div>}
-                    {selectedProspect.prospect_phone && <div>Phone: {selectedProspect.prospect_phone}</div>}
-                    {selectedProspect.website && <div>Web: {selectedProspect.website}</div>}
-                    {selectedProspect.city && <div>Location: {selectedProspect.city}, {selectedProspect.state_code}</div>}
-                    {selectedProspect.google_rating && <div>Rating: {selectedProspect.google_rating}/5 ({selectedProspect.review_count} reviews)</div>}
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={() => handleDeleteProspect(selectedProspect.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 cursor-pointer transition-colors">
-                      <Trash2 className="w-3 h-3" /> Delete
-                    </button>
-                    <button onClick={() => handleBlacklistProspect(selectedProspect.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 cursor-pointer transition-colors">
-                      <Ban className="w-3 h-3" /> Blacklist
-                    </button>
-                  </div>
-                </div>
-
-                {/* Email Thread */}
-                <div className="p-4">
-                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-3">
-                    <Mail className="w-3 h-3 inline mr-1" /> Email Thread ({prospectEmails.length})
-                  </p>
-                  {prospectEmails.length === 0 ? (
-                    <p className="text-xs text-gray-400">No emails yet.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {prospectEmails.map(email => (
-                        <div key={email.id} className={`rounded-lg p-3 border ${
-                          email.direction === 'outbound'
-                            ? 'bg-gray-50 border-gray-100'
-                            : 'bg-orange-50 border-orange-100'
-                        }`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-xs font-medium ${
-                              email.direction === 'outbound' ? 'text-gray-500' : 'text-orange-600'
-                            }`}>
-                              {email.direction === 'outbound' ? `Step ${email.sequence_step} \u2014 Sent` : 'Reply'}
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              {email.sent_at ? new Date(email.sent_at).toLocaleString() : ''}
-                            </span>
-                          </div>
-                          <p className="text-xs font-medium mb-1 text-gray-900">{email.subject}</p>
-                          <p className="text-xs leading-relaxed text-gray-500">
-                            {email.body_text ? email.body_text.slice(0, 300) : ''}
-                            {email.body_text && email.body_text.length > 300 ? '...' : ''}
-                          </p>
-                          {email.direction === 'outbound' && (
-                            <div className="flex gap-2 mt-2">
-                              {email.delivered_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">Delivered</span>}
-                              {email.opened_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">Opened</span>}
-                              {email.clicked_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-100">Clicked</span>}
-                              {email.bounced_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100">Bounced</span>}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <ProspectsTab
+          prospects={prospects}
+          prospectsTotal={prospectsTotal}
+          prospectsPage={prospectsPage}
+          prospectsFilter={prospectsFilter}
+          onFilterChange={setProspectsFilter}
+          onPageChange={setProspectsPage}
+          selectedProspect={selectedProspect}
+          prospectEmails={prospectEmails}
+          onSelectProspect={handleSelectProspect}
+          onCloseDetail={() => setSelectedProspect(null)}
+          onDeleteProspect={handleDeleteProspect}
+          onBlacklistProspect={handleBlacklistProspect}
+          maxSequenceSteps={config?.max_sequence_steps}
+        />
       )}
 
-      {/* Scrape Jobs Tab */}
-      {activeTab === 'scraping' && (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {['Platform', 'Trade', 'Location', 'Status', 'Found', 'New', 'Dupes', 'Cost', 'Date'].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {scrapeJobs.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">No scrape jobs yet. Run your first scrape.</td></tr>
-                ) : scrapeJobs.map(job => (
-                  <tr key={job.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-2.5 text-xs capitalize text-gray-500">{job.platform?.replace('_', ' ')}</td>
-                    <td className="px-4 py-2.5 text-xs capitalize text-gray-500">{job.trade_type}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-900">{job.city}, {job.state_code}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={job.status} type="job" /></td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-gray-500">{job.results_found}</td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-emerald-600">{job.new_prospects_created}</td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-gray-400">{job.duplicates_skipped}</td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-gray-500">${job.api_cost_usd?.toFixed(3)}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-400">{job.created_at ? new Date(job.created_at).toLocaleDateString() : '\u2014'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {activeTab === 'scraping' && <ScrapeJobsTab scrapeJobs={scrapeJobs} />}
 
-      {/* Status Tab */}
-      {activeTab === 'status' && (
-        <div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            {workerStatus?.workers && Object.entries(workerStatus.workers).map(([name, info]) => (
-              <div key={name} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${HEALTH_COLORS[info.health] || 'bg-gray-400'}`} />
-                  <span className="text-xs font-medium capitalize text-gray-900">{name.replace('_', ' ')}</span>
-                </div>
-                <p className="text-xs text-gray-400">
-                  {info.health === 'unknown' ? 'No heartbeat' :
-                    info.last_heartbeat ? `Last: ${new Date(info.last_heartbeat).toLocaleTimeString()}` : 'N/A'}
-                </p>
-                <p className={`text-xs capitalize font-medium mt-1 ${HEALTH_TEXT[info.health] || 'text-gray-500'}`}>
-                  {info.health}
-                </p>
-              </div>
-            ))}
-          </div>
-          {workerStatus?.alerts && (
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2">Alerts</p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Bounce Rate:</span>
-                <span className={`text-xs font-mono font-medium ${workerStatus.alerts.bounce_rate_alert ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {workerStatus.alerts.bounce_rate || 0}%
-                </span>
-                {workerStatus.alerts.bounce_rate_alert && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100">HIGH</span>
-                )}
-              </div>
-            </div>
-          )}
-          {!workerStatus && (
-            <p className="text-sm text-gray-400">Loading worker status...</p>
-          )}
-        </div>
-      )}
+      {activeTab === 'status' && <StatusTab workerStatus={workerStatus} />}
 
-      {/* Settings Tab */}
-      {activeTab === 'settings' && config && (
-        <div className="space-y-5">
-          {/* Target Locations */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-3">Target Locations</p>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {(config.target_locations || []).map((loc, i) => (
-                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
-                  {loc.city}, {loc.state}
-                  <button onClick={() => removeLocation(i)} className="ml-0.5 text-gray-400 hover:text-gray-600 cursor-pointer">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input type="text" value={newLocation.city} onChange={e => setNewLocation(l => ({ ...l, city: e.target.value }))}
-                className="flex-1 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                placeholder="City" />
-              <input type="text" value={newLocation.state} onChange={e => setNewLocation(l => ({ ...l, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                className="w-16 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                placeholder="ST" maxLength={2} />
-              <button onClick={addLocation}
-                className="px-3 py-2 rounded-lg text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 cursor-pointer transition-colors">
-                Add
-              </button>
-            </div>
-          </div>
-
-          {/* Target Trade Types */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-3">Target Trade Types</p>
-            <div className="flex flex-wrap gap-2">
-              {TRADE_TYPES.map(trade => {
-                const active = (config.target_trade_types || []).includes(trade);
-                return (
-                  <button key={trade} onClick={() => toggleTradeType(trade)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                      active
-                        ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                        : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {trade}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Limits */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-3">Limits</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: 'Daily Emails', key: 'daily_email_limit' },
-                { label: 'Daily Scrapes', key: 'daily_scrape_limit' },
-                { label: 'Delay (hours)', key: 'sequence_delay_hours' },
-                { label: 'Max Steps', key: 'max_sequence_steps' },
-              ].map(({ label, key }) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
-                  <input type="number" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Email Sender */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-3">Email Sender</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[
-                { label: 'From Email', key: 'from_email', placeholder: 'outreach@leadlock.io' },
-                { label: 'From Name', key: 'from_name', placeholder: 'LeadLock' },
-                { label: 'Reply-To Email', key: 'reply_to_email', placeholder: 'alex@leadlock.io' },
-                { label: 'Company Address', key: 'company_address', placeholder: '123 Main St, Austin, TX 78701' },
-              ].map(({ label, key, placeholder }) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
-                  <input type="text" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-                    placeholder={placeholder} />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button onClick={handleSaveConfig} disabled={saving}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-50 cursor-pointer">
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
+      {activeTab === 'settings' && (
+        <SalesEngineSettings
+          config={config}
+          onConfigChange={setConfig}
+          newLocation={newLocation}
+          onNewLocationChange={setNewLocation}
+          onAddLocation={addLocation}
+          onRemoveLocation={removeLocation}
+          onToggleTradeType={toggleTradeType}
+          onSave={handleSaveConfig}
+          saving={saving}
+        />
       )}
     </div>
   );

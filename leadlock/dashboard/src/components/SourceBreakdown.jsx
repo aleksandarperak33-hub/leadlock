@@ -1,5 +1,6 @@
-import { PieChart } from 'lucide-react';
-
+/**
+ * Label mapping for source keys.
+ */
 const SOURCE_LABELS = {
   google_lsa: 'Google LSA',
   angi: 'Angi',
@@ -12,18 +13,27 @@ const SOURCE_LABELS = {
   yelp: 'Yelp',
 };
 
-const SOURCE_COLORS = {
-  google_lsa: '#f97316',
-  angi: '#f59e0b',
-  facebook: '#f97316',
-  website: '#10b981',
-  missed_call: '#f59e0b',
-  text_in: '#06b6d4',
-  thumbtack: '#22c55e',
-  referral: '#fbbf24',
-  yelp: '#ef4444',
-};
+/**
+ * Ordered orange palette for source bars.
+ */
+const BAR_PALETTE = [
+  '#f97316',
+  '#fb923c',
+  '#fdba74',
+  '#fed7aa',
+  '#ffedd5',
+  '#f97316',
+  '#fb923c',
+  '#fdba74',
+  '#fed7aa',
+];
 
+/**
+ * SourceBreakdown -- Horizontal bar chart showing lead sources.
+ * Parent wraps in a card container; this component renders only the content.
+ *
+ * @param {Object} data - Map of source key to count
+ */
 export default function SourceBreakdown({ data = {} }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
   const max = Math.max(...entries.map(([, v]) => v), 1);
@@ -31,55 +41,45 @@ export default function SourceBreakdown({ data = {} }) {
 
   if (!entries.length) {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
-        <div className="flex items-center gap-2 mb-4">
-          <PieChart className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Leads by Source
-          </h3>
-        </div>
-        <p className="text-sm text-gray-400">No data available</p>
-      </div>
+      <p className="text-sm text-gray-400 py-8 text-center">
+        No data available
+      </p>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
-      <div className="flex items-center gap-2 mb-4">
-        <PieChart className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Leads by Source
-        </h3>
-      </div>
-      <div className="space-y-3.5">
-        {entries.map(([source, count]) => {
-          const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
-          const barColor = SOURCE_COLORS[source] || '#f97316';
-          return (
-            <div key={source}>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: barColor }} />
-                  <span className="text-gray-600 font-medium">{SOURCE_LABELS[source] || source}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="tabular-nums text-gray-400">{pct}%</span>
-                  <span className="tabular-nums font-semibold text-gray-900">{count}</span>
-                </div>
-              </div>
-              <div className="w-full rounded-full h-1.5 bg-gray-100 overflow-hidden">
-                <div
-                  className="h-1.5 rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    width: `${(count / max) * 100}%`,
-                    background: barColor,
-                  }}
-                />
+    <div className="space-y-4">
+      {entries.map(([source, count], index) => {
+        const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
+        const barColor = BAR_PALETTE[index % BAR_PALETTE.length];
+
+        return (
+          <div key={source}>
+            <div className="flex items-center justify-between text-sm mb-1.5">
+              <span className="text-gray-600 font-medium">
+                {SOURCE_LABELS[source] || source}
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-gray-400">
+                  {pct}%
+                </span>
+                <span className="text-sm font-mono font-semibold text-gray-900">
+                  {count}
+                </span>
               </div>
             </div>
-          );
-        })}
-      </div>
+            <div className="w-full rounded-lg h-2 bg-gray-100 overflow-hidden">
+              <div
+                className="h-2 rounded-lg transition-all duration-700 ease-out"
+                style={{
+                  width: `${(count / max) * 100}%`,
+                  background: barColor,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -14,7 +14,11 @@ async function request(path, options = {}) {
   });
 
   if (res.status === 401) {
+    console.warn('API returned 401, clearing session');
     localStorage.removeItem('ll_token');
+    localStorage.removeItem('ll_business');
+    localStorage.removeItem('ll_is_admin');
+    localStorage.removeItem('ll_client_id');
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }
@@ -39,7 +43,11 @@ async function adminRequest(path, options = {}) {
   });
 
   if (res.status === 401) {
+    console.warn('API returned 401, clearing session');
     localStorage.removeItem('ll_token');
+    localStorage.removeItem('ll_business');
+    localStorage.removeItem('ll_is_admin');
+    localStorage.removeItem('ll_client_id');
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }
@@ -68,7 +76,11 @@ async function salesRequest(path, options = {}) {
   });
 
   if (res.status === 401) {
+    console.warn('API returned 401, clearing session');
     localStorage.removeItem('ll_token');
+    localStorage.removeItem('ll_business');
+    localStorage.removeItem('ll_is_admin');
+    localStorage.removeItem('ll_client_id');
     window.location.href = '/login';
     throw new Error('Unauthorized');
   }

@@ -1,13 +1,124 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
-import { Search, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
+import SearchInput from '../../components/ui/SearchInput';
+import DataTable from '../../components/ui/DataTable';
+import Badge from '../../components/ui/Badge';
 
 const INITIAL_FORM = {
   business_name: '', trade_type: 'hvac', tier: 'starter', monthly_fee: '497',
   owner_name: '', owner_email: '', owner_phone: '',
   dashboard_email: '', dashboard_password: '', crm_type: 'google_sheets',
 };
+
+/**
+ * Maps a billing status to a Badge variant.
+ */
+const billingVariant = (status) => {
+  switch (status) {
+    case 'active': return 'success';
+    case 'trial': return 'info';
+    case 'past_due': return 'warning';
+    case 'cancelled': return 'danger';
+    default: return 'neutral';
+  }
+};
+
+/**
+ * Maps a tier name to a Badge variant.
+ */
+const tierVariant = (tier) => {
+  switch (tier) {
+    case 'enterprise': return 'warning';
+    case 'scale': return 'info';
+    case 'growth': return 'success';
+    case 'starter': return 'neutral';
+    default: return 'neutral';
+  }
+};
+
+const TABLE_COLUMNS = [
+  {
+    key: 'business_name',
+    label: 'Business Name',
+    render: (val) => (
+      <span className="font-medium text-gray-900">{val}</span>
+    ),
+  },
+  {
+    key: 'trade_type',
+    label: 'Trade',
+    render: (val) => (
+      <span className="capitalize text-gray-600">{val || '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'tier',
+    label: 'Tier',
+    render: (val) => (
+      <Badge variant={tierVariant(val)} size="sm">
+        {val || 'none'}
+      </Badge>
+    ),
+  },
+  {
+    key: 'billing_status',
+    label: 'Billing',
+    render: (val) => (
+      <Badge variant={billingVariant(val)} size="sm">
+        {(val || 'unknown').replace('_', ' ')}
+      </Badge>
+    ),
+  },
+  {
+    key: 'leads_30d',
+    label: 'Leads',
+    align: 'right',
+    render: (val) => (
+      <span className="font-mono text-gray-900">{val ?? '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'booked_30d',
+    label: 'Booked',
+    align: 'right',
+    render: (val) => (
+      <span className="font-mono text-emerald-600">{val ?? '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'conversion_rate',
+    label: 'Conversion %',
+    align: 'right',
+    render: (val) => (
+      <span className="font-mono text-gray-600">
+        {val != null ? `${(val * 100).toFixed(1)}%` : '\u2014'}
+      </span>
+    ),
+  },
+  {
+    key: 'monthly_fee',
+    label: 'MRR',
+    align: 'right',
+    render: (val) => (
+      <span className="font-mono font-medium text-gray-900">
+        ${val?.toLocaleString() || '0'}
+      </span>
+    ),
+  },
+];
+
+const FORM_FIELDS = [
+  { label: 'Business Name', key: 'business_name', type: 'text', placeholder: 'Austin Comfort HVAC', required: true },
+  { label: 'Owner Name', key: 'owner_name', type: 'text', placeholder: 'John Smith' },
+  { label: 'Owner Email', key: 'owner_email', type: 'email', placeholder: 'john@business.com' },
+  { label: 'Owner Phone', key: 'owner_phone', type: 'text', placeholder: '+15551234567' },
+  { label: 'Dashboard Email', key: 'dashboard_email', type: 'email', placeholder: 'john@business.com' },
+  { label: 'Dashboard Password', key: 'dashboard_password', type: 'password', placeholder: 'Set login password' },
+  { label: 'Monthly Fee', key: 'monthly_fee', type: 'number', placeholder: '497' },
+];
 
 export default function AdminClients() {
   const navigate = useNavigate();
@@ -39,15 +150,6 @@ export default function AdminClients() {
 
   useEffect(() => { fetchClients(); }, [page, search]);
 
-  const billingBadge = (status) => {
-    switch (status) {
-      case 'active': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'trial': return 'bg-amber-50 text-amber-700 border-amber-100';
-      case 'past_due': return 'bg-red-50 text-red-700 border-red-100';
-      default: return 'bg-gray-50 text-gray-500 border-gray-100';
-    }
-  };
-
   const handleCreate = async () => {
     setSaving(true);
     try {
@@ -65,208 +167,150 @@ export default function AdminClients() {
     }
   };
 
+  const handleSearchChange = (val) => {
+    setSearch(val);
+    setPage(1);
+  };
+
   return (
-    <div style={{ background: '#f8f9fb' }}>
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold tracking-tight text-gray-900">Clients</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-gray-400">{total} total</span>
-          <button
-            onClick={() => { setForm(INITIAL_FORM); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New Client
-          </button>
-        </div>
-      </div>
+    <div className="bg-[#FAFAFA] min-h-screen">
+      <PageHeader
+        title="Clients"
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="w-64">
+              <SearchInput
+                value={search}
+                onChange={handleSearchChange}
+                placeholder="Search clients..."
+              />
+            </div>
+            <button
+              onClick={() => { setForm(INITIAL_FORM); setShowForm(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 transition-colors cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              New Client
+            </button>
+          </div>
+        }
+      />
 
       {/* New Client Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl p-6 bg-white border border-gray-200 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-gray-900">New Client</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors">
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-start justify-center pt-24">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-xl border border-gray-200/60">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">New Client</h2>
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-              {[
-                { label: 'Business Name', key: 'business_name', type: 'text', placeholder: 'Austin Comfort HVAC', required: true },
-                { label: 'Owner Name', key: 'owner_name', type: 'text', placeholder: 'John Smith' },
-                { label: 'Owner Email', key: 'owner_email', type: 'email', placeholder: 'john@business.com' },
-                { label: 'Owner Phone', key: 'owner_phone', type: 'text', placeholder: '+15551234567' },
-                { label: 'Dashboard Email', key: 'dashboard_email', type: 'email', placeholder: 'john@business.com' },
-                { label: 'Dashboard Password', key: 'dashboard_password', type: 'password', placeholder: 'Set login password' },
-                { label: 'Monthly Fee', key: 'monthly_fee', type: 'number', placeholder: '497' },
-              ].map(({ label, key, type, placeholder, required }) => (
+
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              {FORM_FIELDS.map(({ label, key, type, placeholder, required }) => (
                 <div key={key}>
-                  <label className="block text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-500">
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
                     {label}{required && ' *'}
                   </label>
                   <input
                     type={type}
                     value={form[key]}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
+                    className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all"
                     placeholder={placeholder}
                   />
                 </div>
               ))}
+
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-500">Trade Type</label>
-                  <select
-                    value={form.trade_type}
-                    onChange={e => setForm(f => ({ ...f, trade_type: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
-                  >
-                    {['hvac', 'plumbing', 'electrical', 'roofing', 'solar', 'general'].map(t => (
-                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-500">Tier</label>
-                  <select
-                    value={form.tier}
-                    onChange={e => setForm(f => ({ ...f, tier: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
-                  >
-                    {['starter', 'growth', 'scale', 'enterprise'].map(t => (
-                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-500">CRM</label>
-                  <select
-                    value={form.crm_type}
-                    onChange={e => setForm(f => ({ ...f, crm_type: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
-                  >
-                    {['google_sheets', 'service_titan', 'housecall_pro', 'jobber', 'gohighlevel'].map(t => (
-                      <option key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                    ))}
-                  </select>
-                </div>
+                {[
+                  { label: 'Trade Type', key: 'trade_type', options: ['hvac', 'plumbing', 'electrical', 'roofing', 'solar', 'general'] },
+                  { label: 'Tier', key: 'tier', options: ['starter', 'growth', 'scale', 'enterprise'] },
+                  { label: 'CRM', key: 'crm_type', options: ['google_sheets', 'service_titan', 'housecall_pro', 'jobber', 'gohighlevel'] },
+                ].map(({ label, key, options }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+                      {label}
+                    </label>
+                    <select
+                      value={form[key]}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
+                    >
+                      {options.map(t => (
+                        <option key={t} value={t}>
+                          {t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={handleCreate}
-                disabled={saving || !form.business_name || !form.trade_type}
-                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
-              >
-                {saving ? 'Creating...' : 'Create Client'}
-              </button>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={saving || !form.business_name || !form.trade_type}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+                >
+                  {saving ? 'Creating...' : 'Create Client'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search clients..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-          />
-        </div>
-      </div>
-
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Business', 'Trade', 'Tier', 'Billing', 'Leads (30d)', 'Booked', 'Conversion', 'MRR'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td colSpan={8} className="px-4 py-4">
-                      <div className="h-4 rounded bg-gray-100 animate-pulse" />
-                    </td>
-                  </tr>
-                ))
-              ) : clients.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
-                    No clients found
-                  </td>
-                </tr>
-              ) : clients.map(client => (
-                <tr
-                  key={client.id}
-                  onClick={() => navigate(`/clients/${client.id}`)}
-                  className="cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {client.business_name}
-                  </td>
-                  <td className="px-4 py-3 text-sm capitalize text-gray-500">
-                    {client.trade_type || '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm capitalize text-gray-500">
-                    {client.tier || '\u2014'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium capitalize px-2 py-0.5 rounded-md border ${billingBadge(client.billing_status)}`}>
-                      {(client.billing_status || 'unknown').replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-900">
-                    {client.leads_30d ?? '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono text-emerald-600">
-                    {client.booked_30d ?? '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-500">
-                    {client.conversion_rate != null ? `${(client.conversion_rate * 100).toFixed(1)}%` : '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono font-medium text-gray-900">
-                    ${client.monthly_fee?.toLocaleString() || '0'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 rounded-2xl bg-gray-100 animate-pulse" />
+          ))}
         </div>
+      ) : (
+        <DataTable
+          columns={TABLE_COLUMNS}
+          data={clients}
+          emptyMessage="No clients found"
+          onRowClick={(row) => navigate(`/clients/${row.id}`)}
+        />
+      )}
 
-        {/* Pagination */}
-        {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-xs font-mono text-gray-400">Page {page} of {pages}</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(pages, p + 1))}
-                disabled={page === pages}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Pagination */}
+      {pages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-xs font-mono text-gray-400">
+            Page {page} of {pages} ({total} total)
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(pages, p + 1))}
+              disabled={page === pages}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

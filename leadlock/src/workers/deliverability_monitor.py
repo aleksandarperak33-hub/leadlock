@@ -114,3 +114,50 @@ async def _check_deliverability():
                 number_stats["filtered_24h"],
                 number_stats["invalid_24h"],
             )
+
+    # === Email reputation monitoring ===
+    try:
+        from src.utils.dedup import get_redis
+        from src.services.deliverability import get_email_reputation
+
+        redis = await get_redis()
+        email_rep = await get_email_reputation(redis)
+
+        if email_rep["status"] in ("poor", "critical"):
+            logger.error(
+                "EMAIL REPUTATION %s (score: %.1f) — bounce: %.2f%%, complaints: %.4f%%",
+                email_rep["status"].upper(),
+                email_rep["score"],
+                email_rep["metrics"].get("bounce_rate", 0) * 100,
+                email_rep["metrics"].get("complaint_rate", 0) * 100,
+            )
+            await send_alert(
+                AlertType.SMS_DELIVERY_FAILED,
+                f"EMAIL REPUTATION {email_rep['status'].upper()} — score {email_rep['score']:.1f}. "
+                f"Bounce rate: {email_rep['metrics'].get('bounce_rate', 0) * 100:.2f}%, "
+                f"Complaint rate: {email_rep['metrics'].get('complaint_rate', 0) * 100:.4f}%. "
+                f"Email sending is {'PAUSED' if email_rep['throttle'] == 'paused' else 'throttled'}.",
+                severity="critical",
+                extra={
+                    "channel": "email",
+                    "reputation_score": email_rep["score"],
+                    "throttle": email_rep["throttle"],
+                },
+            )
+        elif email_rep["status"] == "warning":
+            logger.warning(
+                "Email reputation warning (score: %.1f) — bounce: %.2f%%",
+                email_rep["score"],
+                email_rep["metrics"].get("bounce_rate", 0) * 100,
+            )
+        else:
+            logger.info(
+                "Email reputation %s (score: %.1f, sent: %d, delivered: %d, opened: %d)",
+                email_rep["status"],
+                email_rep["score"],
+                email_rep["metrics"].get("sent", 0),
+                email_rep["metrics"].get("delivered", 0),
+                email_rep["metrics"].get("opened", 0),
+            )
+    except Exception as e:
+        logger.warning("Email reputation check failed: %s", str(e))

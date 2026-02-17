@@ -290,11 +290,32 @@ async def email_events_webhook(
             if not email_record:
                 continue
 
+            # Get Redis for reputation tracking
+            try:
+                from src.utils.dedup import get_redis
+                from src.services.deliverability import record_email_event
+                redis = await get_redis()
+            except Exception as redis_err:
+                logger.debug("Redis unavailable for email reputation: %s", str(redis_err))
+                redis = None
+
             # Update email record based on event type
             if event_type == "delivered" and not email_record.delivered_at:
                 email_record.delivered_at = timestamp
+                # Record reputation event
+                if redis:
+                    try:
+                        await record_email_event(redis, "delivered")
+                    except Exception:
+                        pass
             elif event_type == "open" and not email_record.opened_at:
                 email_record.opened_at = timestamp
+                # Record reputation event
+                if redis:
+                    try:
+                        await record_email_event(redis, "opened")
+                    except Exception:
+                        pass
                 # Also update prospect
                 if outreach_id:
                     prospect = await db.get(Outreach, uuid.UUID(outreach_id))
@@ -315,6 +336,12 @@ async def email_events_webhook(
                                 pass
             elif event_type == "click" and not email_record.clicked_at:
                 email_record.clicked_at = timestamp
+                # Record reputation event
+                if redis:
+                    try:
+                        await record_email_event(redis, "clicked")
+                    except Exception:
+                        pass
                 if outreach_id:
                     prospect = await db.get(Outreach, uuid.UUID(outreach_id))
                     if prospect:
@@ -322,10 +349,17 @@ async def email_events_webhook(
                         await _record_email_signal(
                             "email_clicked", prospect, email_record, 1.0,
                         )
-            elif event_type in ("bounce", "blocked", "deferred"):
+            elif event_type in ("bounce", "blocked"):
+                # Hard bounce or block — count as real bounce
                 email_record.bounced_at = timestamp
                 email_record.bounce_type = event.get("type", event_type)
                 email_record.bounce_reason = event.get("reason", "")
+                # Record reputation event
+                if redis:
+                    try:
+                        await record_email_event(redis, "bounced")
+                    except Exception:
+                        pass
                 # Hard bounce → mark prospect as lost, flag email invalid
                 if event.get("type") == "bounce" or event_type == "bounce":
                     if outreach_id:
@@ -337,7 +371,47 @@ async def email_events_webhook(
                             await _record_email_signal(
                                 "email_bounced", prospect, email_record, 0.0,
                             )
+                            # Auto-blacklist the domain on hard bounce
+                            try:
+                                if prospect.prospect_email and "@" in prospect.prospect_email:
+                                    domain = prospect.prospect_email.split("@")[1].lower().strip()
+                                    if domain:
+                                        existing = await db.execute(
+                                            select(EmailBlacklist).where(
+                                                EmailBlacklist.value == domain
+                                            ).limit(1)
+                                        )
+                                        if not existing.scalar_one_or_none():
+                                            blacklist_entry = EmailBlacklist(
+                                                entry_type="domain",
+                                                value=domain,
+                                                reason=f"Hard bounce on {prospect.prospect_email}",
+                                            )
+                                            db.add(blacklist_entry)
+                                            logger.info(
+                                                "Auto-blacklisted domain %s after hard bounce",
+                                                domain,
+                                            )
+                            except Exception as bl_err:
+                                logger.warning(
+                                    "Failed to auto-blacklist domain: %s", str(bl_err)
+                                )
+            elif event_type == "deferred":
+                # Deferred is temporary — do NOT count as bounce
+                email_record.bounce_type = "deferred"
+                email_record.bounce_reason = event.get("reason", "")
+                logger.info(
+                    "Email %s deferred: %s",
+                    str(email_record.id)[:8],
+                    event.get("reason", "unknown"),
+                )
             elif event_type == "spamreport":
+                # Record reputation event — spam complaints are CRITICAL
+                if redis:
+                    try:
+                        await record_email_event(redis, "complained")
+                    except Exception:
+                        pass
                 # Treat spam report as unsubscribe
                 if outreach_id:
                     prospect = await db.get(Outreach, uuid.UUID(outreach_id))

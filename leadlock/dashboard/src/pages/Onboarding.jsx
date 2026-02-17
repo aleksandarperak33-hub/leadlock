@@ -181,7 +181,7 @@ export default function Onboarding() {
       if (!res.ok) throw new Error('Failed to save');
 
       localStorage.setItem('ll_onboarded', 'true');
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } catch {
       setSaving(false);
     }

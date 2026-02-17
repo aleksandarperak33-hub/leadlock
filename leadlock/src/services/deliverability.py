@@ -268,6 +268,119 @@ async def check_send_allowed(from_phone: str) -> tuple[bool, str]:
         return True, "Redis unavailable — fail open"
 
 
+# ─── EMAIL REPUTATION ──────────────────────────────────
+# Redis keys for email metrics (rolling 24h window)
+# email:reputation:sent — total emails sent
+# email:reputation:delivered — total delivered
+# email:reputation:bounced — total bounced (hard only)
+# email:reputation:complained — spam reports
+# email:reputation:opened — total opened
+# email:reputation:clicked — total clicked
+
+EMAIL_REPUTATION_TTL = 86400  # 24 hour rolling window
+
+# Throttle factor mapping for email reputation
+EMAIL_THROTTLE_FACTORS = {
+    "normal": 1.0,
+    "reduced": 0.5,
+    "critical": 0.25,
+    "paused": 0.0,
+}
+
+
+async def record_email_event(redis_client, event_type: str) -> None:
+    """
+    Record an email event for reputation scoring.
+
+    Args:
+        redis_client: Active Redis connection.
+        event_type: One of sent|delivered|bounced|complained|opened|clicked.
+    """
+    valid_types = {"sent", "delivered", "bounced", "complained", "opened", "clicked"}
+    if event_type not in valid_types:
+        logger.warning("Invalid email event type: %s", event_type)
+        return
+
+    try:
+        key = f"email:reputation:{event_type}"
+        pipe = redis_client.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, EMAIL_REPUTATION_TTL)
+        await pipe.execute()
+    except Exception as e:
+        logger.warning("Failed to record email event '%s': %s", event_type, str(e))
+
+
+async def get_email_reputation(redis_client) -> dict:
+    """
+    Get email reputation score and metrics from a rolling 24h window.
+
+    Args:
+        redis_client: Active Redis connection.
+
+    Returns:
+        Dict with score (0-100), status, throttle level, and detailed metrics.
+    """
+    metric_keys = ["sent", "delivered", "bounced", "complained", "opened", "clicked"]
+    values = {}
+    for k in metric_keys:
+        val = await redis_client.get(f"email:reputation:{k}")
+        if val is not None:
+            val_str = val.decode() if isinstance(val, bytes) else str(val)
+            values[k] = int(val_str)
+        else:
+            values[k] = 0
+
+    sent = values["sent"]
+    if sent == 0:
+        return {"score": 100, "status": "no_data", "throttle": "normal", "metrics": values}
+
+    delivery_rate = values["delivered"] / sent
+    bounce_rate = values["bounced"] / sent
+    complaint_rate = values["complained"] / sent
+    open_rate = values["opened"] / values["delivered"] if values["delivered"] > 0 else 0.0
+
+    # Weighted score (0-100)
+    score = 100.0
+    # Bounce penalty: -5 per 1% bounce rate (heavy penalty)
+    score -= bounce_rate * 500
+    # Complaint penalty: -20 per 0.1% complaint rate (CRITICAL)
+    score -= complaint_rate * 20000
+    # Low delivery bonus/penalty
+    if delivery_rate < 0.95:
+        score -= (0.95 - delivery_rate) * 200
+    # Open rate bonus (minor)
+    if open_rate > 0.15:
+        score += min(5, (open_rate - 0.15) * 50)
+
+    score = max(0.0, min(100.0, score))
+
+    # Status and throttle
+    if score >= 90:
+        status, throttle = "excellent", "normal"
+    elif score >= 75:
+        status, throttle = "good", "normal"
+    elif score >= 60:
+        status, throttle = "warning", "reduced"  # 50% of limit
+    elif score >= 40:
+        status, throttle = "poor", "critical"  # 25% of limit
+    else:
+        status, throttle = "critical", "paused"  # STOP sending
+
+    return {
+        "score": round(score, 1),
+        "status": status,
+        "throttle": throttle,
+        "metrics": {
+            **values,
+            "delivery_rate": round(delivery_rate, 4),
+            "bounce_rate": round(bounce_rate, 4),
+            "complaint_rate": round(complaint_rate, 4),
+            "open_rate": round(open_rate, 4),
+        },
+    }
+
+
 async def get_deliverability_summary() -> dict:
     """
     Get aggregate deliverability summary across all numbers.

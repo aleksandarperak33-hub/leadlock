@@ -30,6 +30,21 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
+# Email warmup schedule — ramps daily send volume over 60 days to protect
+# domain reputation with new sending domains.
+# Format: (day_range_start, day_range_end, max_daily_emails)
+# day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
+EMAIL_WARMUP_SCHEDULE = [
+    (0, 3, 5),        # Days 0-3: 5 emails/day
+    (4, 7, 10),       # Days 4-7: 10 emails/day
+    (8, 14, 25),      # Week 2: 25 emails/day
+    (15, 21, 50),     # Week 3: 50 emails/day
+    (22, 30, 75),     # Week 4: 75 emails/day
+    (31, 45, 100),    # Week 5-6: 100 emails/day
+    (46, 60, 150),    # Week 7-8: 150 emails/day
+    (61, None, None), # After 60 days: use configured limit
+]
+
 
 def sanitize_dashes(text: str) -> str:
     """Replace em dashes, en dashes, and other unicode dashes with regular hyphens."""
@@ -173,6 +188,94 @@ async def _heartbeat():
         pass
 
 
+async def _get_warmup_limit(configured_limit: int) -> int:
+    """
+    Calculate the effective daily email limit based on domain warmup schedule.
+    On first call, stores the warmup start timestamp in Redis.
+
+    Args:
+        configured_limit: The user-configured daily email limit.
+
+    Returns:
+        The minimum of the warmup limit and configured limit.
+    """
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+
+        warmup_key = "leadlock:email_sending_started_at"
+        started_at_raw = await redis.get(warmup_key)
+
+        if started_at_raw is None:
+            # First email send ever — record the start timestamp
+            now_iso = datetime.utcnow().isoformat()
+            await redis.set(warmup_key, now_iso)
+            logger.info("Email warmup started — day 0, limit=5")
+            return min(5, configured_limit)
+
+        started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
+        started_at = datetime.fromisoformat(started_at_str)
+        days_since_start = (datetime.utcnow() - started_at).days
+
+        for day_start, day_end, max_daily in EMAIL_WARMUP_SCHEDULE:
+            if day_end is None:
+                # Final entry: warmup complete, use configured limit
+                return configured_limit
+            if day_start <= days_since_start <= day_end:
+                warmup_limit = max_daily if max_daily is not None else configured_limit
+                return min(warmup_limit, configured_limit)
+
+        # Fallback: warmup complete
+        return configured_limit
+
+    except Exception as e:
+        logger.warning("Warmup limit check failed: %s — using configured limit", str(e))
+        return configured_limit
+
+
+async def _check_email_health() -> tuple[bool, str]:
+    """
+    Check email reputation before sending. Returns (allowed, throttle_level).
+
+    If reputation is critical, returns (False, "paused") to halt sending.
+    Otherwise returns (True, throttle_level) where throttle_level is
+    one of "normal", "reduced", or "critical".
+    """
+    try:
+        from src.utils.dedup import get_redis
+        from src.services.deliverability import get_email_reputation
+
+        redis = await get_redis()
+        reputation = await get_email_reputation(redis)
+
+        if reputation["throttle"] == "paused":
+            logger.warning(
+                "EMAIL SENDING PAUSED — reputation score %.1f (critical). "
+                "Bounce rate: %.2f%%, Complaint rate: %.4f%%",
+                reputation["score"],
+                reputation["metrics"].get("bounce_rate", 0) * 100,
+                reputation["metrics"].get("complaint_rate", 0) * 100,
+            )
+            return False, "paused"
+
+        if reputation["throttle"] == "critical":
+            logger.warning(
+                "Email reputation POOR (%.1f) — sending at 25%% capacity",
+                reputation["score"],
+            )
+        elif reputation["throttle"] == "reduced":
+            logger.warning(
+                "Email reputation WARNING (%.1f) — sending at 50%% capacity",
+                reputation["score"],
+            )
+
+        return True, reputation["throttle"]
+
+    except Exception as e:
+        logger.warning("Email health check failed: %s — continuing with caution", str(e))
+        return True, "normal"  # Don't block on monitoring errors
+
+
 def _calculate_cycle_cap(
     daily_limit: int,
     sent_today: int,
@@ -256,6 +359,12 @@ async def sequence_cycle():
             logger.warning("Sales engine email sender not configured")
             return
 
+        # Email reputation circuit breaker — pause if reputation is critical
+        email_healthy, throttle_level = await _check_email_health()
+        if not email_healthy:
+            logger.warning("Email sending paused due to poor reputation — skipping cycle")
+            return
+
         settings = get_settings()
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -289,21 +398,32 @@ async def sequence_cycle():
         )
         sent_today = sent_today_result.scalar() or 0
 
-        remaining = config.daily_email_limit - sent_today
+        # Apply warmup limit — ramp up daily sends for new domains
+        warmup_limit = await _get_warmup_limit(config.daily_email_limit)
+
+        # Apply reputation throttle factor
+        from src.services.deliverability import EMAIL_THROTTLE_FACTORS
+        throttle_factor = EMAIL_THROTTLE_FACTORS.get(throttle_level, 1.0)
+        effective_limit = max(1, int(warmup_limit * throttle_factor))
+
+        remaining = effective_limit - sent_today
         if remaining <= 0:
-            logger.info("Daily email limit reached (%d sent)", sent_today)
+            logger.info(
+                "Daily email limit reached (%d sent, effective_limit=%d, warmup=%d, throttle=%s)",
+                sent_today, effective_limit, warmup_limit, throttle_level,
+            )
             await db.commit()
             return
 
         # Calculate per-cycle cap for distributed sending
         cycle_cap = _calculate_cycle_cap(
-            config.daily_email_limit, sent_today, config,
+            effective_limit, sent_today, config,
         )
         remaining = min(remaining, cycle_cap)
 
         logger.info(
-            "Unbound prospects: sent_today=%d daily_limit=%d cycle_cap=%d",
-            sent_today, config.daily_email_limit, cycle_cap,
+            "Unbound prospects: sent_today=%d effective_limit=%d (warmup=%d throttle=%s) cycle_cap=%d",
+            sent_today, effective_limit, warmup_limit, throttle_level, cycle_cap,
         )
 
         # Find prospects ready for next step
@@ -663,6 +783,15 @@ async def send_sequence_email(
             str(prospect.id)[:8], send_result["error"],
         )
         return
+
+    # Record send event for email reputation tracking
+    try:
+        from src.utils.dedup import get_redis
+        from src.services.deliverability import record_email_event
+        redis = await get_redis()
+        await record_email_event(redis, "sent")
+    except Exception as rep_err:
+        logger.debug("Failed to record email send event: %s", str(rep_err))
 
     now = datetime.utcnow()
 

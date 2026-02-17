@@ -1,8 +1,130 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import PageHeader from '../../components/ui/PageHeader';
+import SearchInput from '../../components/ui/SearchInput';
+import Tabs from '../../components/ui/Tabs';
+import DataTable from '../../components/ui/DataTable';
+import Badge from '../../components/ui/Badge';
 
-const STATE_FILTERS = ['all', 'new', 'qualifying', 'qualified', 'booked', 'cold', 'opted_out'];
+const STATE_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'new', label: 'New' },
+  { id: 'qualifying', label: 'Qualifying' },
+  { id: 'qualified', label: 'Qualified' },
+  { id: 'booked', label: 'Booked' },
+  { id: 'cold', label: 'Cold' },
+  { id: 'opted_out', label: 'Opted Out' },
+];
+
+/**
+ * Maps a lead state to a Badge variant.
+ */
+const stateVariant = (state) => {
+  switch (state) {
+    case 'booked':
+    case 'completed':
+      return 'success';
+    case 'qualified':
+    case 'qualifying':
+      return 'info';
+    case 'new':
+    case 'intake_sent':
+      return 'warning';
+    case 'cold':
+    case 'dead':
+    case 'opted_out':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+};
+
+/**
+ * Returns the color class for a response time in milliseconds.
+ * <=10s emerald, <=30s orange, <=60s amber, >60s red.
+ */
+const responseTimeColor = (ms) => {
+  if (!ms) return 'text-gray-400';
+  if (ms <= 10000) return 'text-emerald-600';
+  if (ms <= 30000) return 'text-orange-500';
+  if (ms <= 60000) return 'text-amber-600';
+  return 'text-red-600';
+};
+
+const TABLE_COLUMNS = [
+  {
+    key: 'name',
+    label: 'Name',
+    render: (_val, row) => (
+      <span className="font-medium text-gray-900">
+        {row.first_name || 'Unknown'} {row.last_name || ''}
+      </span>
+    ),
+  },
+  {
+    key: 'client_name',
+    label: 'Client',
+    render: (val) => (
+      <span className="text-gray-600">{val || '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'phone_masked',
+    label: 'Phone',
+    render: (val) => (
+      <span className="font-mono text-gray-500">{val || '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'source',
+    label: 'Source',
+    render: (val) => (
+      <span className="capitalize text-gray-600">
+        {(val || '').replace('_', ' ') || '\u2014'}
+      </span>
+    ),
+  },
+  {
+    key: 'state',
+    label: 'Status',
+    render: (val) => (
+      <Badge variant={stateVariant(val)} size="sm">
+        {(val || '').replace('_', ' ')}
+      </Badge>
+    ),
+  },
+  {
+    key: 'score',
+    label: 'Score',
+    align: 'right',
+    render: (val) => (
+      <span className="font-mono text-gray-600">{val ?? '\u2014'}</span>
+    ),
+  },
+  {
+    key: 'first_response_ms',
+    label: 'Response',
+    render: (val) => {
+      if (!val) return <span className="text-xs text-gray-400">{'\u2014'}</span>;
+      return (
+        <span className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeColor(val)}`}>
+          <Clock className="w-3 h-3" />
+          {(val / 1000).toFixed(1)}s
+        </span>
+      );
+    },
+  },
+  {
+    key: 'created_at',
+    label: 'Date',
+    render: (val) => (
+      <span className="font-mono text-xs text-gray-400">
+        {val ? new Date(val).toLocaleDateString() : '\u2014'}
+      </span>
+    ),
+  },
+];
 
 export default function AdminLeads() {
   const [leads, setLeads] = useState([]);
@@ -33,174 +155,78 @@ export default function AdminLeads() {
     fetchLeads();
   }, [page, stateFilter, search]);
 
-  const stateBadge = (state) => {
-    switch (state) {
-      case 'booked': case 'completed':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'qualified': case 'qualifying':
-        return 'bg-blue-50 text-blue-700 border-blue-100';
-      case 'new': case 'intake_sent':
-        return 'bg-amber-50 text-amber-700 border-amber-100';
-      case 'cold': case 'dead':
-        return 'bg-red-50 text-red-600 border-red-100';
-      case 'opted_out':
-        return 'bg-red-50 text-red-700 border-red-100';
-      default:
-        return 'bg-gray-50 text-gray-500 border-gray-100';
-    }
+  const handleSearchChange = (val) => {
+    setSearch(val);
+    setPage(1);
   };
 
-  const responseTimeColor = (ms) => {
-    if (!ms) return 'text-gray-400';
-    if (ms < 10000) return 'text-emerald-600';
-    if (ms < 60000) return 'text-amber-600';
-    return 'text-red-600';
-  };
-
-  const scoreBarColor = (score) => {
-    if (score >= 70) return 'bg-emerald-500';
-    if (score >= 40) return 'bg-amber-500';
-    return 'bg-red-500';
+  const handleTabChange = (tabId) => {
+    setStateFilter(tabId);
+    setPage(1);
   };
 
   return (
-    <div style={{ background: '#f8f9fb' }}>
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold tracking-tight text-gray-900">All Leads</h1>
-        <span className="text-xs font-mono text-gray-400">{total} total</span>
-      </div>
+    <div className="bg-[#FAFAFA] min-h-screen">
+      <PageHeader
+        title="All Leads"
+        subtitle={`${total} total`}
+        actions={
+          <div className="w-72">
+            <SearchInput
+              value={search}
+              onChange={handleSearchChange}
+              placeholder="Search name, phone, client..."
+            />
+          </div>
+        }
+      />
 
-      {/* Search */}
-      <div className="mb-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search name, phone, service, client..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
-          />
-        </div>
-      </div>
-
-      {/* State filters */}
-      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-        {STATE_FILTERS.map(s => (
-          <button
-            key={s}
-            onClick={() => { setStateFilter(s); setPage(1); }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer border ${
-              stateFilter === s
-                ? 'bg-orange-50 text-orange-700 border-orange-200'
-                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
-            }`}
-          >
-            {s === 'all' ? 'All' : s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
-          </button>
-        ))}
-      </div>
+      {/* State Tabs */}
+      <Tabs
+        tabs={STATE_TABS}
+        activeId={stateFilter}
+        onChange={handleTabChange}
+      />
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Name', 'Client', 'Phone', 'Source', 'Status', 'Score', 'Response', 'Date'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td colSpan={8} className="px-4 py-4">
-                      <div className="h-4 rounded bg-gray-100 animate-pulse" />
-                    </td>
-                  </tr>
-                ))
-              ) : leads.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
-                    No leads found
-                  </td>
-                </tr>
-              ) : leads.map(lead => (
-                <tr key={lead.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {lead.first_name || 'Unknown'} {lead.last_name || ''}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-orange-600 font-medium">
-                    {lead.client_name || '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-500">
-                    {lead.phone_masked || '\u2014'}
-                  </td>
-                  <td className="px-4 py-3 text-sm capitalize text-gray-500">
-                    {(lead.source || '').replace('_', ' ')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium capitalize px-2 py-0.5 rounded-md border ${stateBadge(lead.state)}`}>
-                      {(lead.state || '').replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-12 rounded-full h-1.5 bg-gray-100">
-                        <div
-                          className={`h-1.5 rounded-full ${scoreBarColor(lead.score || 0)}`}
-                          style={{ width: `${lead.score || 0}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono text-gray-400">{lead.score ?? '\u2014'}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {lead.first_response_ms ? (
-                      <span className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeColor(lead.first_response_ms)}`}>
-                        <Clock className="w-3 h-3" />
-                        {(lead.first_response_ms / 1000).toFixed(1)}s
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">{'\u2014'}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs font-mono text-gray-400">
-                    {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '\u2014'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 rounded-2xl bg-gray-100 animate-pulse" />
+          ))}
         </div>
+      ) : (
+        <DataTable
+          columns={TABLE_COLUMNS}
+          data={leads}
+          emptyMessage="No leads found"
+        />
+      )}
 
-        {/* Pagination */}
-        {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-xs font-mono text-gray-400">Page {page} of {pages}</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(pages, p + 1))}
-                disabled={page === pages}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Pagination */}
+      {pages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <span className="text-xs font-mono text-gray-400">
+            Page {page} of {pages}
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(pages, p + 1))}
+              disabled={page === pages}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
