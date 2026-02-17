@@ -241,11 +241,12 @@ async def get_worker_health():
             key = f"leadlock:worker_health:{worker}"
             last_heartbeat = await redis.get(key)
             if last_heartbeat:
-                ts = datetime.fromisoformat(last_heartbeat.decode())
+                hb_str = last_heartbeat if isinstance(last_heartbeat, str) else last_heartbeat.decode()
+                ts = datetime.fromisoformat(hb_str)
                 age_seconds = (now - ts).total_seconds()
                 statuses[worker] = {
                     "status": "healthy" if age_seconds < 600 else "stale",
-                    "last_heartbeat": last_heartbeat.decode(),
+                    "last_heartbeat": hb_str,
                     "age_seconds": int(age_seconds),
                 }
             else:

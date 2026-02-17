@@ -280,9 +280,10 @@ async def get_deliverability_summary() -> dict:
         # Find all tracked phone numbers
         keys = []
         async for key in redis.scan_iter("leadlock:deliverability:+*:total"):
-            phone = key.decode().split(":")[2]
+            key_str = key if isinstance(key, str) else key.decode()
+            phone = key_str.split(":")[2]
             if phone not in [k.get("phone") for k in keys]:
-                keys.append({"phone": phone, "key": key.decode()})
+                keys.append({"phone": phone, "key": key_str})
 
         numbers = []
         total_sent = 0
