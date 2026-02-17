@@ -9,6 +9,7 @@ import Settings from './pages/Settings';
 import Bookings from './pages/Bookings';
 import Compliance from './pages/Compliance';
 import Login from './pages/Login';
+import AdminCommandCenter from './pages/admin/AdminCommandCenter';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminClients from './pages/admin/AdminClients';
 import AdminClientDetail from './pages/admin/AdminClientDetail';
@@ -17,6 +18,8 @@ import AdminRevenue from './pages/admin/AdminRevenue';
 import AdminOutreach from './pages/admin/AdminOutreach';
 import AdminSalesEngine from './pages/admin/AdminSalesEngine';
 import AdminCampaigns from './pages/admin/AdminCampaigns';
+import AdminCampaignDetail from './pages/admin/AdminCampaignDetail';
+import AdminInbox from './pages/admin/AdminInbox';
 import AdminInsights from './pages/admin/AdminInsights';
 import AdminTemplates from './pages/admin/AdminTemplates';
 
@@ -37,7 +40,8 @@ function App() {
     return (
       <Routes>
         <Route element={<AdminLayout />}>
-          <Route path="/" element={<AdminOverview />} />
+          <Route path="/" element={<AdminCommandCenter />} />
+          <Route path="/overview" element={<AdminOverview />} />
           <Route path="/clients" element={<AdminClients />} />
           <Route path="/clients/:clientId" element={<AdminClientDetail />} />
           <Route path="/leads" element={<AdminLeads />} />
@@ -45,6 +49,8 @@ function App() {
           <Route path="/outreach" element={<AdminOutreach />} />
           <Route path="/sales-engine" element={<AdminSalesEngine />} />
           <Route path="/campaigns" element={<AdminCampaigns />} />
+          <Route path="/campaigns/:campaignId" element={<AdminCampaignDetail />} />
+          <Route path="/inbox" element={<AdminInbox />} />
           <Route path="/insights" element={<AdminInsights />} />
           <Route path="/templates" element={<AdminTemplates />} />
         </Route>

@@ -6,7 +6,9 @@ Email first, SMS only after a prospect replies (TCPA compliance).
 """
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,8 @@ from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
 from src.models.email_blacklist import EmailBlacklist
+from src.models.campaign import Campaign
+from src.models.email_template import EmailTemplate
 from src.agents.sales_outreach import generate_outreach_email
 from src.services.cold_email import send_cold_email
 from src.utils.email_validation import validate_email
@@ -175,7 +179,10 @@ async def run_outreach_sequencer():
 
 
 async def sequence_cycle():
-    """Execute one full outreach sequence cycle. Respects business hours gating."""
+    """
+    Execute one full outreach sequence cycle. Respects business hours gating.
+    Two-pass: (1) active campaigns first, (2) unbound prospects with global config.
+    """
     async with async_session_factory() as db:
         # Load config
         result = await db.execute(select(SalesEngineConfig).limit(1))
@@ -194,9 +201,28 @@ async def sequence_cycle():
             return
 
         settings = get_settings()
-
-        # Count today's sent emails
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # === PASS 1: Active campaigns ===
+        campaigns_result = await db.execute(
+            select(Campaign).where(Campaign.status == "active")
+        )
+        active_campaigns = campaigns_result.scalars().all()
+
+        for campaign in active_campaigns:
+            try:
+                await _process_campaign_prospects(
+                    db, config, settings, campaign, today_start
+                )
+            except Exception as e:
+                logger.error(
+                    "Campaign %s processing error: %s",
+                    str(campaign.id)[:8], str(e),
+                )
+
+        # === PASS 2: Unbound prospects (campaign_id IS NULL) ===
+
+        # Count today's sent emails (global)
         sent_today_result = await db.execute(
             select(func.count()).select_from(OutreachEmail).where(
                 and_(
@@ -210,14 +236,16 @@ async def sequence_cycle():
         remaining = config.daily_email_limit - sent_today
         if remaining <= 0:
             logger.info("Daily email limit reached (%d sent)", sent_today)
+            await db.commit()
             return
 
         # Find prospects ready for next step
         delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
 
-        # Step 0: never contacted, has email, not unsubscribed
+        # Step 0: never contacted, has email, not unsubscribed, NOT campaign-bound
         step_0_query = select(Outreach).where(
             and_(
+                Outreach.campaign_id.is_(None),
                 Outreach.outreach_sequence_step == 0,
                 Outreach.prospect_email.isnot(None),
                 Outreach.prospect_email != "",
@@ -227,9 +255,10 @@ async def sequence_cycle():
             )
         ).order_by(Outreach.created_at).limit(remaining)
 
-        # Steps 1-2: contacted but no reply, delay elapsed
+        # Steps 1-2: contacted but no reply, delay elapsed, NOT campaign-bound
         followup_query = select(Outreach).where(
             and_(
+                Outreach.campaign_id.is_(None),
                 Outreach.outreach_sequence_step >= 1,
                 Outreach.outreach_sequence_step < config.max_sequence_steps,
                 Outreach.prospect_email.isnot(None),
@@ -252,10 +281,8 @@ async def sequence_cycle():
         all_prospects = step_0_prospects + followup_prospects
         all_prospects = all_prospects[:remaining]
 
-        if not all_prospects:
-            return
-
-        logger.info("Processing %d prospects for outreach", len(all_prospects))
+        if all_prospects:
+            logger.info("Processing %d unbound prospects for outreach", len(all_prospects))
 
         for i, prospect in enumerate(all_prospects):
             try:
@@ -282,11 +309,180 @@ async def sequence_cycle():
         await db.commit()
 
 
+async def _process_campaign_prospects(
+    db: AsyncSession,
+    config: SalesEngineConfig,
+    settings,
+    campaign: Campaign,
+    today_start: datetime,
+) -> None:
+    """
+    Process prospects bound to a specific campaign.
+    Uses campaign's daily_limit and sequence_steps for timing/templates.
+    """
+    steps = campaign.sequence_steps or []
+    if not steps:
+        return
+
+    # Count today's sends for THIS campaign
+    sent_today_result = await db.execute(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
+            and_(
+                Outreach.campaign_id == campaign.id,
+                OutreachEmail.direction == "outbound",
+                OutreachEmail.sent_at >= today_start,
+            )
+        )
+    )
+    sent_today = sent_today_result.scalar() or 0
+    remaining = campaign.daily_limit - sent_today
+
+    if remaining <= 0:
+        logger.debug(
+            "Campaign %s daily limit reached (%d sent)",
+            str(campaign.id)[:8], sent_today,
+        )
+        return
+
+    all_prospects = []
+
+    # For each step, find eligible prospects
+    for step_def in steps:
+        step_num = step_def.get("step", 1)
+        delay_hours = step_def.get("delay_hours", 0)
+        template_id = step_def.get("template_id")
+
+        if step_num == 1:
+            # Step 1: cold prospects in this campaign, never contacted
+            query = select(Outreach).where(
+                and_(
+                    Outreach.campaign_id == campaign.id,
+                    Outreach.outreach_sequence_step == 0,
+                    Outreach.prospect_email.isnot(None),
+                    Outreach.prospect_email != "",
+                    Outreach.email_unsubscribed == False,
+                    Outreach.status.in_(["cold"]),
+                    Outreach.last_email_replied_at.is_(None),
+                )
+            ).order_by(Outreach.created_at).limit(remaining)
+        else:
+            # Follow-up steps: at previous step, delay elapsed
+            delay_cutoff = datetime.utcnow() - timedelta(hours=delay_hours)
+            query = select(Outreach).where(
+                and_(
+                    Outreach.campaign_id == campaign.id,
+                    Outreach.outreach_sequence_step == step_num - 1,
+                    Outreach.prospect_email.isnot(None),
+                    Outreach.prospect_email != "",
+                    Outreach.email_unsubscribed == False,
+                    Outreach.status.in_(["cold", "contacted"]),
+                    Outreach.last_email_replied_at.is_(None),
+                    Outreach.last_email_sent_at <= delay_cutoff,
+                )
+            ).order_by(Outreach.last_email_sent_at).limit(remaining)
+
+        result = await db.execute(query)
+        prospects = result.scalars().all()
+        for p in prospects:
+            all_prospects.append((p, template_id))
+
+    # Limit to daily cap
+    all_prospects = all_prospects[:remaining]
+
+    if not all_prospects:
+        return
+
+    logger.info(
+        "Campaign %s: processing %d prospects",
+        str(campaign.id)[:8], len(all_prospects),
+    )
+
+    for i, (prospect, template_id) in enumerate(all_prospects):
+        try:
+            deferred = await _check_smart_timing(prospect, config)
+            if deferred:
+                continue
+
+            await send_sequence_email(
+                db, config, settings, prospect,
+                template_id=template_id, campaign=campaign,
+            )
+        except Exception as e:
+            logger.error(
+                "Campaign %s: failed to send to %s: %s",
+                str(campaign.id)[:8], str(prospect.id)[:8], str(e),
+            )
+
+        if i < len(all_prospects) - 1:
+            await asyncio.sleep(30)
+
+
+async def _generate_email_with_template(
+    prospect: Outreach,
+    next_step: int,
+    template: Optional[EmailTemplate] = None,
+) -> dict:
+    """
+    Generate an outreach email, optionally using a template.
+    - No template or is_ai_generated=True with ai_instructions: use AI with instructions
+    - is_ai_generated=False with body_template: render static template with substitutions
+    - Fallback: standard AI generation
+    """
+    if template and not template.is_ai_generated and template.body_template:
+        # Static template with variable substitution
+        substitutions = {
+            "{prospect_name}": prospect.prospect_name or "",
+            "{company}": prospect.prospect_company or prospect.prospect_name or "",
+            "{city}": prospect.city or "",
+            "{trade}": prospect.prospect_trade_type or "home services",
+        }
+
+        body_text = template.body_template
+        subject = template.subject_template or f"Quick question for {prospect.prospect_company or prospect.prospect_name}"
+
+        for key, value in substitutions.items():
+            body_text = body_text.replace(key, value)
+            subject = subject.replace(key, value)
+
+        # Simple text-to-html conversion
+        body_html = body_text.replace("\n", "<br>")
+
+        return {
+            "subject": subject,
+            "body_html": body_html,
+            "body_text": body_text,
+            "ai_cost_usd": 0.0,
+        }
+
+    # AI-generated email (with optional extra instructions from template)
+    extra_instructions = None
+    if template and template.is_ai_generated and template.ai_instructions:
+        extra_instructions = template.ai_instructions
+
+    return await generate_outreach_email(
+        prospect_name=prospect.prospect_name,
+        company_name=prospect.prospect_company or prospect.prospect_name,
+        trade_type=prospect.prospect_trade_type or "general",
+        city=prospect.city or "",
+        state=prospect.state_code or "",
+        rating=prospect.google_rating,
+        review_count=prospect.review_count,
+        website=prospect.website,
+        sequence_step=next_step,
+        extra_instructions=extra_instructions,
+    )
+
+
 async def send_sequence_email(
     db: AsyncSession,
     config: SalesEngineConfig,
     settings,
     prospect: Outreach,
+    template_id: Optional[str] = None,
+    campaign: Optional[Campaign] = None,
 ):
     """Generate and send a single outreach email for a prospect."""
     # Validate email before sending
@@ -312,17 +508,19 @@ async def send_sequence_email(
 
     next_step = prospect.outreach_sequence_step + 1
 
-    # Generate personalized email
-    email_result = await generate_outreach_email(
-        prospect_name=prospect.prospect_name,
-        company_name=prospect.prospect_company or prospect.prospect_name,
-        trade_type=prospect.prospect_trade_type or "general",
-        city=prospect.city or "",
-        state=prospect.state_code or "",
-        rating=prospect.google_rating,
-        review_count=prospect.review_count,
-        website=prospect.website,
-        sequence_step=next_step,
+    # Load template if specified
+    template = None
+    if template_id:
+        try:
+            template = await db.get(EmailTemplate, uuid.UUID(template_id))
+        except Exception:
+            pass
+
+    # Generate personalized email — template-aware
+    email_result = await _generate_email_with_template(
+        prospect=prospect,
+        next_step=next_step,
+        template=template,
     )
 
     if email_result.get("error"):
@@ -409,7 +607,12 @@ async def send_sequence_email(
     if prospect.status == "cold":
         prospect.status = "contacted"
 
+    # Increment campaign counters
+    if campaign:
+        campaign.total_sent = (campaign.total_sent or 0) + 1
+
     logger.info(
-        "Outreach email sent: prospect=%s step=%d to=%s",
+        "Outreach email sent: prospect=%s step=%d to=%s campaign=%s",
         str(prospect.id)[:8], next_step, prospect.prospect_email[:20] + "***",
+        str(campaign.id)[:8] if campaign else "none",
     )

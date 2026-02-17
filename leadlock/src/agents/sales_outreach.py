@@ -81,6 +81,7 @@ async def generate_outreach_email(
     review_count: Optional[int] = None,
     website: Optional[str] = None,
     sequence_step: int = 1,
+    extra_instructions: Optional[str] = None,
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -119,6 +120,9 @@ async def generate_outreach_email(
     learning_context = await _get_learning_context(trade_type, state)
     if learning_context:
         prospect_details += f"\n\n{learning_context}"
+
+    if extra_instructions:
+        prospect_details += f"\n\nAdditional instructions: {extra_instructions}"
 
     user_message = f"{step_instruction}\n\n{prospect_details}"
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Send, Plus, Pause, Play, ChevronRight } from 'lucide-react';
 import { api } from '../../api/client';
 
@@ -10,6 +11,7 @@ const STATUS_BADGE = {
 };
 
 export default function AdminCampaigns() {
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -167,7 +169,11 @@ export default function AdminCampaigns() {
             <p className="text-xs text-gray-400 mt-1">Create your first campaign to start automated outreach.</p>
           </div>
         ) : campaigns.map(c => (
-          <div key={c.id} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
+          <div
+            key={c.id}
+            onClick={() => navigate(`/campaigns/${c.id}`)}
+            className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -187,7 +193,7 @@ export default function AdminCampaigns() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleToggle(c)}
+                  onClick={e => { e.stopPropagation(); handleToggle(c); }}
                   className="p-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   {c.status === 'active'
@@ -195,6 +201,7 @@ export default function AdminCampaigns() {
                     : <Play className="w-4 h-4 text-emerald-500" />
                   }
                 </button>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
               </div>
             </div>
           </div>

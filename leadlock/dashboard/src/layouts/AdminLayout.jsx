@@ -2,17 +2,19 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, DollarSign,
-  Target, Zap, Activity, LogOut, Menu, X, Send, LineChart
+  Target, Zap, Activity, LogOut, Menu, X, Send, LineChart, Radio, Inbox
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Overview' },
+  { to: '/', icon: Radio, label: 'Command Center' },
+  { to: '/overview', icon: LayoutDashboard, label: 'Overview' },
   { to: '/clients', icon: Users, label: 'Clients' },
   { to: '/leads', icon: FileText, label: 'All Leads' },
   { to: '/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/outreach', icon: Target, label: 'Outreach' },
   { to: '/sales-engine', icon: Zap, label: 'Sales Engine' },
   { to: '/campaigns', icon: Send, label: 'Campaigns' },
+  { to: '/inbox', icon: Inbox, label: 'Inbox' },
   { to: '/insights', icon: LineChart, label: 'Insights' },
 ];
 

@@ -196,11 +196,31 @@ export const api = {
   pauseCampaign: (id) => salesRequest(`/campaigns/${id}/pause`, { method: 'POST' }),
   resumeCampaign: (id) => salesRequest(`/campaigns/${id}/resume`, { method: 'POST' }),
 
+  // Campaign Detail
+  getCampaignDetail: (id) => salesRequest(`/campaigns/${id}/detail`),
+  getCampaignProspects: (id, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return salesRequest(`/campaigns/${id}/prospects?${qs}`);
+  },
+  activateCampaign: (id) => salesRequest(`/campaigns/${id}/activate`, { method: 'POST' }),
+  assignProspects: (id, data) => salesRequest(`/campaigns/${id}/assign-prospects`, { method: 'POST', body: JSON.stringify(data) }),
+  getCampaignMetrics: (id) => salesRequest(`/campaigns/${id}/metrics`),
+
+  // Inbox
+  getInbox: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return salesRequest(`/inbox?${qs}`);
+  },
+  getInboxThread: (id) => salesRequest(`/inbox/${id}/thread`),
+
   // Templates (Phase 3)
   getTemplates: () => salesRequest('/templates'),
   createTemplate: (data) => salesRequest('/templates', { method: 'POST', body: JSON.stringify(data) }),
   updateTemplate: (id, data) => salesRequest(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTemplate: (id) => salesRequest(`/templates/${id}`, { method: 'DELETE' }),
+
+  // Command Center (Phase 5)
+  getCommandCenter: () => salesRequest('/command-center'),
 
   // Insights (Phase 3)
   getInsights: () => salesRequest('/insights'),
