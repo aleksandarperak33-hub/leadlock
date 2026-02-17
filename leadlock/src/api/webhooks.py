@@ -219,6 +219,7 @@ async def twilio_status_webhook(
 
         if message_sid and status:
             from src.models.conversation import Conversation
+            from src.services.deliverability import record_sms_outcome
 
             result = await db.execute(
                 select(Conversation).where(Conversation.sms_sid == message_sid)
@@ -232,6 +233,15 @@ async def twilio_status_webhook(
                 if status == "delivered":
                     conv.delivered_at = datetime.now(timezone.utc)
                 logger.info("SMS %s status: %s", message_sid, status)
+
+                # Record delivery outcome for reputation tracking
+                await record_sms_outcome(
+                    from_phone=conv.from_phone,
+                    to_phone=conv.to_phone,
+                    status=status,
+                    error_code=error_code,
+                    provider="twilio",
+                )
 
         await _complete_webhook_event(event)
         return {"status": "ok"}

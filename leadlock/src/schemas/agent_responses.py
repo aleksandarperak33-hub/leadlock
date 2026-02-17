@@ -38,6 +38,8 @@ class QualifyResponse(BaseModel):
     )
     score_adjustment: int = Field(default=0, description="Points to add/subtract from lead score")
     is_qualified: bool = Field(default=False, description="True when all 4 fields collected")
+    ai_cost_usd: float = Field(default=0.0, description="AI generation cost for this response")
+    ai_latency_ms: Optional[int] = Field(default=None, description="AI generation latency")
 
 
 class BookResponse(BaseModel):
@@ -50,6 +52,8 @@ class BookResponse(BaseModel):
     booking_confirmed: bool = Field(default=False)
     needs_human_handoff: bool = Field(default=False)
     internal_notes: str = Field(default="")
+    ai_cost_usd: float = Field(default=0.0, description="AI generation cost for this response")
+    ai_latency_ms: Optional[int] = Field(default=None, description="AI generation latency")
 
 
 class FollowupResponse(BaseModel):

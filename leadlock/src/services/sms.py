@@ -163,6 +163,23 @@ async def send_sms(
     body, segments, encoding = enforce_message_length(body)
     masked = mask_phone(to)
 
+    # Check deliverability throttle before sending
+    from src.services.deliverability import check_send_allowed, record_sms_outcome
+    send_ok, throttle_reason = await check_send_allowed(from_phone or "default")
+    if not send_ok:
+        logger.warning("SMS throttled for %s: %s", masked, throttle_reason)
+        return {
+            "sid": None,
+            "status": "throttled",
+            "provider": "none",
+            "segments": segments,
+            "cost_usd": 0.0,
+            "error": throttle_reason,
+            "error_code": None,
+            "encoding": encoding,
+            "is_landline": False,
+        }
+
     # Try Twilio with retries
     last_error = None
     last_error_code = None
@@ -174,6 +191,7 @@ async def send_sms(
                 "SMS sent via Twilio to %s (%d segments, %s): %s",
                 masked, segments, encoding, result.get("sid", "unknown"),
             )
+            await record_sms_outcome(from_phone or "default", to, "sent", provider="twilio")
             return {
                 "sid": result.get("sid"),
                 "status": result.get("status", "sent"),
@@ -197,6 +215,7 @@ async def send_sms(
                     "Twilio permanent error for %s: code=%s class=%s",
                     masked, error_code, error_class,
                 )
+                await record_sms_outcome(from_phone or "default", to, "failed", error_code, "twilio")
                 return {
                     "sid": None,
                     "status": "failed",
@@ -232,6 +251,7 @@ async def send_sms(
             logger.info(
                 "SMS sent via Telnyx (failover) to %s (%d segments)", masked, segments,
             )
+            await record_sms_outcome(from_phone or "default", to, "sent", provider="telnyx")
             return {
                 "sid": result.get("id"),
                 "status": "sent",

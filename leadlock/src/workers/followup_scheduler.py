@@ -25,6 +25,21 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 60
 
 
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        from datetime import timezone
+        redis = await get_redis()
+        await redis.set(
+            "leadlock:worker_health:followup_scheduler",
+            datetime.now(timezone.utc).isoformat(),
+            ex=300,
+        )
+    except Exception:
+        pass
+
+
 async def run_followup_scheduler():
     """Main loop — poll for due followup tasks and execute them."""
     logger.info("Follow-up scheduler started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -35,6 +50,7 @@ async def run_followup_scheduler():
         except Exception as e:
             logger.error("Follow-up scheduler error: %s", str(e))
 
+        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

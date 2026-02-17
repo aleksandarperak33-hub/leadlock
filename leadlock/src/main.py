@@ -68,6 +68,31 @@ async def lifespan(app: FastAPI):
     worker_tasks.append(asyncio.create_task(run_stuck_lead_sweeper()))
     logger.info("Stuck lead sweeper started")
 
+    # CRM sync worker always runs
+    from src.workers.crm_sync import run_crm_sync
+    worker_tasks.append(asyncio.create_task(run_crm_sync()))
+    logger.info("CRM sync worker started")
+
+    # Follow-up scheduler always runs
+    from src.workers.followup_scheduler import run_followup_scheduler
+    worker_tasks.append(asyncio.create_task(run_followup_scheduler()))
+    logger.info("Follow-up scheduler started")
+
+    # Deliverability monitor always runs (reputation tracking)
+    from src.workers.deliverability_monitor import run_deliverability_monitor
+    worker_tasks.append(asyncio.create_task(run_deliverability_monitor()))
+    logger.info("Deliverability monitor started")
+
+    # Booking reminder worker always runs
+    from src.workers.booking_reminder import run_booking_reminder
+    worker_tasks.append(asyncio.create_task(run_booking_reminder()))
+    logger.info("Booking reminder worker started")
+
+    # Lead lifecycle worker always runs
+    from src.workers.lead_lifecycle import run_lead_lifecycle
+    worker_tasks.append(asyncio.create_task(run_lead_lifecycle()))
+    logger.info("Lead lifecycle worker started")
+
     # Sales engine workers — gated behind config flag
     if settings.sales_engine_enabled:
         if not settings.brave_api_key:
@@ -123,12 +148,18 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cancel all background workers on shutdown
+    # Graceful shutdown — give workers time to finish current work
+    logger.info("LeadLock shutting down — stopping %d workers...", len(worker_tasks))
     for task in worker_tasks:
         task.cancel()
     if worker_tasks:
-        await asyncio.gather(*worker_tasks, return_exceptions=True)
-    logger.info("LeadLock shutting down — all workers stopped")
+        # Wait up to 10 seconds for workers to finish
+        done, pending = await asyncio.wait(worker_tasks, timeout=10.0)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    logger.info("LeadLock shutdown complete — all %d workers stopped", len(worker_tasks))
 
 
 def create_app() -> FastAPI:

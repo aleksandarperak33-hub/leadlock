@@ -116,7 +116,13 @@ async def process_booking(
 
     if result.get("error"):
         logger.error("Book agent AI failed: %s", result["error"])
-        return _fallback_booking(slots)
+        fallback = _fallback_booking(slots)
+        fallback.ai_cost_usd = 0.0
+        fallback.ai_latency_ms = 0
+        return fallback
+
+    ai_cost = result.get("cost_usd", 0.0)
+    ai_latency = result.get("latency_ms", 0)
 
     # Parse response — strip markdown fences if present
     raw = result["content"].strip()
@@ -127,7 +133,7 @@ async def process_booking(
 
     try:
         parsed = json.loads(raw)
-        return BookResponse(
+        response = BookResponse(
             message=parsed["message"],
             appointment_date=parsed.get("appointment_date"),
             time_window_start=parsed.get("time_window_start"),
@@ -137,12 +143,18 @@ async def process_booking(
             needs_human_handoff=parsed.get("needs_human_handoff", False),
             internal_notes=parsed.get("internal_notes", ""),
         )
+        response.ai_cost_usd = ai_cost
+        response.ai_latency_ms = ai_latency
+        return response
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning("Failed to parse book response: %s", str(e))
-        return BookResponse(
+        response = BookResponse(
             message=result["content"][:300] if result["content"] else _fallback_booking(slots).message,
             internal_notes=f"Parse error: {str(e)}",
         )
+        response.ai_cost_usd = ai_cost
+        response.ai_latency_ms = ai_latency
+        return response
 
 
 def _fallback_booking(slots: list) -> BookResponse:

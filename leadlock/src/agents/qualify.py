@@ -108,7 +108,10 @@ async def process_qualify(
 
     if result.get("error"):
         logger.error("Qualify agent AI failed: %s", result["error"])
-        return _fallback_response(conversation_turn)
+        fallback = _fallback_response(conversation_turn)
+        fallback.ai_cost_usd = 0.0
+        fallback.ai_latency_ms = 0
+        return fallback
 
     # Parse JSON response — strip markdown fences if present
     raw = result["content"].strip()
@@ -118,11 +121,14 @@ async def process_qualify(
         lines = [l for l in lines if not l.strip().startswith("```")]
         raw = "\n".join(lines).strip()
 
+    ai_cost = result.get("cost_usd", 0.0)
+    ai_latency = result.get("latency_ms", 0)
+
     try:
         parsed = json.loads(raw)
         qualification = QualificationData(**parsed.get("qualification", {}))
 
-        return QualifyResponse(
+        response = QualifyResponse(
             message=parsed["message"],
             qualification=qualification,
             internal_notes=parsed.get("internal_notes", ""),
@@ -130,13 +136,19 @@ async def process_qualify(
             score_adjustment=parsed.get("score_adjustment", 0),
             is_qualified=parsed.get("is_qualified", False),
         )
+        response.ai_cost_usd = ai_cost
+        response.ai_latency_ms = ai_latency
+        return response
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         logger.warning("Failed to parse qualify response: %s. Content: %s", str(e), raw[:200])
         # Try to extract just the message from the response
-        return QualifyResponse(
+        response = QualifyResponse(
             message=raw[:300] if raw else _fallback_response(conversation_turn).message,
             internal_notes=f"Parse error: {str(e)}",
         )
+        response.ai_cost_usd = ai_cost
+        response.ai_latency_ms = ai_latency
+        return response
 
 
 def _fallback_response(turn: int) -> QualifyResponse:

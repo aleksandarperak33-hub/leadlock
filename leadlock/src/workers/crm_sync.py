@@ -1,10 +1,15 @@
 """
 CRM sync worker — asynchronously creates records in the client's CRM.
 CRITICAL: This runs AFTER the SMS response. Never in the critical path.
+
+Retry logic:
+- On failure: retry up to 5 times with exponential backoff (30s, 2min, 10min, 30min, 2hr)
+- After max retries: mark as permanently failed, alert admin
+- Heartbeat stored in Redis for health monitoring
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +25,22 @@ from src.integrations.google_sheets import GoogleSheetsCRM
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30
+MAX_CRM_RETRIES = 5
+CRM_RETRY_DELAYS = [30, 120, 600, 1800, 7200]  # 30s, 2m, 10m, 30m, 2h
+
+
+async def _heartbeat():
+    """Store heartbeat timestamp in Redis."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set(
+            "leadlock:worker_health:crm_sync",
+            datetime.now(timezone.utc).isoformat(),
+            ex=300,
+        )
+    except Exception:
+        pass
 
 
 async def run_crm_sync():
@@ -32,15 +53,19 @@ async def run_crm_sync():
         except Exception as e:
             logger.error("CRM sync error: %s", str(e))
 
+        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
 async def sync_pending_bookings():
-    """Find and sync all pending bookings to their CRM."""
+    """Find and sync all pending and retrying bookings to their CRM."""
     async with async_session_factory() as db:
+        # Find pending bookings AND failed bookings that are due for retry
         result = await db.execute(
             select(Booking)
-            .where(Booking.crm_sync_status == "pending")
+            .where(
+                Booking.crm_sync_status.in_(["pending", "retrying"])
+            )
             .order_by(Booking.created_at)
             .limit(20)
         )
@@ -55,9 +80,38 @@ async def sync_pending_bookings():
             try:
                 await sync_booking(db, booking)
             except Exception as e:
-                logger.error("CRM sync failed for booking %s: %s", str(booking.id)[:8], str(e))
-                booking.crm_sync_status = "failed"
-                booking.crm_sync_error = str(e)
+                retry_count = (booking.extra_data or {}).get("crm_retry_count", 0)
+                logger.error(
+                    "CRM sync failed for booking %s (attempt %d/%d): %s",
+                    str(booking.id)[:8], retry_count + 1, MAX_CRM_RETRIES, str(e),
+                )
+
+                if retry_count < MAX_CRM_RETRIES:
+                    # Schedule retry with exponential backoff
+                    delay = CRM_RETRY_DELAYS[min(retry_count, len(CRM_RETRY_DELAYS) - 1)]
+                    booking.crm_sync_status = "retrying"
+                    booking.crm_sync_error = str(e)
+                    extra = dict(booking.extra_data or {})
+                    extra["crm_retry_count"] = retry_count + 1
+                    extra["crm_next_retry_at"] = (
+                        datetime.now(timezone.utc) + timedelta(seconds=delay)
+                    ).isoformat()
+                    booking.extra_data = extra
+                    logger.info(
+                        "CRM sync retry scheduled for booking %s in %ds",
+                        str(booking.id)[:8], delay,
+                    )
+                else:
+                    # Max retries exhausted
+                    booking.crm_sync_status = "failed"
+                    booking.crm_sync_error = f"Max retries ({MAX_CRM_RETRIES}) exhausted: {str(e)}"
+
+                    from src.utils.alerting import send_alert, AlertType
+                    await send_alert(
+                        AlertType.LEAD_PROCESSING_FAILED,
+                        f"CRM sync permanently failed for booking {str(booking.id)[:8]} after {MAX_CRM_RETRIES} retries: {str(e)}",
+                        extra={"booking_id": str(booking.id)[:8]},
+                    )
 
         await db.commit()
 

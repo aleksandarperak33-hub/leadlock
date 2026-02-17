@@ -351,8 +351,29 @@ async def _process_reply_locked(
         lead.current_agent = "qualify"
         lead.score = max(lead.score, 50)
 
+    # Enforce conversation turn limit (max 10 turns of AI conversation)
+    from src.config import get_settings
+    max_turns = get_settings().max_conversation_turns
+    if lead.conversation_turn > max_turns and lead.state in ("qualifying", "booking"):
+        logger.warning(
+            "Lead %s hit conversation turn limit (%d). Escalating to human.",
+            str(lead.id)[:8], max_turns,
+        )
+        lead.state = "booking" if lead.state == "qualifying" else lead.state
+        db.add(EventLog(
+            lead_id=lead.id,
+            client_id=client.id,
+            action="turn_limit_reached",
+            message=f"Conversation hit {max_turns} turn limit — needs human follow-up",
+            data={"turns": lead.conversation_turn, "limit": max_turns},
+        ))
+        response = {
+            "message": f"Thanks for your patience! Let me get our team lead to help you directly. Someone will reach out to you shortly.",
+            "agent_id": "system",
+            "ai_cost": 0.0,
+        }
     # Route to appropriate agent
-    if lead.state in ("intake_sent", "qualifying"):
+    elif lead.state in ("intake_sent", "qualifying"):
         response = await _route_to_qualify(db, lead, client, config, message_text)
     elif lead.state in ("qualified", "booking"):
         response = await _route_to_book(db, lead, client, config, message_text)
@@ -471,7 +492,8 @@ async def _route_to_qualify(
     return {
         "message": result.message,
         "agent_id": "qualify",
-        "ai_cost": 0.0,
+        "ai_cost": getattr(result, "ai_cost_usd", 0.0),
+        "ai_latency_ms": getattr(result, "ai_latency_ms", None),
     }
 
 
@@ -533,7 +555,8 @@ async def _route_to_book(
     return {
         "message": result.message,
         "agent_id": "book",
-        "ai_cost": 0.0,
+        "ai_cost": getattr(result, "ai_cost_usd", 0.0),
+        "ai_latency_ms": getattr(result, "ai_latency_ms", None),
     }
 
 
