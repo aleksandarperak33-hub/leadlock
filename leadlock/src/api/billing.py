@@ -18,6 +18,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["billing"])
 
 
+@router.get("/api/v1/billing/plans")
+async def get_plans():
+    """Return available subscription plans with their Stripe price IDs."""
+    settings = get_settings()
+    return {
+        "plans": [
+            {"slug": "starter", "name": "Starter", "price": "$297", "price_id": settings.stripe_price_starter},
+            {"slug": "pro", "name": "Professional", "price": "$597", "price_id": settings.stripe_price_pro, "popular": True},
+            {"slug": "business", "name": "Business", "price": "$1,497", "price_id": settings.stripe_price_business},
+        ]
+    }
+
+
 @router.post("/api/v1/billing/create-checkout")
 async def create_checkout(
     request: Request,

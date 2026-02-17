@@ -3,15 +3,10 @@ import { useSearchParams } from 'react-router-dom';
 import { CreditCard, Check, AlertCircle, ExternalLink, Zap } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 
-const PLANS = [
-  { slug: 'starter', name: 'Starter', price: '$297', priceId: '__STARTER__' },
-  { slug: 'pro', name: 'Professional', price: '$597', priceId: '__PRO__', popular: true },
-  { slug: 'business', name: 'Business', price: '$1,497', priceId: '__BUSINESS__' },
-];
-
 export default function Billing() {
   const [searchParams] = useSearchParams();
   const [billing, setBilling] = useState(null);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
@@ -19,12 +14,15 @@ export default function Billing() {
   const canceled = searchParams.get('canceled') === 'true';
 
   useEffect(() => {
-    fetchBilling();
+    const token = localStorage.getItem('ll_token');
+    Promise.all([
+      fetchBilling(token),
+      fetchPlans(token),
+    ]).finally(() => setLoading(false));
   }, []);
 
-  const fetchBilling = async () => {
+  const fetchBilling = async (token) => {
     try {
-      const token = localStorage.getItem('ll_token');
       const res = await fetch('/api/v1/billing/status', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -33,8 +31,19 @@ export default function Billing() {
       setBilling(data);
     } catch (e) {
       setError(e.message);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchPlans = async (token) => {
+    try {
+      const res = await fetch('/api/v1/billing/plans', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load plans');
+      const data = await res.json();
+      setPlans(data.plans || []);
+    } catch (e) {
+      console.error('Failed to load plans:', e);
     }
   };
 
@@ -177,7 +186,7 @@ export default function Billing() {
         <>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose a plan</h2>
           <div className="grid md:grid-cols-3 gap-4">
-            {PLANS.map((plan) => (
+            {plans.map((plan) => (
               <div
                 key={plan.slug}
                 className={`bg-white border rounded-2xl p-6 relative ${
@@ -195,7 +204,7 @@ export default function Billing() {
                   <span className="text-sm text-gray-400">/mo</span>
                 </div>
                 <button
-                  onClick={() => handleCheckout(plan.priceId)}
+                  onClick={() => handleCheckout(plan.price_id)}
                   disabled={!!actionLoading}
                   className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
                     plan.popular
@@ -203,7 +212,7 @@ export default function Billing() {
                       : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                   }`}
                 >
-                  {actionLoading === plan.priceId ? (
+                  {actionLoading === plan.price_id ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                       Loading...
