@@ -489,6 +489,34 @@ async def update_settings(
     return {"status": "updated"}
 
 
+@router.post("/api/v1/dashboard/onboarding")
+async def complete_onboarding(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Save onboarding configuration and mark client as onboarded."""
+    if "config" in payload:
+        existing = client.config or {}
+        merged = {**existing, **payload["config"]}
+        client.config = merged
+
+    if "crm_type" in payload and payload["crm_type"]:
+        client.crm_type = payload["crm_type"]
+
+    if "crm_tenant_id" in payload and payload["crm_tenant_id"]:
+        client.crm_tenant_id = payload["crm_tenant_id"]
+
+    if "crm_api_key" in payload and payload["crm_api_key"]:
+        client.crm_api_key_encrypted = payload["crm_api_key"]
+
+    client.onboarding_status = "live"
+
+    await db.commit()
+    logger.info("Onboarding completed for client %s", client.business_name)
+    return {"status": "onboarded", "client_id": str(client.id)}
+
+
 # === COMPLIANCE ===
 
 @router.get("/api/v1/dashboard/compliance/summary", response_model=ComplianceSummary)

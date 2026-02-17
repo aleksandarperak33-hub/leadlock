@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import {
   Zap, MessageSquare, Clock, Shield, Calendar, BarChart3,
@@ -853,7 +853,12 @@ export default function Landing() {
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#52526B] mb-4">Legal</h4>
               <ul className="space-y-2">
-                {['Privacy Policy', 'Terms of Service', 'TCPA Compliance', 'Security'].map(item => (
+                <li>
+                  <Link to="/privacy" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    Privacy Policy
+                  </Link>
+                </li>
+                {['Terms of Service', 'TCPA Compliance', 'Security'].map(item => (
                   <li key={item}>
                     <span className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
                       {item}

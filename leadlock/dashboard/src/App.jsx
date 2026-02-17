@@ -11,6 +11,8 @@ import Compliance from './pages/Compliance';
 import Login from './pages/Login';
 import Landing from './pages/Landing';
 import Signup from './pages/Signup';
+import Onboarding from './pages/Onboarding';
+import Privacy from './pages/Privacy';
 import AdminCommandCenter from './pages/admin/AdminCommandCenter';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminClients from './pages/admin/AdminClients';
@@ -35,6 +37,8 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -58,6 +62,7 @@ function App() {
           <Route path="/insights" element={<AdminInsights />} />
           <Route path="/templates" element={<AdminTemplates />} />
         </Route>
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/login" element={<Navigate to="/dashboard" replace />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -67,6 +72,8 @@ function App() {
 
   return (
     <Routes>
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route element={<DashboardLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/leads" element={<LeadFeed />} />
