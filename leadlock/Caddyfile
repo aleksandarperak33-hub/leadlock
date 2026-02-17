@@ -1,4 +1,4 @@
-:80 {
+leadlock.org {
 	handle /api/* {
 		reverse_proxy api:8000
 	}
@@ -12,4 +12,8 @@
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+api.leadlock.org {
+	reverse_proxy api:8000
 }
