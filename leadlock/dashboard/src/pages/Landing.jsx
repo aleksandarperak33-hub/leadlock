@@ -152,6 +152,7 @@ const PRICING_TIERS = [
       'Sub-60s AI response',
       '1 CRM integration',
       '3-step follow-up sequences',
+      'Business hours coverage',
       'TCPA compliance built in',
       'Email support',
     ],
@@ -161,46 +162,32 @@ const PRICING_TIERS = [
     price: 597,
     badge: 'MOST POPULAR',
     features: [
-      'Up to 200 leads/month',
-      'Sub-60s AI response',
+      'Up to 250 leads/month',
+      'Sub-30s AI response',
       'All CRM integrations',
       '5-step advanced sequences',
+      '24/7 AI coverage',
       'Full compliance (all states)',
+      'Real-time analytics dashboard',
+      'Team dashboard (up to 10)',
       'Priority support',
-      'AI conversation analytics',
-      'Team dashboard (up to 5)',
     ],
   },
   {
     name: 'Business',
-    price: 997,
-    badge: null,
-    features: [
-      'Up to 500 leads/month',
-      'Sub-30s AI response',
-      'All CRM integrations',
-      'Unlimited sequences',
-      'Full compliance + audit logs',
-      'Priority support + Slack',
-      'Advanced analytics & reports',
-      'Team dashboard (up to 15)',
-      'Multi-location support',
-    ],
-  },
-  {
-    name: 'Enterprise',
-    price: 2497,
+    price: 1497,
     badge: null,
     features: [
       'Unlimited leads',
       'Sub-15s AI response',
       'All + custom integrations',
-      'Custom sequences & workflows',
+      'Unlimited sequences & workflows',
+      '24/7 coverage + emergency routing',
       'Full compliance + audit logs',
-      'Dedicated account manager',
+      'Multi-location support',
       'Unlimited team members',
-      'White-label branding',
-      'Custom AI persona & training',
+      'White-label branding option',
+      'Dedicated account manager',
       'SLA guarantee',
     ],
   },
@@ -746,7 +733,7 @@ export default function Landing() {
             </p>
           </FadeUp>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {PRICING_TIERS.map((tier, i) => (
               <FadeUp key={i} delay={i * 0.1}>
                 <div className={`ld-card p-8 h-full flex flex-col relative ${
