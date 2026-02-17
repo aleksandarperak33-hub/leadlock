@@ -74,6 +74,18 @@ class Settings(BaseSettings):
     sales_daily_email_limit: int = 50
     sales_daily_scrape_limit: int = 100
 
+    # Transactional Email (auth flows, billing notifications)
+    sendgrid_transactional_key: str = ""  # Separate key for transactional emails
+    from_email_transactional: str = "noreply@leadlock.org"
+
+    # Stripe Billing
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_starter: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_business: str = ""
+
     # Alerting
     alert_webhook_url: str = ""  # Discord/Slack webhook URL for critical alerts
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { AlertCircle, Zap, ArrowRight } from 'lucide-react';
 
@@ -82,6 +83,14 @@ export default function Login() {
                 className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-white border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
                 placeholder={'\u2022'.repeat(10)}
               />
+            </div>
+            <div className="flex justify-end">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+              >
+                Forgot password?
+              </Link>
             </div>
             <button
               type="submit"

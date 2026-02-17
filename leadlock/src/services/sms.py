@@ -143,6 +143,95 @@ def classify_error(error_code: str | None) -> str:
     return "unknown"
 
 
+async def search_available_numbers(area_code: str) -> list[dict]:
+    """
+    Search for available phone numbers in Twilio by area code.
+
+    Returns: [{"phone_number": str, "friendly_name": str, "locality": str, "region": str}]
+    """
+    from twilio.rest import Client as TwilioClient
+    from src.config import get_settings
+    settings = get_settings()
+
+    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+
+    try:
+        available = client.available_phone_numbers("US").local.list(
+            area_code=area_code,
+            sms_enabled=True,
+            mms_enabled=True,
+            limit=10,
+        )
+        return [
+            {
+                "phone_number": num.phone_number,
+                "friendly_name": num.friendly_name,
+                "locality": num.locality,
+                "region": num.region,
+            }
+            for num in available
+        ]
+    except Exception as e:
+        logger.error("Number search failed for area code %s: %s", area_code, str(e))
+        raise
+
+
+async def provision_phone_number(phone_number: str, client_id: str) -> dict:
+    """
+    Purchase and configure a Twilio phone number for a client.
+    Sets up SMS webhook URL for inbound messages.
+
+    Returns: {"phone_number": str, "phone_sid": str, "error": str|None}
+    """
+    from twilio.rest import Client as TwilioClient
+    from src.config import get_settings
+    settings = get_settings()
+
+    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+    webhook_url = f"{settings.app_base_url.rstrip('/')}/api/v1/webhooks/twilio/inbound"
+
+    try:
+        incoming = client.incoming_phone_numbers.create(
+            phone_number=phone_number,
+            sms_url=webhook_url,
+            sms_method="POST",
+            friendly_name=f"LeadLock-{client_id[:8]}",
+        )
+        logger.info(
+            "Phone provisioned: %s (SID: %s) for client %s",
+            phone_number[:6] + "***", incoming.sid, client_id[:8],
+        )
+        return {
+            "phone_number": incoming.phone_number,
+            "phone_sid": incoming.sid,
+            "error": None,
+        }
+    except Exception as e:
+        logger.error("Phone provisioning failed: %s", str(e))
+        return {"phone_number": None, "phone_sid": None, "error": str(e)}
+
+
+async def release_phone_number(phone_sid: str) -> dict:
+    """
+    Release a Twilio phone number.
+
+    Returns: {"released": bool, "error": str|None}
+    """
+    from twilio.rest import Client as TwilioClient
+    from src.config import get_settings
+    settings = get_settings()
+
+    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+
+    try:
+        client.incoming_phone_numbers(phone_sid).delete()
+        logger.info("Phone released: %s", phone_sid)
+        return {"released": True, "error": None}
+    except Exception as e:
+        logger.error("Phone release failed: %s", str(e))
+        return {"released": False, "error": str(e)}
+
+
 async def send_sms(
     to: str,
     body: str,

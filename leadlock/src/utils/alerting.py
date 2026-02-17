@@ -28,6 +28,9 @@ class AlertType:
     DEAD_LETTER_EXHAUSTED = "dead_letter_exhausted"
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
+    PAYMENT_FAILED = "payment_failed"
+    CRM_SYNC_ERROR = "crm_sync_error"
+    HIGH_BOUNCE_RATE = "high_bounce_rate"
 
 
 async def send_alert(
@@ -73,6 +76,10 @@ async def send_alert(
     # Channel 2: Webhook (Discord/Slack)
     await _send_webhook_alert(alert_type, message, cid, extra)
 
+    # Channel 3: Email alert (for critical/error severity)
+    if severity in ("critical", "error"):
+        await _send_email_alert(alert_type, message, cid, extra)
+
 
 def _should_send(alert_type: str) -> bool:
     """Check if alert is within rate limit cooldown."""
@@ -115,3 +122,42 @@ async def _send_webhook_alert(
     except Exception as e:
         # Alert sending failure should never crash the system
         logger.warning("Failed to send webhook alert: %s", str(e))
+
+
+async def _send_email_alert(
+    alert_type: str,
+    message: str,
+    correlation_id: Optional[str],
+    extra: Optional[dict],
+) -> None:
+    """Send alert via transactional email to the configured alert recipient."""
+    try:
+        from src.services.transactional_email import _send_transactional
+
+        # Send to the transactional email sender (admin address)
+        from src.config import get_settings
+        settings = get_settings()
+        alert_email = settings.from_email_transactional or "noreply@leadlock.org"
+
+        subject = f"LeadLock Alert: {alert_type}"
+        details = ""
+        if correlation_id:
+            details += f"<p><strong>Correlation ID:</strong> {correlation_id}</p>"
+        if extra:
+            for key, val in extra.items():
+                details += f"<p><strong>{key}:</strong> {val}</p>"
+
+        html = f"""
+        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #ef4444; font-size: 18px;">Alert: {alert_type}</h2>
+          <p style="color: #555; font-size: 14px;">{message}</p>
+          {details}
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="color: #999; font-size: 11px;">LeadLock Monitoring System</p>
+        </div>
+        """
+        text = f"Alert: {alert_type}\n\n{message}\n\nCorrelation ID: {correlation_id or 'N/A'}"
+
+        await _send_transactional(alert_email, subject, html, text)
+    except Exception as e:
+        logger.warning("Failed to send email alert: %s", str(e))

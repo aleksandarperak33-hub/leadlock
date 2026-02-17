@@ -62,6 +62,10 @@ class Client(Base):
     # Dashboard auth — hashed password for the client's dashboard login
     dashboard_email: Mapped[Optional[str]] = mapped_column(String(255), unique=True)
     dashboard_password_hash: Mapped[Optional[str]] = mapped_column(String(255))
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Trial
+    trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Admin flag — True for LeadLock operators who see the admin dashboard
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
