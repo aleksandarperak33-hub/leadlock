@@ -178,6 +178,50 @@ async def signup(
     }
 
 
+# === AUTH DEPENDENCIES ===
+
+async def get_current_client(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Client:
+    """Dependency to extract and verify client from JWT Bearer token."""
+    import jwt as pyjwt
+    from src.config import get_settings
+    settings = get_settings()
+
+    try:
+        payload = pyjwt.decode(
+            credentials.credentials,
+            settings.dashboard_jwt_secret or settings.app_secret_key,
+            algorithms=["HS256"],
+        )
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    client_id = payload.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    result = await db.execute(
+        select(Client).where(and_(Client.id == uuid.UUID(client_id), Client.is_active == True))
+    )
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+    return client
+
+
+async def get_current_admin(
+    client: Client = Depends(get_current_client),
+) -> Client:
+    """Dependency that requires the authenticated client to be an admin."""
+    if not client.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return client
+
+
 # === PASSWORD RESET ===
 
 @router.post("/api/v1/auth/forgot-password")
@@ -422,48 +466,6 @@ async def provision_number(
     except Exception as e:
         logger.error("Phone provisioning failed: %s", str(e))
         raise HTTPException(status_code=502, detail=f"Provisioning failed: {str(e)}")
-
-
-async def get_current_client(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> Client:
-    """Dependency to extract and verify client from JWT Bearer token."""
-    import jwt as pyjwt
-    from src.config import get_settings
-    settings = get_settings()
-
-    try:
-        payload = pyjwt.decode(
-            credentials.credentials,
-            settings.dashboard_jwt_secret or settings.app_secret_key,
-            algorithms=["HS256"],
-        )
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    client_id = payload.get("client_id")
-    if not client_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-
-    result = await db.execute(
-        select(Client).where(and_(Client.id == uuid.UUID(client_id), Client.is_active == True))
-    )
-    client = result.scalar_one_or_none()
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
-    return client
-
-
-async def get_current_admin(
-    client: Client = Depends(get_current_client),
-) -> Client:
-    """Dependency that requires the authenticated client to be an admin."""
-    if not client.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return client
 
 
 # === METRICS ===
