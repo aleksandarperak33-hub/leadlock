@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -294,6 +294,132 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--gradient-start), var(--gradient-end), transparent);
   opacity: 0.2;
+}
+
+/* ========== LANDING PAGE DARK THEME ========== */
+.landing-dark {
+  --ld-bg: #0A0A0F;
+  --ld-surface: #111118;
+  --ld-elevated: #1A1A24;
+  --ld-border: #222230;
+  --ld-brand: #FF5C00;
+  --ld-brand-glow: #FF8C42;
+  --ld-accent: #3B82F6;
+  --ld-text: #F8F8FC;
+  --ld-text-secondary: #A1A1BC;
+  --ld-text-muted: #52526B;
+
+  background: var(--ld-bg);
+  color: var(--ld-text);
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.landing-dark ::selection {
+  background: rgba(255, 92, 0, 0.25);
+  color: #fff;
+}
+
+.landing-dark ::-webkit-scrollbar-thumb { background: #333; }
+.landing-dark ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* Landing gradient backgrounds */
+.ld-gradient-hero {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(255, 92, 0, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(59, 130, 246, 0.08), transparent),
+    var(--ld-bg);
+}
+
+.ld-gradient-section {
+  background:
+    radial-gradient(ellipse 50% 50% at 0% 50%, rgba(255, 92, 0, 0.04), transparent),
+    radial-gradient(ellipse 50% 50% at 100% 50%, rgba(59, 130, 246, 0.04), transparent);
+}
+
+.ld-gradient-cta {
+  background: linear-gradient(135deg, rgba(255, 92, 0, 0.12), rgba(59, 130, 246, 0.08));
+}
+
+/* Landing card style */
+.ld-card {
+  background: var(--ld-surface);
+  border: 1px solid var(--ld-border);
+  border-radius: 16px;
+  transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.ld-card:hover {
+  border-color: rgba(255, 92, 0, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Landing button styles */
+.ld-btn-primary {
+  background: linear-gradient(135deg, #FF5C00, #FF8C42);
+  color: white;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 92, 0, 0.3);
+}
+
+.ld-btn-primary:hover {
+  box-shadow: 0 8px 30px rgba(255, 92, 0, 0.45);
+  transform: translateY(-2px);
+}
+
+.ld-btn-secondary {
+  background: transparent;
+  color: var(--ld-text);
+  border: 1px solid var(--ld-border);
+  font-weight: 500;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.ld-btn-secondary:hover {
+  border-color: var(--ld-text-secondary);
+  background: var(--ld-elevated);
+}
+
+/* Landing nav glass */
+.ld-nav-glass {
+  background: rgba(10, 10, 15, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(34, 34, 48, 0.6);
+}
+
+/* Pricing card highlight */
+.ld-pricing-popular {
+  border-color: var(--ld-brand);
+  box-shadow: 0 0 40px rgba(255, 92, 0, 0.15);
+}
+
+/* SMS mockup styling */
+@keyframes typing-dots {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+.typing-dot {
+  animation: typing-dots 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Counter animation utility */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* FAQ accordion */
+.ld-faq-open {
+  background: var(--ld-surface);
+  border-color: rgba(255, 92, 0, 0.2);
 }
 
 /* ========== PRINT ========== */

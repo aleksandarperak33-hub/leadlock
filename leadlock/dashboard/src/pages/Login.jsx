@@ -20,7 +20,7 @@ export default function Login() {
       localStorage.setItem('ll_token', data.token);
       localStorage.setItem('ll_business', data.business_name);
       localStorage.setItem('ll_is_admin', data.is_admin ? 'true' : 'false');
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError('Invalid email or password');
     } finally {

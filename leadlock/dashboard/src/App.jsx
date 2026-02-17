@@ -9,6 +9,8 @@ import Settings from './pages/Settings';
 import Bookings from './pages/Bookings';
 import Compliance from './pages/Compliance';
 import Login from './pages/Login';
+import Landing from './pages/Landing';
+import Signup from './pages/Signup';
 import AdminCommandCenter from './pages/admin/AdminCommandCenter';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminClients from './pages/admin/AdminClients';
@@ -30,8 +32,10 @@ function App() {
   if (!token) {
     return (
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }
@@ -40,7 +44,7 @@ function App() {
     return (
       <Routes>
         <Route element={<AdminLayout />}>
-          <Route path="/" element={<AdminCommandCenter />} />
+          <Route path="/dashboard" element={<AdminCommandCenter />} />
           <Route path="/overview" element={<AdminOverview />} />
           <Route path="/clients" element={<AdminClients />} />
           <Route path="/clients/:clientId" element={<AdminClientDetail />} />
@@ -54,8 +58,9 @@ function App() {
           <Route path="/insights" element={<AdminInsights />} />
           <Route path="/templates" element={<AdminTemplates />} />
         </Route>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     );
   }
@@ -63,7 +68,7 @@ function App() {
   return (
     <Routes>
       <Route element={<DashboardLayout />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/leads" element={<LeadFeed />} />
         <Route path="/conversations/:leadId?" element={<Conversations />} />
         <Route path="/bookings" element={<Bookings />} />
@@ -71,8 +76,9 @@ function App() {
         <Route path="/compliance" element={<Compliance />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
-      <Route path="/login" element={<Login />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

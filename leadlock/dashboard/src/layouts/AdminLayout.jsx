@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/', icon: Radio, label: 'Command Center' },
+  { to: '/dashboard', icon: Radio, label: 'Command Center' },
   { to: '/overview', icon: LayoutDashboard, label: 'Overview' },
   { to: '/clients', icon: Users, label: 'Clients' },
   { to: '/leads', icon: FileText, label: 'All Leads' },

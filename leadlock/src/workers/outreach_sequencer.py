@@ -6,6 +6,7 @@ Email first, SMS only after a prospect replies (TCPA compliance).
 """
 import asyncio
 import logging
+import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -172,6 +173,46 @@ async def _heartbeat():
         pass
 
 
+def _calculate_cycle_cap(
+    daily_limit: int,
+    sent_today: int,
+    config: SalesEngineConfig,
+) -> int:
+    """
+    Calculate max emails to send in this 30-min cycle for distributed sending.
+    Spreads remaining daily quota across remaining send-window cycles to avoid
+    blasting all emails in a single burst.
+
+    Returns:
+        Max number of emails to send this cycle (minimum 1 if any remain).
+    """
+    remaining = max(0, daily_limit - sent_today)
+    if remaining == 0:
+        return 0
+
+    # Estimate remaining cycles in the send window
+    try:
+        tz_name = getattr(config, "send_timezone", None) or "America/Chicago"
+        tz = ZoneInfo(tz_name)
+    except (KeyError, Exception):
+        tz = ZoneInfo("America/Chicago")
+
+    now_local = datetime.now(tz)
+    end_str = getattr(config, "send_hours_end", None) or "18:00"
+    try:
+        end_hour, end_min = map(int, end_str.split(":"))
+    except (ValueError, AttributeError):
+        end_hour, end_min = 18, 0
+
+    end_minutes = end_hour * 60 + end_min
+    current_minutes = now_local.hour * 60 + now_local.minute
+    remaining_minutes = max(0, end_minutes - current_minutes)
+    remaining_cycles = max(1, remaining_minutes // 30)
+
+    # Distribute remaining sends across remaining cycles
+    return max(1, remaining // remaining_cycles)
+
+
 async def run_outreach_sequencer():
     """Main loop — process outreach sequences every 30 minutes."""
     logger.info("Outreach sequencer started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -254,6 +295,17 @@ async def sequence_cycle():
             await db.commit()
             return
 
+        # Calculate per-cycle cap for distributed sending
+        cycle_cap = _calculate_cycle_cap(
+            config.daily_email_limit, sent_today, config,
+        )
+        remaining = min(remaining, cycle_cap)
+
+        logger.info(
+            "Unbound prospects: sent_today=%d daily_limit=%d cycle_cap=%d",
+            sent_today, config.daily_email_limit, cycle_cap,
+        )
+
         # Find prospects ready for next step
         delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
 
@@ -317,9 +369,10 @@ async def sequence_cycle():
                     str(prospect.id)[:8], str(e),
                 )
 
-            # Rate limit: ~2 emails/min to avoid SendGrid burst limits
+            # Rate limit with jitter: spread sends across the cycle window
             if i < len(all_prospects) - 1:
-                await asyncio.sleep(30)
+                jitter = random.uniform(60, 120)
+                await asyncio.sleep(jitter)
 
         await db.commit()
 
@@ -361,6 +414,15 @@ async def _process_campaign_prospects(
             str(campaign.id)[:8], sent_today,
         )
         return
+
+    # Calculate per-cycle cap for distributed sending
+    cycle_cap = _calculate_cycle_cap(campaign.daily_limit, sent_today, config)
+    remaining = min(remaining, cycle_cap)
+
+    logger.debug(
+        "Campaign %s: sent_today=%d daily_limit=%d cycle_cap=%d",
+        str(campaign.id)[:8], sent_today, campaign.daily_limit, cycle_cap,
+    )
 
     all_prospects = []
 
@@ -432,7 +494,8 @@ async def _process_campaign_prospects(
             )
 
         if i < len(all_prospects) - 1:
-            await asyncio.sleep(30)
+            jitter = random.uniform(60, 120)
+            await asyncio.sleep(jitter)
 
 
 async def _generate_email_with_template(

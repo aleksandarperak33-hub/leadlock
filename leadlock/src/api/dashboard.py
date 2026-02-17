@@ -87,6 +87,81 @@ async def login(
     )
 
 
+@router.post("/api/v1/auth/signup")
+async def signup(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new client account and return JWT token."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    business_name = (payload.get("business_name") or "").strip()
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    phone = (payload.get("phone") or "").strip()
+    trade_type = (payload.get("trade_type") or "general").strip().lower()
+    password = payload.get("password") or ""
+
+    if not business_name:
+        raise HTTPException(status_code=400, detail="Business name is required")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    # Check if email already registered
+    existing = await db.execute(
+        select(Client).where(Client.dashboard_email == email).limit(1)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    import bcrypt
+    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+    client = Client(
+        business_name=business_name,
+        trade_type=trade_type,
+        dashboard_email=email,
+        dashboard_password_hash=password_hash,
+        owner_name=name,
+        owner_email=email,
+        owner_phone=phone,
+        is_admin=False,
+        billing_status="trial",
+        onboarding_status="pending",
+    )
+    db.add(client)
+    await db.flush()
+
+    # Generate JWT
+    import jwt
+    from src.config import get_settings
+    settings = get_settings()
+
+    token = jwt.encode(
+        {
+            "client_id": str(client.id),
+            "is_admin": False,
+            "exp": datetime.utcnow() + timedelta(hours=settings.dashboard_jwt_expiry_hours),
+        },
+        settings.dashboard_jwt_secret or settings.app_secret_key,
+        algorithm="HS256",
+    )
+
+    logger.info("New signup: %s (%s)", business_name, email[:20] + "***")
+
+    return {
+        "token": token,
+        "client_id": str(client.id),
+        "business_name": business_name,
+        "is_admin": False,
+    }
+
+
 async def get_current_client(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
