@@ -8,7 +8,7 @@ const STATUS_BADGE = {
   cold: 'bg-gray-50 text-gray-600 border border-gray-100',
   contacted: 'bg-amber-50 text-amber-700 border border-amber-100',
   demo_scheduled: 'bg-blue-50 text-blue-700 border border-blue-100',
-  demo_completed: 'bg-violet-50 text-violet-700 border border-violet-100',
+  demo_completed: 'bg-orange-50 text-orange-700 border border-orange-100',
   proposal_sent: 'bg-orange-50 text-orange-700 border border-orange-100',
   won: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
   lost: 'bg-red-50 text-red-700 border border-red-100',
@@ -18,7 +18,7 @@ const STATUS_DOT = {
   cold: 'bg-gray-400',
   contacted: 'bg-amber-500',
   demo_scheduled: 'bg-blue-500',
-  demo_completed: 'bg-violet-500',
+  demo_completed: 'bg-orange-500',
   proposal_sent: 'bg-orange-500',
   won: 'bg-emerald-500',
   lost: 'bg-red-500',
@@ -26,7 +26,7 @@ const STATUS_DOT = {
 
 const VIEW_MODES = ['board', 'table'];
 
-const inputClasses = 'bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all';
+const inputClasses = 'bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all';
 
 export default function AdminOutreach() {
   const [prospects, setProspects] = useState([]);
@@ -149,7 +149,7 @@ export default function AdminOutreach() {
                 onClick={() => setView(m)}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg capitalize transition-all cursor-pointer ${
                   view === m
-                    ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                    ? 'bg-orange-50 text-orange-700 border border-orange-200'
                     : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
                 }`}
               >
@@ -159,7 +159,7 @@ export default function AdminOutreach() {
           </div>
           <button
             onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Prospect
@@ -273,7 +273,7 @@ export default function AdminOutreach() {
               </div>
               <button
                 onClick={handleSave}
-                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
               >
                 {editingId ? 'Update Prospect' : 'Create Prospect'}
               </button>

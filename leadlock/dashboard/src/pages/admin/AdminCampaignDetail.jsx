@@ -18,7 +18,7 @@ const STATUS_BADGE = {
 const PROSPECT_STATUS_BADGE = {
   cold: 'bg-gray-100 text-gray-600',
   contacted: 'bg-blue-50 text-blue-600',
-  demo_scheduled: 'bg-violet-50 text-violet-600',
+  demo_scheduled: 'bg-orange-50 text-orange-600',
   won: 'bg-emerald-50 text-emerald-600',
   lost: 'bg-red-50 text-red-600',
 };
@@ -35,7 +35,7 @@ function MetricCard({ label, value, icon: Icon, color = 'gray' }) {
     gray: { bg: 'bg-gray-50', text: 'text-gray-600' },
     blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
     emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-    violet: { bg: 'bg-violet-50', text: 'text-violet-600' },
+    orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
     red: { bg: 'bg-red-50', text: 'text-red-600' },
   };
   const c = colors[color] || colors.gray;
@@ -247,7 +247,7 @@ export default function AdminCampaignDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -314,9 +314,9 @@ export default function AdminCampaignDetail() {
       {/* Metrics cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         <MetricCard label="Prospects" value={campaign.prospects?.total || 0} icon={Users} color="blue" />
-        <MetricCard label="Sent" value={totalSent} icon={Mail} color="violet" />
+        <MetricCard label="Sent" value={totalSent} icon={Mail} color="orange" />
         <MetricCard label="Open Rate" value={`${openRate}%`} icon={Eye} color="emerald" />
-        <MetricCard label="Reply Rate" value={`${replyRate}%`} icon={MessageSquare} color="violet" />
+        <MetricCard label="Reply Rate" value={`${replyRate}%`} icon={MessageSquare} color="orange" />
         <MetricCard label="Bounce Rate" value={`${bounceRate}%`} icon={AlertTriangle} color="red" />
       </div>
 
@@ -328,7 +328,7 @@ export default function AdminCampaignDetail() {
             onClick={() => setActiveTab(key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-all whitespace-nowrap cursor-pointer ${
               activeTab === key
-                ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                ? 'bg-orange-50 text-orange-700 border border-orange-200'
                 : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -348,7 +348,7 @@ export default function AdminCampaignDetail() {
             <button
               onClick={handleSaveSequence}
               disabled={saving}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 transition-colors cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save Sequence'}
             </button>
@@ -357,7 +357,7 @@ export default function AdminCampaignDetail() {
           <div className="space-y-3">
             {steps.map((step, i) => (
               <div key={i} className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-lg p-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-violet-100 text-violet-700 text-xs font-bold">
+                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-100 text-orange-700 text-xs font-bold">
                   {step.step}
                 </div>
                 <ChevronRight className="w-3 h-3 text-gray-400" />
@@ -370,7 +370,7 @@ export default function AdminCampaignDetail() {
                       min="0"
                       value={step.delay_hours}
                       onChange={e => updateStep(i, 'delay_hours', parseInt(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 bg-white border border-gray-200 rounded-md text-xs text-gray-900 outline-none focus:border-violet-500 transition-shadow"
+                      className="w-20 px-2 py-1 bg-white border border-gray-200 rounded-md text-xs text-gray-900 outline-none focus:border-orange-500 transition-shadow"
                     />
                   </div>
 
@@ -379,7 +379,7 @@ export default function AdminCampaignDetail() {
                     <select
                       value={step.template_id || ''}
                       onChange={e => updateStep(i, 'template_id', e.target.value || null)}
-                      className="w-full px-2 py-1 bg-white border border-gray-200 rounded-md text-xs text-gray-900 outline-none focus:border-violet-500 cursor-pointer"
+                      className="w-full px-2 py-1 bg-white border border-gray-200 rounded-md text-xs text-gray-900 outline-none focus:border-orange-500 cursor-pointer"
                     >
                       <option value="">AI Generated</option>
                       {templates.map(t => (
@@ -401,7 +401,7 @@ export default function AdminCampaignDetail() {
 
           <button
             onClick={addStep}
-            className="flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 border-dashed hover:border-violet-300 hover:text-violet-600 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 border-dashed hover:border-orange-300 hover:text-orange-600 transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> Add Step
           </button>
@@ -420,14 +420,14 @@ export default function AdminCampaignDetail() {
                   placeholder="Search prospects..."
                   value={prospectsSearch}
                   onChange={e => { setProspectsSearch(e.target.value); setProspectsPage(1); }}
-                  className="pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-violet-500 w-48"
+                  className="pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-orange-500 w-48"
                 />
               </div>
               <span className="text-[11px] text-gray-400">{prospectsTotal} prospects</span>
             </div>
             <button
               onClick={() => setShowAssign(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" /> Assign Prospects
             </button>
@@ -435,7 +435,7 @@ export default function AdminCampaignDetail() {
 
           {/* Assign modal */}
           {showAssign && (
-            <div className="p-4 bg-violet-50/50 border-b border-violet-100">
+            <div className="p-4 bg-orange-50/50 border-b border-orange-100">
               <h3 className="text-xs font-semibold text-gray-900 mb-3">Assign Unbound Prospects</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <div>
@@ -444,7 +444,7 @@ export default function AdminCampaignDetail() {
                     type="text"
                     value={assignFilters.trade_type}
                     onChange={e => setAssignFilters({ ...assignFilters, trade_type: e.target.value })}
-                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-violet-500"
+                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-orange-500"
                     placeholder="e.g. hvac"
                   />
                 </div>
@@ -454,7 +454,7 @@ export default function AdminCampaignDetail() {
                     type="text"
                     value={assignFilters.city}
                     onChange={e => setAssignFilters({ ...assignFilters, city: e.target.value })}
-                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-violet-500"
+                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-orange-500"
                     placeholder="e.g. Austin"
                   />
                 </div>
@@ -464,7 +464,7 @@ export default function AdminCampaignDetail() {
                     type="text"
                     value={assignFilters.state}
                     onChange={e => setAssignFilters({ ...assignFilters, state: e.target.value })}
-                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-violet-500"
+                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-orange-500"
                     placeholder="e.g. TX"
                   />
                 </div>
@@ -473,7 +473,7 @@ export default function AdminCampaignDetail() {
                   <select
                     value={assignFilters.status}
                     onChange={e => setAssignFilters({ ...assignFilters, status: e.target.value })}
-                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-violet-500 cursor-pointer"
+                    className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs outline-none focus:border-orange-500 cursor-pointer"
                   >
                     <option value="cold">Cold</option>
                     <option value="contacted">Contacted</option>
@@ -481,7 +481,7 @@ export default function AdminCampaignDetail() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleAssign} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 cursor-pointer">
+                <button onClick={handleAssign} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 cursor-pointer">
                   Assign Matching
                 </button>
                 <button onClick={() => setShowAssign(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 cursor-pointer">
@@ -523,7 +523,7 @@ export default function AdminCampaignDetail() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
                         {p.last_email_opened_at && <Eye className="w-3 h-3 text-emerald-500" />}
-                        {p.last_email_replied_at && <MessageSquare className="w-3 h-3 text-violet-500" />}
+                        {p.last_email_replied_at && <MessageSquare className="w-3 h-3 text-orange-500" />}
                         {!p.last_email_opened_at && !p.last_email_replied_at && <span className="text-[10px] text-gray-300">—</span>}
                       </div>
                     </td>
@@ -582,7 +582,7 @@ export default function AdminCampaignDetail() {
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                     formatter={(value, name) => [`${value}%`, name === 'open_rate' ? 'Open Rate' : 'Reply Rate']}
                   />
-                  <Bar dataKey="open_rate" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="open_rate" />
+                  <Bar dataKey="open_rate" fill="#fb923c" radius={[4, 4, 0, 0]} name="open_rate" />
                   <Bar dataKey="reply_rate" fill="#06b6d4" radius={[4, 4, 0, 0]} name="reply_rate" />
                 </BarChart>
               </ResponsiveContainer>
@@ -607,7 +607,7 @@ export default function AdminCampaignDetail() {
                     contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                     labelFormatter={v => v ? new Date(v).toLocaleDateString() : ''}
                   />
-                  <Bar dataKey="sent" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="sent" fill="#fb923c" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -623,7 +623,7 @@ export default function AdminCampaignDetail() {
                 {[
                   { key: 'cold', label: 'Cold', color: 'bg-gray-400' },
                   { key: 'contacted', label: 'Contacted', color: 'bg-blue-500' },
-                  { key: 'demo_scheduled', label: 'Demo Scheduled', color: 'bg-violet-500' },
+                  { key: 'demo_scheduled', label: 'Demo Scheduled', color: 'bg-orange-500' },
                   { key: 'won', label: 'Won', color: 'bg-emerald-500' },
                   { key: 'lost', label: 'Lost', color: 'bg-red-400' },
                 ].map(({ key, label, color }) => {
@@ -650,7 +650,7 @@ export default function AdminCampaignDetail() {
 
       {activeTab === 'analytics' && !metrics && (
         <div className="flex items-center justify-center h-32">
-          <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
@@ -665,7 +665,7 @@ export default function AdminCampaignDetail() {
                 type="text"
                 value={settingsForm.name}
                 onChange={e => setSettingsForm({ ...settingsForm, name: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
               />
             </div>
             <div>
@@ -673,7 +673,7 @@ export default function AdminCampaignDetail() {
               <textarea
                 value={settingsForm.description}
                 onChange={e => setSettingsForm({ ...settingsForm, description: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-20 resize-none"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow h-20 resize-none"
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -683,7 +683,7 @@ export default function AdminCampaignDetail() {
                   type="number"
                   value={settingsForm.daily_limit}
                   onChange={e => setSettingsForm({ ...settingsForm, daily_limit: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
                 />
               </div>
               <div>
@@ -692,7 +692,7 @@ export default function AdminCampaignDetail() {
                   type="text"
                   value={settingsForm.target_trades}
                   onChange={e => setSettingsForm({ ...settingsForm, target_trades: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
                   placeholder="hvac, plumbing, roofing"
                 />
               </div>
@@ -702,7 +702,7 @@ export default function AdminCampaignDetail() {
                   type="text"
                   value={settingsForm.target_locations}
                   onChange={e => setSettingsForm({ ...settingsForm, target_locations: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
                   placeholder="Austin, TX; Dallas, TX"
                 />
               </div>
@@ -710,7 +710,7 @@ export default function AdminCampaignDetail() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleSaveSettings}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
               >
                 Save Settings
               </button>

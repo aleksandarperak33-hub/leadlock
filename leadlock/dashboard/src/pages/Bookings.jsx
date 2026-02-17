@@ -58,7 +58,7 @@ export default function Bookings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function Bookings() {
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all cursor-pointer ${
                 view === v
-                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200'
+                  ? 'bg-white text-orange-600 shadow-sm border border-gray-200'
                   : 'text-gray-500 hover:text-gray-700'
               }`}>
               {v}
@@ -227,10 +227,10 @@ function CalendarGrid({ bookings }) {
           return (
             <div key={day} className={`rounded-lg p-1.5 min-h-[60px] border ${
               isToday
-                ? 'bg-indigo-50 border-indigo-200'
+                ? 'bg-orange-50 border-orange-200'
                 : 'border-transparent hover:bg-gray-50'
             } transition-colors`}>
-              <p className={`text-xs font-medium ${isToday ? 'text-indigo-600' : 'text-gray-600'}`}>{day}</p>
+              <p className={`text-xs font-medium ${isToday ? 'text-orange-600' : 'text-gray-600'}`}>{day}</p>
               {dayBookings.map(b => {
                 const colors = CALENDAR_STATUS_COLORS[b.status] || { bg: 'bg-gray-50', text: 'text-gray-600' };
                 return (

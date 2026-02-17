@@ -3,7 +3,7 @@ import { Clock } from 'lucide-react';
 
 const BUCKET_COLORS = {
   '0-10s': '#10b981',
-  '10-30s': '#6366f1',
+  '10-30s': '#f97316',
   '30-60s': '#f59e0b',
   '60s+': '#ef4444',
 };
@@ -22,7 +22,7 @@ export default function ResponseTimeChart({ data = [] }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
       <div className="flex items-center gap-2 mb-4">
-        <Clock className="w-3.5 h-3.5 text-indigo-500" strokeWidth={2} />
+        <Clock className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
           Response Time Distribution
         </h3>
@@ -48,7 +48,7 @@ export default function ResponseTimeChart({ data = [] }) {
             />
             <Bar dataKey="count" radius={[6, 6, 0, 0]}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#6366f1'} fillOpacity={0.9} />
+                <Cell key={i} fill={BUCKET_COLORS[entry.bucket] || '#f97316'} fillOpacity={0.9} />
               ))}
             </Bar>
           </BarChart>

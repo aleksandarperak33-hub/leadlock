@@ -78,7 +78,7 @@ export default function LeadFeed() {
             placeholder="Search name, phone, service..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
           />
         </div>
       </div>
@@ -93,7 +93,7 @@ export default function LeadFeed() {
               onClick={() => { setStateFilter(s); setPage(1); }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                  ? 'bg-orange-50 text-orange-700 border border-orange-200'
                   : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
               }`}
             >

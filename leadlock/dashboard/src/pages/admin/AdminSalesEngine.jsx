@@ -15,7 +15,7 @@ const JOB_STATUS_BADGE = {
 const PROSPECT_STATUS_BADGE = {
   cold: 'bg-gray-50 text-gray-600 border border-gray-100',
   contacted: 'bg-blue-50 text-blue-700 border border-blue-100',
-  demo_scheduled: 'bg-violet-50 text-violet-700 border border-violet-100',
+  demo_scheduled: 'bg-orange-50 text-orange-700 border border-orange-100',
   demo_completed: 'bg-purple-50 text-purple-700 border border-purple-100',
   proposal_sent: 'bg-amber-50 text-amber-700 border border-amber-100',
   won: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
@@ -25,7 +25,7 @@ const PROSPECT_STATUS_BADGE = {
 const PROSPECT_STATUS_DOT = {
   cold: 'bg-gray-400',
   contacted: 'bg-blue-500',
-  demo_scheduled: 'bg-violet-500',
+  demo_scheduled: 'bg-orange-500',
   demo_completed: 'bg-purple-500',
   proposal_sent: 'bg-amber-500',
   won: 'bg-emerald-500',
@@ -50,7 +50,7 @@ function MetricCard({ label, value, sub, variant }) {
   const textColor = variant === 'success' ? 'text-emerald-600'
     : variant === 'warning' ? 'text-amber-600'
     : variant === 'danger' ? 'text-red-600'
-    : variant === 'accent' ? 'text-violet-600'
+    : variant === 'accent' ? 'text-orange-600'
     : 'text-gray-900';
 
   return (
@@ -255,7 +255,7 @@ export default function AdminSalesEngine() {
         </div>
         <button
           onClick={() => { setShowScrapeForm(true); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
         >
           <Play className="w-3.5 h-3.5" />
           Run Scrape
@@ -270,7 +270,7 @@ export default function AdminSalesEngine() {
             onClick={() => setActiveTab(key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg capitalize transition-all whitespace-nowrap cursor-pointer ${
               activeTab === key
-                ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                ? 'bg-orange-50 text-orange-700 border border-orange-200'
                 : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -295,7 +295,7 @@ export default function AdminSalesEngine() {
                 <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">City</label>
                 <input
                   type="text" value={scrapeForm.city} onChange={e => setScrapeForm(f => ({ ...f, city: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                   placeholder="Austin"
                 />
               </div>
@@ -303,20 +303,20 @@ export default function AdminSalesEngine() {
                 <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">State</label>
                 <input
                   type="text" value={scrapeForm.state} onChange={e => setScrapeForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                   placeholder="TX" maxLength={2}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">Trade Type</label>
                 <select value={scrapeForm.trade_type} onChange={e => setScrapeForm(f => ({ ...f, trade_type: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer">
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer">
                   {TRADE_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                 </select>
               </div>
               <button
                 onClick={handleScrape} disabled={scraping || !scrapeForm.city || !scrapeForm.state}
-                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {scraping ? 'Scraping...' : 'Start Scrape'}
               </button>
@@ -365,14 +365,14 @@ export default function AdminSalesEngine() {
               <input
                 type="text" value={prospectsFilter.search}
                 onChange={e => { setProspectsFilter(f => ({ ...f, search: e.target.value })); setProspectsPage(1); }}
-                className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                className="w-full pl-8 pr-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                 placeholder="Search name, company, email..."
               />
             </div>
             <select
               value={prospectsFilter.status}
               onChange={e => { setProspectsFilter(f => ({ ...f, status: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer"
+              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
             >
               <option value="">All Statuses</option>
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
@@ -380,7 +380,7 @@ export default function AdminSalesEngine() {
             <select
               value={prospectsFilter.trade_type}
               onChange={e => { setProspectsFilter(f => ({ ...f, trade_type: e.target.value })); setProspectsPage(1); }}
-              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all cursor-pointer"
+              className="px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
             >
               <option value="">All Trades</option>
               {TRADE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -407,7 +407,7 @@ export default function AdminSalesEngine() {
                         key={p.id}
                         onClick={() => handleSelectProspect(p)}
                         className={`cursor-pointer transition-colors border-b border-gray-100 ${
-                          selectedProspect?.id === p.id ? 'bg-violet-50' : 'hover:bg-gray-50'
+                          selectedProspect?.id === p.id ? 'bg-orange-50' : 'hover:bg-gray-50'
                         }`}
                       >
                         <td className="px-3 py-2.5">
@@ -493,11 +493,11 @@ export default function AdminSalesEngine() {
                         <div key={email.id} className={`rounded-lg p-3 border ${
                           email.direction === 'outbound'
                             ? 'bg-gray-50 border-gray-100'
-                            : 'bg-violet-50 border-violet-100'
+                            : 'bg-orange-50 border-orange-100'
                         }`}>
                           <div className="flex items-center justify-between mb-1">
                             <span className={`text-xs font-medium ${
-                              email.direction === 'outbound' ? 'text-gray-500' : 'text-violet-600'
+                              email.direction === 'outbound' ? 'text-gray-500' : 'text-orange-600'
                             }`}>
                               {email.direction === 'outbound' ? `Step ${email.sequence_step} \u2014 Sent` : 'Reply'}
                             </span>
@@ -514,7 +514,7 @@ export default function AdminSalesEngine() {
                             <div className="flex gap-2 mt-2">
                               {email.delivered_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">Delivered</span>}
                               {email.opened_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">Opened</span>}
-                              {email.clicked_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">Clicked</span>}
+                              {email.clicked_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-100">Clicked</span>}
                               {email.bounced_at && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100">Bounced</span>}
                             </div>
                           )}
@@ -621,13 +621,13 @@ export default function AdminSalesEngine() {
             </div>
             <div className="flex gap-2">
               <input type="text" value={newLocation.city} onChange={e => setNewLocation(l => ({ ...l, city: e.target.value }))}
-                className="flex-1 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                className="flex-1 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                 placeholder="City" />
               <input type="text" value={newLocation.state} onChange={e => setNewLocation(l => ({ ...l, state: e.target.value.toUpperCase().slice(0, 2) }))}
-                className="w-16 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                className="w-16 px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                 placeholder="ST" maxLength={2} />
               <button onClick={addLocation}
-                className="px-3 py-2 rounded-lg text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 cursor-pointer transition-colors">
+                className="px-3 py-2 rounded-lg text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 cursor-pointer transition-colors">
                 Add
               </button>
             </div>
@@ -643,7 +643,7 @@ export default function AdminSalesEngine() {
                   <button key={trade} onClick={() => toggleTradeType(trade)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
                       active
-                        ? 'bg-violet-50 text-violet-700 border border-violet-200'
+                        ? 'bg-orange-50 text-orange-700 border border-orange-200'
                         : 'bg-white text-gray-500 border border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -667,7 +667,7 @@ export default function AdminSalesEngine() {
                 <div key={key}>
                   <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
                   <input type="number" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all" />
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all" />
                 </div>
               ))}
             </div>
@@ -686,7 +686,7 @@ export default function AdminSalesEngine() {
                 <div key={key}>
                   <label className="block text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">{label}</label>
                   <input type="text" value={config[key] || ''} onChange={e => setConfig(c => ({ ...c, [key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                     placeholder={placeholder} />
                 </div>
               ))}
@@ -694,7 +694,7 @@ export default function AdminSalesEngine() {
           </div>
 
           <button onClick={handleSaveConfig} disabled={saving}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-50 cursor-pointer">
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors disabled:opacity-50 cursor-pointer">
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
         </div>

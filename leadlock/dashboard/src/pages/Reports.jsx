@@ -47,22 +47,22 @@ export default function Reports() {
           {/* Summary */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Leads', value: report.total_leads, color: 'indigo' },
+              { label: 'Total Leads', value: report.total_leads, color: 'orange' },
               { label: 'Booked', value: report.total_booked ?? 0, sub: `${((report.conversion_rate ?? 0) * 100).toFixed(1)}% conversion`, color: 'emerald' },
               { label: 'Avg Response', value: `${((report.avg_response_time_ms ?? 0) / 1000).toFixed(1)}s`, color: 'amber' },
-              { label: 'Total Cost', value: `$${((report.total_ai_cost ?? 0) + (report.total_sms_cost ?? 0)).toFixed(2)}`, sub: `AI: $${(report.total_ai_cost ?? 0).toFixed(2)} | SMS: $${(report.total_sms_cost ?? 0).toFixed(2)}`, color: 'violet' },
+              { label: 'Total Cost', value: `$${((report.total_ai_cost ?? 0) + (report.total_sms_cost ?? 0)).toFixed(2)}`, sub: `AI: $${(report.total_ai_cost ?? 0).toFixed(2)} | SMS: $${(report.total_sms_cost ?? 0).toFixed(2)}`, color: 'orange2' },
             ].map(({ label, value, sub, color }) => {
               const colorMap = {
-                indigo: 'bg-indigo-50 border-indigo-100 text-indigo-600',
+                orange: 'bg-orange-50 border-orange-100 text-orange-600',
                 emerald: 'bg-emerald-50 border-emerald-100 text-emerald-600',
                 amber: 'bg-amber-50 border-amber-100 text-amber-600',
-                violet: 'bg-violet-50 border-violet-100 text-violet-600',
+                orange2: 'bg-orange-50 border-orange-100 text-orange-600',
               };
               const dotMap = {
-                indigo: 'bg-indigo-500',
+                orange: 'bg-orange-500',
                 emerald: 'bg-emerald-500',
                 amber: 'bg-amber-500',
-                violet: 'bg-violet-500',
+                orange2: 'bg-orange-500',
               };
               return (
                 <div key={label} className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
@@ -126,7 +126,7 @@ export default function Reports() {
               {(report.response_time_distribution || []).map(bucket => {
                 const colorMap = {
                   '0-10s': { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600' },
-                  '10-30s': { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-600' },
+                  '10-30s': { bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-600' },
                   '30-60s': { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600' },
                 };
                 const colors = colorMap[bucket.bucket] || { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-600' };

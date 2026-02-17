@@ -61,7 +61,7 @@ export default function Settings() {
   const hours = config.hours || {};
   const services = config.services || {};
 
-  const inputClasses = 'w-full px-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all';
+  const inputClasses = 'w-full px-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all';
   const labelClasses = 'block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5';
 
   return (
@@ -71,7 +71,7 @@ export default function Settings() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
         >
           {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
           {saved ? 'Saved' : saving ? 'Saving...' : 'Save Changes'}

@@ -66,7 +66,7 @@ export default function AdminCampaigns() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -76,8 +76,8 @@ export default function AdminCampaigns() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50">
-            <Send className="w-4.5 h-4.5 text-violet-600" />
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-50">
+            <Send className="w-4.5 h-4.5 text-orange-600" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Campaigns</h1>
@@ -86,7 +86,7 @@ export default function AdminCampaigns() {
         </div>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" /> New Campaign
         </button>
@@ -103,7 +103,7 @@ export default function AdminCampaigns() {
                 type="text"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
                 placeholder="Q1 HVAC Outreach"
               />
             </div>
@@ -113,7 +113,7 @@ export default function AdminCampaigns() {
                 type="number"
                 value={form.daily_limit}
                 onChange={e => setForm({ ...form, daily_limit: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
               />
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function AdminCampaigns() {
             <textarea
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-20 resize-none"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow h-20 resize-none"
               placeholder="Campaign description..."
             />
           </div>
@@ -146,7 +146,7 @@ export default function AdminCampaigns() {
             <button
               onClick={handleCreate}
               disabled={!form.name}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 transition-colors cursor-pointer"
             >
               Create Campaign
             </button>

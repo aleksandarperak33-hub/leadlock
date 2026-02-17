@@ -22,7 +22,7 @@ const STATE_BADGE_STYLES = {
 };
 
 const METRIC_ACCENTS = {
-  'Total Leads': 'border-l-violet-500',
+  'Total Leads': 'border-l-orange-500',
   'Booked': 'border-l-emerald-500',
   'Conversion': 'border-l-blue-500',
   'MRR': 'border-l-amber-500',
@@ -63,7 +63,7 @@ export default function AdminClientDetail() {
         <p className="text-sm text-gray-400">Client not found</p>
         <button
           onClick={() => navigate('/clients')}
-          className="text-xs mt-2 text-violet-600 hover:text-violet-700 cursor-pointer"
+          className="text-xs mt-2 text-orange-600 hover:text-orange-700 cursor-pointer"
         >
           Back to clients
         </button>

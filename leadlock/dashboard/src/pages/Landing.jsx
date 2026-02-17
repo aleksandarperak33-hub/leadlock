@@ -148,12 +148,11 @@ const PRICING_TIERS = [
     price: 497,
     badge: null,
     features: [
-      '1 location',
-      '200 leads/month',
+      'Up to 200 leads/month',
       'Sub-60s response time',
       '1 CRM integration',
       '3-step follow-up sequences',
-      'Standard compliance',
+      'Standard TCPA compliance',
       'Email support',
     ],
   },
@@ -162,7 +161,6 @@ const PRICING_TIERS = [
     price: 997,
     badge: 'MOST POPULAR',
     features: [
-      '3 locations',
       'Unlimited leads',
       'Sub-60s response time',
       'All CRM integrations',
@@ -170,20 +168,21 @@ const PRICING_TIERS = [
       'Full compliance (all states)',
       'Priority support',
       'Priority AI conversations',
+      'Team dashboard (up to 5 users)',
     ],
   },
   {
-    name: 'Agency',
+    name: 'Enterprise',
     price: 3500,
     badge: null,
     features: [
-      'Unlimited locations',
       'Unlimited leads',
       'Sub-30s response time',
       'All + custom integrations',
       'Custom sequences',
       'Full compliance + audit logs',
       'Dedicated account manager',
+      'Unlimited team members',
       'White-label branding',
       'Custom AI persona',
     ],
@@ -371,7 +370,7 @@ export default function Landing() {
                 onClick={() => navigate('/signup')}
                 className="ld-btn-primary px-5 py-2 text-sm"
               >
-                Start Free Trial
+                Get Started
               </button>
             </div>
 
@@ -406,7 +405,7 @@ export default function Landing() {
                 ))}
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => navigate('/login')} className="ld-btn-secondary px-4 py-2 text-sm flex-1">Login</button>
-                  <button onClick={() => navigate('/signup')} className="ld-btn-primary px-4 py-2 text-sm flex-1">Start Free Trial</button>
+                  <button onClick={() => navigate('/signup')} className="ld-btn-primary px-4 py-2 text-sm flex-1">Get Started</button>
                 </div>
               </div>
             </motion.div>
@@ -449,7 +448,7 @@ export default function Landing() {
                     onClick={() => navigate('/signup')}
                     className="ld-btn-primary px-7 py-3.5 text-base inline-flex items-center justify-center gap-2"
                   >
-                    Start Free Trial <ArrowRight className="w-5 h-5" />
+                    Get Started <ArrowRight className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => scrollTo('how-it-works')}
@@ -458,10 +457,6 @@ export default function Landing() {
                     See How It Works
                   </button>
                 </div>
-              </FadeUp>
-
-              <FadeUp delay={0.4}>
-                <p className="text-xs text-[#52526B] mt-5">No credit card required. 14-day free trial.</p>
               </FadeUp>
             </div>
 
@@ -491,6 +486,27 @@ export default function Landing() {
               </FadeUp>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ═══ SAVINGS HOOK ═══ */}
+      <section className="py-20 lg:py-24">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <FadeUp>
+            <div className="relative rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.08] to-transparent p-10 sm:p-14 text-center overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(249,115,22,0.08),transparent_60%)]" />
+              <div className="relative z-10">
+                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-4">Average contractor savings</p>
+                <div className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.04em] text-[#F8F8FC] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  $<CountUp target={4200} /><span className="text-[#52526B]">/mo</span>
+                </div>
+                <p className="text-base sm:text-lg text-[#A1A1BC] max-w-2xl mx-auto leading-relaxed">
+                  in recovered revenue from leads that would have gone cold.
+                  The average contractor loses <span className="text-orange-400 font-semibold">$50,000+ per year</span> to slow follow-up.
+                </p>
+              </div>
+            </div>
+          </FadeUp>
         </div>
       </section>
 
@@ -570,7 +586,7 @@ export default function Landing() {
               { step: 1, icon: MessageSquare, title: 'Instant Response', desc: 'Lead comes in via form, call, or text. AI responds in under 10 seconds with a personalized message.', color: 'orange' },
               { step: 2, icon: Bot, title: 'AI Qualification', desc: 'Conversational AI identifies service type, urgency, timeline, and budget in 4 messages or less.', color: 'blue' },
               { step: 3, icon: Calendar, title: 'Auto-Booking', desc: 'Checks your real-time availability and books the appointment directly into your CRM.', color: 'emerald' },
-              { step: 4, icon: TrendingUp, title: 'Follow-Up', desc: 'Cold leads get automated nurture sequences. Warm leads get priority routing to your team.', color: 'violet' },
+              { step: 4, icon: TrendingUp, title: 'Follow-Up', desc: 'Cold leads get automated nurture sequences. Warm leads get priority routing to your team.', color: 'amber' },
             ].map((item, i) => (
               <FadeUp key={i} delay={i * 0.1}>
                 <div className="ld-card p-6 h-full relative overflow-hidden">
@@ -581,7 +597,7 @@ export default function Landing() {
                     item.color === 'orange' ? 'bg-orange-500/10 text-orange-400' :
                     item.color === 'blue' ? 'bg-blue-500/10 text-blue-400' :
                     item.color === 'emerald' ? 'bg-emerald-500/10 text-emerald-400' :
-                    'bg-violet-500/10 text-violet-400'
+                    'bg-orange-500/10 text-amber-400'
                   }`}>
                     <item.icon className="w-5 h-5" />
                   </div>
@@ -774,13 +790,12 @@ export default function Landing() {
               </h2>
               <p className="text-lg text-[#A1A1BC] mb-8 max-w-xl mx-auto">
                 Join 500+ contractors who book more jobs with AI-powered speed-to-lead.
-                14-day free trial, no credit card required.
               </p>
               <button
                 onClick={() => navigate('/signup')}
                 className="ld-btn-primary px-8 py-4 text-base inline-flex items-center gap-2"
               >
-                Start Your Free Trial <ArrowRight className="w-5 h-5" />
+                Get Started <ArrowRight className="w-5 h-5" />
               </button>
             </div>
           </FadeUp>

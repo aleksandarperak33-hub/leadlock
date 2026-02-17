@@ -80,10 +80,10 @@ export default function Signup() {
         {/* Card */}
         <div className="ld-card p-8">
           <h2 className="text-xl font-bold text-center mb-1 text-[#F8F8FC]">
-            Start your free trial
+            Get started with LeadLock
           </h2>
           <p className="text-sm text-center mb-8 text-[#52526B]">
-            14 days free. No credit card required.
+            Set up your account in 2 minutes.
           </p>
 
           {error && (

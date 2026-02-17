@@ -79,7 +79,7 @@ export default function AdminLeads() {
             placeholder="Search name, phone, service, client..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm bg-white border border-gray-200 text-gray-900 placeholder-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
           />
         </div>
       </div>
@@ -92,7 +92,7 @@ export default function AdminLeads() {
             onClick={() => { setStateFilter(s); setPage(1); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer border ${
               stateFilter === s
-                ? 'bg-violet-50 text-violet-700 border-violet-200'
+                ? 'bg-orange-50 text-orange-700 border-orange-200'
                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
             }`}
           >
@@ -134,7 +134,7 @@ export default function AdminLeads() {
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     {lead.first_name || 'Unknown'} {lead.last_name || ''}
                   </td>
-                  <td className="px-4 py-3 text-sm text-violet-600 font-medium">
+                  <td className="px-4 py-3 text-sm text-orange-600 font-medium">
                     {lead.client_name || '\u2014'}
                   </td>
                   <td className="px-4 py-3 text-sm font-mono text-gray-500">

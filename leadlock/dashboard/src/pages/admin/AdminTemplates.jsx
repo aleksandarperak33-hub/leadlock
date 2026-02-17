@@ -71,7 +71,7 @@ export default function AdminTemplates() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -81,8 +81,8 @@ export default function AdminTemplates() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50">
-            <FileText className="w-4.5 h-4.5 text-violet-600" />
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-50">
+            <FileText className="w-4.5 h-4.5 text-orange-600" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Email Templates</h1>
@@ -91,7 +91,7 @@ export default function AdminTemplates() {
         </div>
         <button
           onClick={() => { setEditing(null); setShowEditor(!showEditor); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" /> New Template
         </button>
@@ -110,7 +110,7 @@ export default function AdminTemplates() {
                 type="text"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
                 placeholder="HVAC Step 1"
               />
             </div>
@@ -119,7 +119,7 @@ export default function AdminTemplates() {
               <select
                 value={form.step_type}
                 onChange={e => setForm({ ...form, step_type: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow cursor-pointer"
               >
                 {STEP_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
               </select>
@@ -131,7 +131,7 @@ export default function AdminTemplates() {
               type="text"
               value={form.subject_template}
               onChange={e => setForm({ ...form, subject_template: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow"
               placeholder="Quick question about {{company_name}}"
             />
           </div>
@@ -140,7 +140,7 @@ export default function AdminTemplates() {
             <textarea
               value={form.body_template}
               onChange={e => setForm({ ...form, body_template: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-32 resize-none font-mono"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow h-32 resize-none font-mono"
               placeholder="Hi {{prospect_name}},&#10;&#10;I noticed..."
             />
           </div>
@@ -149,7 +149,7 @@ export default function AdminTemplates() {
             <textarea
               value={form.ai_instructions}
               onChange={e => setForm({ ...form, ai_instructions: e.target.value })}
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 transition-shadow h-20 resize-none"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-shadow h-20 resize-none"
               placeholder="Focus on speed-to-lead pain point. Mention their Google rating."
             />
           </div>
@@ -159,7 +159,7 @@ export default function AdminTemplates() {
                 type="checkbox"
                 checked={form.is_ai_generated}
                 onChange={e => setForm({ ...form, is_ai_generated: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
               />
               <span className="text-xs text-gray-700">AI-generated (uses template as guidance)</span>
             </label>
@@ -168,7 +168,7 @@ export default function AdminTemplates() {
             <button
               onClick={handleSave}
               disabled={!form.name}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 transition-colors cursor-pointer"
             >
               {editing ? 'Update' : 'Create'}
             </button>
@@ -197,7 +197,7 @@ export default function AdminTemplates() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-gray-900">{t.name}</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium capitalize bg-violet-50 text-violet-700 border border-violet-100">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium capitalize bg-orange-50 text-orange-700 border border-orange-100">
                       {t.step_type?.replace('_', ' ')}
                     </span>
                     {t.is_ai_generated && (

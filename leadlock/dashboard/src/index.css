@@ -15,11 +15,11 @@
     --text-primary: #111827;
     --text-secondary: #6b7280;
     --text-tertiary: #9ca3af;
-    --accent: #6366f1;
-    --accent-muted: rgba(99, 102, 241, 0.08);
-    --accent-glow: rgba(99, 102, 241, 0.12);
-    --gradient-start: #6366f1;
-    --gradient-end: #8b5cf6;
+    --accent: #f97316;
+    --accent-muted: rgba(255, 92, 0, 0.08);
+    --accent-glow: rgba(255, 92, 0, 0.12);
+    --gradient-start: #f97316;
+    --gradient-end: #fb923c;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -47,20 +47,20 @@
 
 /* ========== SELECTION ========== */
 ::selection {
-  background: rgba(99, 102, 241, 0.15);
-  color: #1e1b4b;
+  background: rgba(249, 115, 22, 0.15);
+  color: #431407;
 }
 
 /* ========== ADMIN THEME ========== */
 .admin-theme {
-  --accent: #7c3aed;
-  --accent-muted: rgba(124, 58, 237, 0.06);
-  --accent-glow: rgba(124, 58, 237, 0.1);
-  --gradient-start: #7c3aed;
-  --gradient-end: #a855f7;
+  --accent: #ea580c;
+  --accent-muted: rgba(234, 88, 12, 0.06);
+  --accent-glow: rgba(234, 88, 12, 0.1);
+  --gradient-start: #ea580c;
+  --gradient-end: #f97316;
 }
 .admin-theme ::selection {
-  background: rgba(124, 58, 237, 0.15);
+  background: rgba(234, 88, 12, 0.15);
 }
 
 /* ========== CARD & SURFACE ========== */
@@ -118,11 +118,11 @@
 .gradient-btn {
   background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
   color: white;
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 1px 3px rgba(249, 115, 22, 0.3);
   transition: all 0.2s ease;
 }
 .gradient-btn:hover {
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
   transform: translateY(-1px);
 }
 .gradient-btn:active {
@@ -130,11 +130,11 @@
 }
 
 .admin-theme .gradient-btn {
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
-  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3);
+  background: linear-gradient(135deg, #ea580c, #f97316);
+  box-shadow: 0 1px 3px rgba(234, 88, 12, 0.3);
 }
 .admin-theme .gradient-btn:hover {
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35);
 }
 
 /* ========== NAV LINK ACTIVE INDICATOR ========== */
@@ -143,7 +143,7 @@
   color: var(--text-primary) !important;
 }
 .admin-theme .nav-active {
-  background: rgba(124, 58, 237, 0.06);
+  background: rgba(234, 88, 12, 0.06);
 }
 
 /* ========== TABLE STYLING ========== */
@@ -261,15 +261,15 @@
 
 .bg-gradient-mesh {
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.04), transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.03), transparent 50%),
+    radial-gradient(ellipse at 20% 50%, rgba(249, 115, 22, 0.04), transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(251, 146, 60, 0.03), transparent 50%),
     radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.02), transparent 50%);
 }
 
 .admin-theme .bg-gradient-mesh {
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.04), transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.03), transparent 50%),
+    radial-gradient(ellipse at 20% 50%, rgba(234, 88, 12, 0.04), transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(249, 115, 22, 0.03), transparent 50%),
     radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.02), transparent 50%);
 }
 

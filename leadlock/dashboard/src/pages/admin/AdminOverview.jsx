@@ -46,7 +46,7 @@ export default function AdminOverview() {
       label: 'Active Clients',
       value: overview.active_clients,
       icon: Users,
-      color: 'violet',
+      color: 'orange',
     },
     {
       label: 'Monthly Revenue',
@@ -72,13 +72,13 @@ export default function AdminOverview() {
   ] : [];
 
   const iconBgMap = {
-    violet: 'bg-violet-50',
+    orange: 'bg-orange-50',
     emerald: 'bg-emerald-50',
     blue: 'bg-blue-50',
     amber: 'bg-amber-50',
   };
   const iconColorMap = {
-    violet: 'text-violet-600',
+    orange: 'text-orange-600',
     emerald: 'text-emerald-600',
     blue: 'text-blue-600',
     amber: 'text-amber-600',
@@ -153,7 +153,7 @@ export default function AdminOverview() {
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-gray-100">
                     <div
-                      className="h-1.5 rounded-full bg-violet-500 transition-all"
+                      className="h-1.5 rounded-full bg-orange-500 transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>

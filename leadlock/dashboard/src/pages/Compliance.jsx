@@ -30,7 +30,7 @@ export default function Compliance() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -53,7 +53,7 @@ export default function Compliance() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-8">
-        <Shield className="w-5 h-5 text-indigo-500" />
+        <Shield className="w-5 h-5 text-orange-500" />
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-gray-900">Compliance</h1>
           <p className="text-sm text-gray-500">TCPA compliance monitoring and audit trail</p>

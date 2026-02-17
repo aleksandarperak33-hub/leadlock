@@ -31,8 +31,8 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#f8f9fb] relative overflow-hidden">
       {/* Decorative gradient blobs */}
-      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-500/[0.04] blur-3xl" />
-      <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full bg-violet-500/[0.04] blur-3xl" />
+      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-orange-500/[0.04] blur-3xl" />
+      <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full bg-orange-500/[0.04] blur-3xl" />
       <div className="absolute top-[30%] left-[20%] w-[300px] h-[300px] rounded-full bg-emerald-500/[0.03] blur-3xl" />
 
       {/* Subtle dot grid */}
@@ -41,7 +41,7 @@ export default function Login() {
       <div className="w-full max-w-[420px] relative z-10 animate-page-in">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/25">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-500 shadow-lg shadow-orange-500/25">
             <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-2xl font-bold tracking-tight text-gray-900">
@@ -75,7 +75,7 @@ export default function Login() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 input-premium"
+                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 input-premium"
                 placeholder="you@company.com"
               />
             </div>
@@ -88,14 +88,14 @@ export default function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 input-premium"
+                className="w-full px-4 py-3 rounded-xl text-sm text-gray-900 bg-gray-50 border border-gray-200 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-100 input-premium"
                 placeholder={'\u2022'.repeat(10)}
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-[1px] active:translate-y-0 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/30 hover:-translate-y-[1px] active:translate-y-0 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <span className="flex items-center gap-2">

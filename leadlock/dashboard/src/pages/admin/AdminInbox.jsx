@@ -9,7 +9,7 @@ import { api } from '../../api/client';
 const STATUS_BADGE = {
   cold: 'bg-gray-100 text-gray-600',
   contacted: 'bg-blue-50 text-blue-600',
-  demo_scheduled: 'bg-violet-50 text-violet-600',
+  demo_scheduled: 'bg-orange-50 text-orange-600',
   won: 'bg-emerald-50 text-emerald-600',
   lost: 'bg-red-50 text-red-600',
 };
@@ -111,8 +111,8 @@ export default function AdminInbox() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50">
-            <Inbox className="w-4.5 h-4.5 text-violet-600" />
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-50">
+            <Inbox className="w-4.5 h-4.5 text-orange-600" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Inbox</h1>
@@ -124,7 +124,7 @@ export default function AdminInbox() {
           <select
             value={campaignFilter}
             onChange={e => { setCampaignFilter(e.target.value); setPage(1); }}
-            className="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 outline-none focus:border-violet-500 cursor-pointer"
+            className="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 outline-none focus:border-orange-500 cursor-pointer"
           >
             <option value="">All Campaigns</option>
             {campaigns.map(c => (
@@ -141,7 +141,7 @@ export default function AdminInbox() {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-32">
-                <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : conversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -155,7 +155,7 @@ export default function AdminInbox() {
                   key={conv.prospect_id}
                   onClick={() => handleSelect(conv.prospect_id)}
                   className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${
-                    selectedId === conv.prospect_id ? 'bg-violet-50/50 border-l-2 border-l-violet-500' : ''
+                    selectedId === conv.prospect_id ? 'bg-orange-50/50 border-l-2 border-l-orange-500' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -165,7 +165,7 @@ export default function AdminInbox() {
                           {conv.prospect_name}
                         </span>
                         {conv.campaign_name && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-50 text-violet-600 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-50 text-orange-600 whitespace-nowrap">
                             {conv.campaign_name}
                           </span>
                         )}
@@ -223,7 +223,7 @@ export default function AdminInbox() {
             </div>
           ) : threadLoading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : thread ? (
             <>
@@ -237,7 +237,7 @@ export default function AdminInbox() {
                         {thread.prospect.status}
                       </span>
                       {thread.prospect.campaign_name && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-50 text-violet-600">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-50 text-orange-600">
                           {thread.prospect.campaign_name}
                         </span>
                       )}
@@ -300,7 +300,7 @@ export default function AdminInbox() {
                     className={`rounded-xl p-4 ${
                       email.direction === 'outbound'
                         ? 'bg-gray-50 border border-gray-100'
-                        : 'bg-violet-50/50 border border-violet-100'
+                        : 'bg-orange-50/50 border border-orange-100'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -310,7 +310,7 @@ export default function AdminInbox() {
                             <Send className="w-3 h-3" /> Outbound
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-[10px] font-medium text-violet-600">
+                          <span className="flex items-center gap-1 text-[10px] font-medium text-orange-600">
                             <MessageSquare className="w-3 h-3" /> Reply
                           </span>
                         )}

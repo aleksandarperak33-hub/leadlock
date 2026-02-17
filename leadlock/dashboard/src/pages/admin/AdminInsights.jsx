@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 const BAR_COLORS = {
   blue: { bar: 'bg-blue-500', text: 'text-blue-600' },
   emerald: { bar: 'bg-emerald-500', text: 'text-emerald-600' },
-  violet: { bar: 'bg-violet-500', text: 'text-violet-600' },
+  orange: { bar: 'bg-orange-500', text: 'text-orange-600' },
   amber: { bar: 'bg-amber-500', text: 'text-amber-600' },
 };
 
@@ -31,7 +31,7 @@ export default function AdminInsights() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -40,8 +40,8 @@ export default function AdminInsights() {
     <div>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-violet-50">
-          <LineChart className="w-4.5 h-4.5 text-violet-600" />
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-orange-50">
+          <LineChart className="w-4.5 h-4.5 text-orange-600" />
         </div>
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Learning Insights</h1>
@@ -88,7 +88,7 @@ export default function AdminInsights() {
             <InsightSection title="Open Rate by Sequence Step" icon={BarChart3}>
               <div className="space-y-3">
                 {insights.open_rate_by_step.map(item => (
-                  <BarRow key={item.step} label={`Step ${item.step}`} value={item.open_rate} count={item.count} color="violet" />
+                  <BarRow key={item.step} label={`Step ${item.step}`} value={item.open_rate} count={item.count} color="orange" />
                 ))}
               </div>
             </InsightSection>

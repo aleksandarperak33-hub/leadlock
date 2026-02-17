@@ -39,7 +39,7 @@ export default function DashboardLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between px-5 h-16 gradient-border-bottom">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/20">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-orange-500 shadow-md shadow-orange-500/20">
               <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-[15px] font-bold tracking-tight text-gray-900">
@@ -67,12 +67,12 @@ export default function DashboardLayout() {
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `
                 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 cursor-pointer
-                ${isActive ? 'bg-indigo-50/80 text-gray-900 nav-item-active' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
+                ${isActive ? 'bg-orange-50/80 text-gray-900 nav-item-active' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
               `}
             >
               {({ isActive }) => (
                 <>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-sm shadow-indigo-500/20' : ''}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-gradient-to-br from-orange-500 to-orange-600 shadow-sm shadow-orange-500/20' : ''}`}>
                     <Icon className={`w-[18px] h-[18px] ${isActive ? 'text-white' : 'text-gray-400'}`} strokeWidth={isActive ? 2 : 1.5} />
                   </div>
                   {label}

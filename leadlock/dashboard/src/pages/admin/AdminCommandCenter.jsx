@@ -13,8 +13,8 @@ const REFRESH_INTERVAL_MS = 30_000;
 const ACTIVITY_CONFIG = {
   email_sent:      { color: 'text-blue-600',    bg: 'bg-blue-50',    icon: Mail },
   email_opened:    { color: 'text-emerald-600',  bg: 'bg-emerald-50', icon: Eye },
-  email_clicked:   { color: 'text-indigo-600',   bg: 'bg-indigo-50',  icon: MousePointer },
-  email_replied:   { color: 'text-violet-600',   bg: 'bg-violet-50',  icon: MessageSquare },
+  email_clicked:   { color: 'text-orange-600',   bg: 'bg-orange-50',  icon: MousePointer },
+  email_replied:   { color: 'text-orange-600',   bg: 'bg-orange-50',  icon: MessageSquare },
   email_bounced:   { color: 'text-red-600',      bg: 'bg-red-50',     icon: AlertTriangle },
   scrape_completed:{ color: 'text-gray-600',     bg: 'bg-gray-100',   icon: Search },
   unsubscribed:    { color: 'text-amber-600',    bg: 'bg-amber-50',   icon: UserMinus },
@@ -30,9 +30,9 @@ const HEALTH_DOT = {
 const FUNNEL_STAGES = [
   { key: 'cold',           label: 'Cold',           color: 'bg-gray-400' },
   { key: 'contacted',      label: 'Contacted',      color: 'bg-blue-500' },
-  { key: 'demo_scheduled', label: 'Demo Scheduled', color: 'bg-violet-500' },
+  { key: 'demo_scheduled', label: 'Demo Scheduled', color: 'bg-orange-500' },
   { key: 'demo_completed', label: 'Demo Completed', color: 'bg-purple-500' },
-  { key: 'proposal_sent',  label: 'Proposal Sent',  color: 'bg-indigo-500' },
+  { key: 'proposal_sent',  label: 'Proposal Sent',  color: 'bg-orange-500' },
   { key: 'won',            label: 'Won',            color: 'bg-emerald-500' },
   { key: 'lost',           label: 'Lost',           color: 'bg-red-400' },
 ];
@@ -79,8 +79,7 @@ function MetricCard({ label, value, sub, trend, icon: Icon, color = 'gray' }) {
   const colorMap = {
     blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
     emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
-    violet: { bg: 'bg-violet-50', text: 'text-violet-600' },
+    orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
     red: { bg: 'bg-red-50', text: 'text-red-600' },
     amber: { bg: 'bg-amber-50', text: 'text-amber-600' },
     gray: { bg: 'bg-gray-100', text: 'text-gray-600' },
@@ -187,7 +186,7 @@ export default function AdminCommandCenter() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600 shadow-md shadow-violet-500/20">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-purple-600 shadow-md shadow-orange-500/20">
             <Radio className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="text-lg font-semibold tracking-tight text-gray-900">Command Center</h1>
@@ -261,7 +260,7 @@ export default function AdminCommandCenter() {
           trend={<TrendArrow current={period.click_rate} previous={prev.click_rate} />}
           sub="30-day"
           icon={MousePointer}
-          color="indigo"
+          color="orange"
         />
         <MetricCard
           label="Reply Rate"
@@ -269,7 +268,7 @@ export default function AdminCommandCenter() {
           trend={<TrendArrow current={period.reply_rate} previous={prev.reply_rate} />}
           sub="30-day"
           icon={MessageSquare}
-          color="violet"
+          color="orange"
         />
         <MetricCard
           label="Bounce Rate"
@@ -364,7 +363,7 @@ export default function AdminCommandCenter() {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                   formatter={(v) => `${v}%`}
                 />
-                <Bar dataKey="Open %" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Open %" fill="#fb923c" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Reply %" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -534,7 +533,7 @@ export default function AdminCommandCenter() {
                       <div className="flex gap-3 mb-2 text-[10px] text-gray-400">
                         {email.sent_at && <span>Sent: {new Date(email.sent_at).toLocaleString()}</span>}
                         {email.opened_at && <span className="text-emerald-600">Opened: {new Date(email.opened_at).toLocaleString()}</span>}
-                        {email.clicked_at && <span className="text-indigo-600">Clicked: {new Date(email.clicked_at).toLocaleString()}</span>}
+                        {email.clicked_at && <span className="text-orange-600">Clicked: {new Date(email.clicked_at).toLocaleString()}</span>}
                         {email.bounced_at && <span className="text-red-600">Bounced</span>}
                       </div>
                       <p className="text-xs text-gray-600 leading-relaxed">{email.body_preview || 'No preview available'}</p>

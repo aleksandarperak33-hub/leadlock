@@ -54,8 +54,8 @@ export default function AdminRevenue() {
       value: `$${(totalMrr * 12).toLocaleString()}`,
       sub: 'projected ARR',
       icon: TrendingUp,
-      iconBg: 'bg-violet-50',
-      iconColor: 'text-violet-600',
+      iconBg: 'bg-orange-50',
+      iconColor: 'text-orange-600',
     },
     {
       label: 'Avg per Client',
@@ -78,7 +78,7 @@ export default function AdminRevenue() {
               onClick={() => setPeriod(p)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer border ${
                 period === p
-                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  ? 'bg-orange-50 text-orange-700 border-orange-200'
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'
               }`}
             >
@@ -121,7 +121,7 @@ export default function AdminRevenue() {
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-gray-100">
                     <div
-                      className="h-1.5 rounded-full bg-violet-500 transition-all"
+                      className="h-1.5 rounded-full bg-orange-500 transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>

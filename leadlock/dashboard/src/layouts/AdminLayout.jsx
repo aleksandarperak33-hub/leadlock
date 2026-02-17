@@ -41,14 +41,14 @@ export default function AdminLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between px-5 h-16 gradient-border-bottom">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500 to-purple-600 shadow-md shadow-violet-500/20">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-500 to-purple-600 shadow-md shadow-orange-500/20">
               <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[15px] font-bold tracking-tight text-gray-900">
                 Lead<span className="gradient-text">Lock</span>
               </span>
-              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-sm shadow-violet-500/20">
+              <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-gradient-to-r from-orange-500 to-purple-500 text-white shadow-sm shadow-orange-500/20">
                 Admin
               </span>
             </div>
@@ -68,12 +68,12 @@ export default function AdminLayout() {
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `
                 flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 cursor-pointer
-                ${isActive ? 'bg-violet-50/80 text-gray-900 nav-item-active' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
+                ${isActive ? 'bg-orange-50/80 text-gray-900 nav-item-active' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
               `}
             >
               {({ isActive }) => (
                 <>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm shadow-violet-500/20' : ''}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-gradient-to-br from-orange-500 to-purple-600 shadow-sm shadow-orange-500/20' : ''}`}>
                     <Icon className={`w-[18px] h-[18px] ${isActive ? 'text-white' : 'text-gray-400'}`} strokeWidth={isActive ? 2 : 1.5} />
                   </div>
                   {label}
@@ -84,7 +84,7 @@ export default function AdminLayout() {
         </nav>
 
         {/* System status */}
-        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-violet-50 to-violet-50/50 border border-violet-100">
+        <div className="mx-3 mb-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-orange-50 to-orange-50/50 border border-orange-100">
           <div className="flex items-center gap-2">
             <div className="relative">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />

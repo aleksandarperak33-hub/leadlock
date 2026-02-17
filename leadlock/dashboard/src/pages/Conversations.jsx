@@ -81,13 +81,13 @@ export default function Conversations() {
                   onClick={() => selectLead(lead.id)}
                   className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer ${
                     isSelected
-                      ? 'bg-indigo-50'
+                      ? 'bg-orange-50'
                       : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className={`text-sm font-medium truncate ${
-                      isSelected ? 'text-indigo-700' : 'text-gray-900'
+                      isSelected ? 'text-orange-700' : 'text-gray-900'
                     }`}>
                       {lead.first_name || 'Unknown'} {lead.last_name || ''}
                     </span>
@@ -121,8 +121,8 @@ export default function Conversations() {
                     >
                       <ArrowLeft className="w-4 h-4" />
                     </button>
-                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                      <User className="w-4 h-4 text-indigo-500" />
+                    <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+                      <User className="w-4 h-4 text-orange-500" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">

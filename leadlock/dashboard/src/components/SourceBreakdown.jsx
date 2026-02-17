@@ -13,14 +13,14 @@ const SOURCE_LABELS = {
 };
 
 const SOURCE_COLORS = {
-  google_lsa: '#6366f1',
+  google_lsa: '#f97316',
   angi: '#f59e0b',
-  facebook: '#8b5cf6',
+  facebook: '#f97316',
   website: '#10b981',
   missed_call: '#f59e0b',
   text_in: '#06b6d4',
   thumbtack: '#22c55e',
-  referral: '#a78bfa',
+  referral: '#fbbf24',
   yelp: '#ef4444',
 };
 
@@ -33,7 +33,7 @@ export default function SourceBreakdown({ data = {} }) {
     return (
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
         <div className="flex items-center gap-2 mb-4">
-          <PieChart className="w-3.5 h-3.5 text-indigo-500" strokeWidth={2} />
+          <PieChart className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Leads by Source
           </h3>
@@ -46,7 +46,7 @@ export default function SourceBreakdown({ data = {} }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 card-accent-top">
       <div className="flex items-center gap-2 mb-4">
-        <PieChart className="w-3.5 h-3.5 text-indigo-500" strokeWidth={2} />
+        <PieChart className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
           Leads by Source
         </h3>
@@ -54,7 +54,7 @@ export default function SourceBreakdown({ data = {} }) {
       <div className="space-y-3.5">
         {entries.map(([source, count]) => {
           const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
-          const barColor = SOURCE_COLORS[source] || '#6366f1';
+          const barColor = SOURCE_COLORS[source] || '#f97316';
           return (
             <div key={source}>
               <div className="flex items-center justify-between text-xs mb-1.5">

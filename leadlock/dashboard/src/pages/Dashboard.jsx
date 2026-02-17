@@ -14,7 +14,7 @@ const PERIODS = ['7d', '30d', '90d'];
 
 const ACTIVITY_DOT_COLORS = {
   booking_confirmed: 'bg-emerald-500',
-  lead_created: 'bg-indigo-500',
+  lead_created: 'bg-orange-500',
   opt_out: 'bg-red-500',
 };
 
@@ -88,7 +88,7 @@ export default function Dashboard() {
               onClick={() => setPeriod(p)}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 period === p
-                  ? 'bg-white text-indigo-600 shadow-sm'
+                  ? 'bg-white text-orange-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -140,7 +140,7 @@ export default function Dashboard() {
       {metrics?.leads_by_day?.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6 card-accent-top">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-3.5 h-3.5 text-indigo-500" strokeWidth={2} />
+            <TrendingUp className="w-3.5 h-3.5 text-orange-500" strokeWidth={2} />
             <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               Leads Per Day
             </h3>
@@ -150,15 +150,15 @@ export default function Dashboard() {
               <AreaChart data={metrics.leads_by_day} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.12} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.12} />
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: '#e5e7eb' }} />
-                <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#leadGradient)" strokeWidth={2} />
+                <Area type="monotone" dataKey="count" stroke="#f97316" fill="url(#leadGradient)" strokeWidth={2} />
                 <Area type="monotone" dataKey="booked" stroke="#10b981" fill="none" strokeWidth={1.5} strokeDasharray="4 4" />
               </AreaChart>
             </ResponsiveContainer>
