@@ -243,6 +243,8 @@ async def get_worker_health():
             if last_heartbeat:
                 hb_str = last_heartbeat if isinstance(last_heartbeat, str) else last_heartbeat.decode()
                 ts = datetime.fromisoformat(hb_str)
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
                 age_seconds = (now - ts).total_seconds()
                 statuses[worker] = {
                     "status": "healthy" if age_seconds < 600 else "stale",
