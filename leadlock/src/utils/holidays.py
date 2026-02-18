@@ -69,7 +69,6 @@ def get_federal_holidays(year: int) -> Set[date]:
     holidays.add(_nth_weekday(year, 1, 0, 3))    # MLK Day: 3rd Monday Jan
     holidays.add(_nth_weekday(year, 2, 0, 3))    # Presidents' Day: 3rd Monday Feb
     holidays.add(_last_weekday(year, 5, 0))       # Memorial Day: Last Monday May
-    holidays.add(_nth_weekday(year, 6, 2, 3))    # Juneteenth (observed): adjusted via _observed_date
     holidays.add(_observed_date(date(year, 6, 19)))  # Juneteenth: June 19
     holidays.add(_nth_weekday(year, 9, 0, 1))    # Labor Day: 1st Monday Sep
     holidays.add(_nth_weekday(year, 10, 0, 2))   # Columbus Day: 2nd Monday Oct

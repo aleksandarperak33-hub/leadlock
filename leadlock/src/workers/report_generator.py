@@ -78,7 +78,9 @@ async def _send_report_email(client: Client, metrics) -> bool:
         )
 
         sg = SendGridAPIClient(settings.sendgrid_api_key)
-        sg.send(message)
+        # Offload synchronous SendGrid SDK call to thread pool
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, lambda: sg.send(message))
         logger.info("Weekly report emailed to %s", client.owner_email)
         return True
     except Exception as e:

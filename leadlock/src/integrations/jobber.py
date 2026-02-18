@@ -137,8 +137,12 @@ class JobberCRM(CRMBase):
     ) -> dict:
         """Create a job in Jobber."""
         try:
-            start_at = f"{appointment_date.isoformat()}T{(time_start or dt_time(9, 0)).isoformat()}"
-            end_at = f"{appointment_date.isoformat()}T{(time_end or dt_time(11, 0)).isoformat()}"
+            # Include timezone offset to avoid server-side timezone ambiguity
+            from datetime import datetime as dt_cls, timezone as tz
+            start_dt = dt_cls.combine(appointment_date, time_start or dt_time(9, 0), tzinfo=tz.utc)
+            end_dt = dt_cls.combine(appointment_date, time_end or dt_time(11, 0), tzinfo=tz.utc)
+            start_at = start_dt.isoformat()
+            end_at = end_dt.isoformat()
 
             mutation = """
             mutation CreateJob($input: JobCreateInput!) {

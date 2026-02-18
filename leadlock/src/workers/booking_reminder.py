@@ -19,7 +19,7 @@ from src.models.lead import Lead
 from src.models.client import Client
 from src.models.conversation import Conversation
 from src.models.event_log import EventLog
-from src.services.compliance import full_compliance_check
+from src.services.compliance import full_compliance_check, check_content_compliance
 from src.services.sms import send_sms
 from src.agents.followup import process_followup
 from src.schemas.client_config import ClientConfig
@@ -159,6 +159,19 @@ async def _send_single_reminder(db, booking: Booking) -> bool:
         tech_name=booking.tech_name,
     )
 
+    # Post-generation content compliance check on the actual message
+    content_check = check_content_compliance(
+        message=response.message,
+        is_first_message=False,
+        business_name=client.business_name,
+    )
+    if not content_check:
+        logger.warning(
+            "Reminder content blocked for booking %s: %s",
+            str(booking.id)[:8], content_check.reason,
+        )
+        return False
+
     # Send SMS
     sms_result = await send_sms(
         to=lead.phone,
@@ -166,6 +179,11 @@ async def _send_single_reminder(db, booking: Booking) -> bool:
         from_phone=client.twilio_phone,
         messaging_service_sid=client.twilio_messaging_service_sid,
     )
+
+    # Mark reminder as sent immediately after SMS succeeds to prevent
+    # duplicate sends if the DB operations below fail and the task retries
+    booking.reminder_sent = True
+    booking.reminder_sent_at = datetime.now(timezone.utc)
 
     # Record conversation
     db.add(Conversation(
@@ -182,10 +200,6 @@ async def _send_single_reminder(db, booking: Booking) -> bool:
         segment_count=sms_result.get("segments", 1),
         sms_cost_usd=sms_result.get("cost_usd", 0.0),
     ))
-
-    # Mark reminder as sent
-    booking.reminder_sent = True
-    booking.reminder_sent_at = datetime.now(timezone.utc)
 
     # Update lead costs
     lead.total_messages_sent += 1

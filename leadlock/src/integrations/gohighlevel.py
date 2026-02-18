@@ -154,23 +154,28 @@ class GoHighLevelCRM(CRMBase):
         end_date: date,
         tech_ids: Optional[list[str]] = None,
     ) -> list[dict]:
-        """Get available appointment slots from GoHighLevel calendars."""
+        """Get available (free) appointment slots from GoHighLevel calendars."""
         try:
+            # Use free-slots endpoint to get AVAILABLE slots, not booked events.
+            # The /calendars/events endpoint returns already-booked appointments.
             params = {
-                "locationId": self.location_id,
                 "startDate": start_date.isoformat(),
                 "endDate": end_date.isoformat(),
             }
-            data = await self._request("GET", "/calendars/events", params=params)
-            events = data.get("events", [])
+            # If we have a specific calendar, use its free-slots endpoint
+            calendar_id = self.location_id  # Default to location ID as calendar
+            data = await self._request(
+                "GET", f"/calendars/{calendar_id}/free-slots", params=params,
+            )
+            slots = data.get("slots", data.get("availableSlots", []))
             return [
                 {
-                    "date": event.get("startTime", "")[:10],
-                    "start": event.get("startTime", "")[11:16],
-                    "end": event.get("endTime", "")[11:16],
-                    "tech_id": event.get("calendarId"),
+                    "date": slot.get("startTime", slot.get("start", ""))[:10],
+                    "start": slot.get("startTime", slot.get("start", ""))[11:16],
+                    "end": slot.get("endTime", slot.get("end", ""))[11:16],
+                    "tech_id": slot.get("calendarId"),
                 }
-                for event in events
+                for slot in slots
             ]
         except Exception as e:
             logger.warning("GHL get_availability failed: %s", str(e))

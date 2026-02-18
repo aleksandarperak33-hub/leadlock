@@ -10,6 +10,7 @@ Compliance checks:
 4. Must include opt-out language
 5. Must identify business
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -140,10 +141,15 @@ async def send_outreach_sms(
         from twilio.rest import Client as TwilioClient
 
         client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
-        message = client.messages.create(
-            body=full_body,
-            from_=from_phone,
-            to=prospect.prospect_phone,
+        # Offload synchronous Twilio SDK call to thread pool
+        loop = asyncio.get_running_loop()
+        message = await loop.run_in_executor(
+            None,
+            lambda: client.messages.create(
+                body=full_body,
+                from_=from_phone,
+                to=prospect.prospect_phone,
+            ),
         )
 
         twilio_sid = message.sid

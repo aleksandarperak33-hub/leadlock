@@ -279,7 +279,14 @@ def check_content_compliance(
 
     # First message requirements
     if is_first_message:
-        if "stop" not in message_lower:
+        # Check for actual opt-out instruction, not just the word "stop".
+        # Must match patterns like "Reply STOP", "Text STOP", "send STOP"
+        # to avoid false passes on "non-stop service", "don't stop", etc.
+        import re
+        stop_instruction_pattern = re.compile(
+            r'\b(reply|text|send|msg|message)\s+stop\b', re.IGNORECASE,
+        )
+        if not stop_instruction_pattern.search(message):
             return ComplianceResult(
                 False,
                 'First message must include "Reply STOP to opt out"',

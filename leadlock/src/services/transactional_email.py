@@ -4,6 +4,7 @@ Transactional email service — SendGrid-based emails for auth flows and billing
 Separate from cold_email.py: uses a different sender identity (noreply@) and
 does NOT include CAN-SPAM footer or tracking (transactional emails are exempt).
 """
+import asyncio
 import logging
 from typing import Optional
 
@@ -46,7 +47,9 @@ async def _send_transactional(
         ]
 
         sg = SendGridAPIClient(api_key=api_key)
-        response = sg.send(message)
+        # Offload synchronous SendGrid SDK call to thread pool
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(None, lambda: sg.send(message))
         message_id = response.headers.get("X-Message-Id", "")
 
         logger.info(

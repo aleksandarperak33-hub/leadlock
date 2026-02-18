@@ -3,6 +3,7 @@ Phone validation service — Twilio Lookup API v2 for line type intelligence.
 Identifies mobile vs landline vs VoIP to optimize SMS delivery.
 Cost: $0.008 per lookup.
 """
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -54,8 +55,13 @@ async def lookup_phone(phone: str) -> dict:
         from src.config import get_settings
         settings = get_settings()
         client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
-        result = client.lookups.v2.phone_numbers(normalized).fetch(
-            fields="line_type_intelligence"
+        # Offload synchronous Twilio Lookup SDK call to thread pool
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: client.lookups.v2.phone_numbers(normalized).fetch(
+                fields="line_type_intelligence"
+            ),
         )
 
         line_type_info = getattr(result, "line_type_intelligence", {}) or {}

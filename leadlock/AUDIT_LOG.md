@@ -1,6 +1,6 @@
 # LeadLock Codebase Audit Log
 
-**Date:** 2026-02-17
+**Date:** 2026-02-17 (updated 2026-02-18)
 **Auditor:** Claude Opus 4.6
 **Scope:** Full codebase — security, data integrity, logic bugs, performance, code quality
 
@@ -10,11 +10,11 @@
 
 | Severity | Found | Fixed |
 |----------|-------|-------|
-| CRITICAL | 9     | 9     |
-| HIGH     | 12    | 12    |
-| MEDIUM   | 9     | 9     |
+| CRITICAL | 16    | 16    |
+| HIGH     | 22    | 22    |
+| MEDIUM   | 14    | 14    |
 | LOW      | 4     | 4     |
-| **Total**| **34**| **34**|
+| **Total**| **56**| **56**|
 
 ---
 
@@ -234,6 +234,165 @@
 - **File:** `src/utils/webhook_signatures.py` lines 121-146
 - **Description:** When webhook secrets are not configured, the system silently accepts webhooks without verification. No logs indicate this is happening, making it easy to miss in production.
 - **Fix:** Added WARNING-level logs for each source type when signature verification is skipped due to missing secrets.
+- **Status:** FIXED
+
+---
+
+## Round 2 — CRITICAL (2026-02-18)
+
+### C-10: .format() prompt injection in qualify and book agents
+- **Files:** `src/agents/qualify.py`, `src/agents/book.py`
+- **Description:** User-controlled content (conversation messages, qualification data, business names) passed through `.format()` without escaping braces. A lead sending `{primary_services}` crashes with `KeyError` or overrides prompt variables.
+- **Fix:** Added `_escape_braces()` helper. All user-controlled fields escaped before `.format()`.
+- **Status:** FIXED
+
+### C-11: Content compliance bypass — empty message checked in followup/booking workers
+- **Files:** `src/workers/followup_scheduler.py`, `src/workers/booking_reminder.py`
+- **Description:** Both workers run `full_compliance_check(message="")` before generating the message, then send the AI-generated message without re-running content compliance. URL shorteners and missing opt-out language bypass detection.
+- **Fix:** Added post-generation `check_content_compliance()` call on the actual message before sending.
+- **Status:** FIXED
+
+### C-12: First message STOP check uses naive substring match
+- **File:** `src/services/compliance.py:282`
+- **Description:** `"stop" in message_lower` passes for "non-stop service", "stop by tomorrow". Not a valid opt-out instruction.
+- **Fix:** Replaced with regex pattern matching `(reply|text|send|msg|message)\s+stop` to require actual opt-out instruction phrasing.
+- **Status:** FIXED
+
+### C-13: Blocking sync Twilio call in outreach_sms.py
+- **File:** `src/services/outreach_sms.py:142-147`
+- **Description:** `client.messages.create()` called synchronously in async function.
+- **Fix:** Wrapped in `asyncio.get_running_loop().run_in_executor()`.
+- **Status:** FIXED
+
+### C-14: Blocking sync SendGrid calls in cold_email.py and transactional_email.py
+- **Files:** `src/services/cold_email.py:134`, `src/services/transactional_email.py:49`
+- **Description:** `sg.send(message)` called synchronously in async functions.
+- **Fix:** Wrapped both in `loop.run_in_executor()`.
+- **Status:** FIXED
+
+### C-15: Blocking sync Twilio Lookup in phone_validation.py
+- **File:** `src/services/phone_validation.py:56-59`
+- **Description:** `client.lookups.v2.phone_numbers().fetch()` called synchronously.
+- **Fix:** Wrapped in `loop.run_in_executor()`.
+- **Status:** FIXED
+
+### C-16: Error boundary leaks stack traces in production
+- **File:** `dashboard/src/components/ErrorBoundary.jsx`
+- **Description:** Full `error.stack` rendered to all users including production.
+- **Fix:** Stack trace only shown when `import.meta.env.DEV` is true.
+- **Status:** FIXED
+
+## Round 2 — HIGH (2026-02-18)
+
+### H-13: Route ordering — /leads/export shadowed by /leads/{lead_id}
+- **File:** `src/api/dashboard.py`
+- **Description:** FastAPI matches `/leads/export` as `{lead_id}="export"`, returning 400.
+- **Fix:** Moved `/export` route registration before `/{lead_id}`.
+- **Status:** FIXED
+
+### H-14: update_settings overwrites entire client.config
+- **File:** `src/api/dashboard.py:1127`
+- **Description:** `client.config = payload["config"]` replaces instead of merging.
+- **Fix:** Changed to `{**existing, **payload["config"]}`.
+- **Status:** FIXED
+
+### H-15: Conductor hardcodes is_opted_out=False for new leads
+- **File:** `src/agents/conductor.py:189`
+- **Description:** No check for prior opt-out records when a phone re-submits.
+- **Fix:** Added query for prior opt-out consent records before compliance check.
+- **Status:** FIXED
+
+### H-16: Conductor hardcodes is_opted_out=False for reply flow
+- **File:** `src/agents/conductor.py:413`
+- **Description:** Reply compliance check never reads actual consent opt-out status.
+- **Fix:** Added consent record lookup and uses actual `opted_out` value.
+- **Status:** FIXED
+
+### H-17: Unhandled ValueError on AI appointment_date parse
+- **File:** `src/agents/conductor.py:554`
+- **Description:** `datetime.strptime(result.appointment_date, "%Y-%m-%d")` crashes on malformed AI output.
+- **Fix:** Added try/except with fallback to current date.
+- **Status:** FIXED
+
+### H-18: CRM sync retry backoff non-functional
+- **File:** `src/workers/crm_sync.py:64-72`
+- **Description:** Query fetches all "retrying" bookings regardless of `crm_next_retry_at`.
+- **Fix:** Added JSON filter on `extra_data->crm_next_retry_at` to respect backoff schedule.
+- **Status:** FIXED
+
+### H-19: Booking reminder duplicate SMS on partial failure
+- **File:** `src/workers/booking_reminder.py:187`
+- **Description:** `reminder_sent = True` set after Conversation DB add. If add fails, reminder retries and sends again.
+- **Fix:** Moved `reminder_sent = True` immediately after successful `send_sms()`.
+- **Status:** FIXED
+
+### H-20: ServiceTitan create_booking drops schedule data
+- **File:** `src/integrations/servicetitan.py:107-111`
+- **Description:** `appointment_date`, `time_start`, `time_end`, `tech_id` parameters accepted but never included in API payload.
+- **Fix:** Included `scheduledDate`, `scheduledStart`, `scheduledEnd`, `technicianId` in payload.
+- **Status:** FIXED
+
+### H-21: ServiceTitan create_customer drops email and address
+- **File:** `src/integrations/servicetitan.py:74-78`
+- **Description:** `email` and `address` parameters accepted but silently ignored.
+- **Fix:** Added email to contacts array and address to locations array.
+- **Status:** FIXED
+
+### H-22: GoHighLevel get_availability returns booked events, not free slots
+- **File:** `src/integrations/gohighlevel.py:164`
+- **Description:** Fetches `/calendars/events` (existing appointments) instead of free slots.
+- **Fix:** Changed to `/calendars/{calendarId}/free-slots` endpoint.
+- **Status:** FIXED
+
+### H-23: Jobber create_booking sends timezone-naive datetimes
+- **File:** `src/integrations/jobber.py:140-141`
+- **Description:** No timezone offset on ISO datetime strings.
+- **Fix:** Used `datetime.combine(..., tzinfo=timezone.utc)` to produce timezone-aware strings.
+- **Status:** FIXED
+
+### H-24: Spurious Juneteenth date in holidays.py
+- **File:** `src/utils/holidays.py:72`
+- **Description:** `_nth_weekday(year, 6, 2, 3)` adds 3rd Wednesday of June instead of June 19th.
+- **Fix:** Deleted the spurious line. Line 73 correctly uses `_observed_date(date(year, 6, 19))`.
+- **Status:** FIXED
+
+## Round 2 — MEDIUM (2026-02-18)
+
+### M-10: complete_onboarding lacks business_type validation
+- **File:** `src/api/dashboard.py:1155`
+- **Fix:** Added whitelist validation matching `submit_business_registration`.
+- **Status:** FIXED
+
+### M-11: get_bookings silently ignores malformed dates
+- **File:** `src/api/dashboard.py:1376-1388`
+- **Fix:** Changed `pass` to `raise HTTPException(status_code=400)`.
+- **Status:** FIXED
+
+### M-12: Rate limit fails open without logging
+- **File:** `src/api/dashboard.py:72-73`
+- **Fix:** Added `logger.warning()` when Redis is down and rate limiting is bypassed.
+- **Status:** FIXED
+
+### M-13: Billing webhook UUID parse error unhandled
+- **File:** `src/services/billing.py:228`
+- **Fix:** Added try/except around `uuid.UUID(client_id)` with early return on error.
+- **Status:** FIXED
+
+### M-14: State code regex matches direction prefixes in scraping
+- **File:** `src/services/scraping.py:213`
+- **Description:** `r"\b([A-Z]{2})\b"` matches NW, SE, etc. before the actual state code.
+- **Fix:** Anchored pattern after comma and before ZIP: `r",\s*([A-Z]{2})\s+\d{5}"`.
+- **Status:** FIXED
+
+### M-15: Scheduling ignores existing_bookings parameter
+- **File:** `src/services/scheduling.py:39`
+- **Description:** Parameter accepted but never referenced. Existing bookings don't reduce available slots.
+- **Fix:** Count existing bookings per day and deduct from `max_daily_bookings`.
+- **Status:** FIXED
+
+### M-16: report_generator blocks event loop with sg.send()
+- **File:** `src/workers/report_generator.py:81`
+- **Fix:** Wrapped in `loop.run_in_executor()`.
 - **Status:** FIXED
 
 ---

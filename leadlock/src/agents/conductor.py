@@ -182,11 +182,22 @@ async def handle_new_lead(
         lead.total_messages_received = 1
         lead.last_inbound_at = datetime.now(timezone.utc)
 
+    # Check for prior opt-out on this phone+client before responding
+    prior_optout_result = await db.execute(
+        select(ConsentRecord).where(
+            ConsentRecord.phone == phone,
+            ConsentRecord.client_id == client.id,
+            ConsentRecord.opted_out == True,
+            ConsentRecord.id != consent.id,  # Exclude the just-created record
+        ).limit(1)
+    )
+    prior_optout = prior_optout_result.scalar_one_or_none()
+
     # Run compliance check before responding
     compliance = full_compliance_check(
         has_consent=True,
         consent_type=consent.consent_type,
-        is_opted_out=False,
+        is_opted_out=prior_optout is not None,
         state_code=lead.state_code,
         is_emergency=lead.is_emergency,
         message="",  # Content checked after template generation (line ~198)
@@ -406,11 +417,17 @@ async def _process_reply_locked(
     response_ms = timer.stop()
 
     if response and response.get("message"):
+        # Check actual consent opt-out status from DB
+        reply_opted_out = False
+        if lead.consent_id:
+            reply_consent = await db.get(ConsentRecord, lead.consent_id)
+            reply_opted_out = reply_consent.opted_out if reply_consent else False
+
         # Compliance check before sending
         compliance = full_compliance_check(
             has_consent=True,
             consent_type="pec",
-            is_opted_out=False,
+            is_opted_out=reply_opted_out,
             state_code=lead.state_code,
             is_emergency=lead.is_emergency,
             is_reply_to_inbound=True,
@@ -548,10 +565,19 @@ async def _route_to_book(
 
         # Create booking record (CRM sync happens asynchronously)
         from src.models.booking import Booking
+        parsed_date = None
+        if result.appointment_date:
+            try:
+                parsed_date = datetime.strptime(result.appointment_date, "%Y-%m-%d").date()
+            except ValueError:
+                logger.warning(
+                    "AI returned unparseable appointment_date '%s' for lead %s",
+                    result.appointment_date, str(lead.id)[:8],
+                )
         booking = Booking(
             lead_id=lead.id,
             client_id=client.id,
-            appointment_date=datetime.strptime(result.appointment_date, "%Y-%m-%d").date() if result.appointment_date else datetime.now(timezone.utc).date(),
+            appointment_date=parsed_date or datetime.now(timezone.utc).date(),
             service_type=lead.service_type or "service",
             tech_name=result.tech_name,
             crm_sync_status="pending",

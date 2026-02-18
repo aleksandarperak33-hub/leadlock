@@ -547,10 +547,10 @@ async def get_inbox(
     conditions = [latest_reply.c.last_reply_at.isnot(None)]
     if campaign_id:
         try:
-                cid = uuid.UUID(campaign_id)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid campaign ID")
-            conditions.append(Outreach.campaign_id == cid)
+            cid = uuid.UUID(campaign_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid campaign ID")
+        conditions.append(Outreach.campaign_id == cid)
 
     # Count total
     count_query = (

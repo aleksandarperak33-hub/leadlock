@@ -17,6 +17,11 @@ from src.schemas.agent_responses import QualifyResponse, QualificationData
 
 logger = logging.getLogger(__name__)
 
+
+def _escape_braces(text: str) -> str:
+    """Escape { and } in user-controlled text to prevent .format() injection."""
+    return text.replace("{", "{{").replace("}", "}}")
+
 QUALIFY_SYSTEM_PROMPT = """You are {rep_name}, a friendly and professional customer service representative for {business_name}, a {trade_type} company.
 
 Your job is to qualify this lead by collecting 4 pieces of information through natural conversation:
@@ -78,22 +83,25 @@ async def process_qualify(
     Uses Claude Sonnet for conversational intelligence.
     """
     # Format conversation history for the prompt
+    # Escape braces in user-controlled content to prevent .format() injection
     history_text = ""
     for msg in conversation_history[-8:]:  # Last 8 messages for context
-        direction = "Customer" if msg.get("direction") == "inbound" else rep_name
-        history_text += f"{direction}: {msg.get('content', '')}\n"
+        direction = "Customer" if msg.get("direction") == "inbound" else _escape_braces(rep_name)
+        history_text += f"{direction}: {_escape_braces(msg.get('content', ''))}\n"
 
     # Format current qualification data
-    qual_text = json.dumps(current_qualification, indent=2) if current_qualification else "{}"
+    qual_text = _escape_braces(
+        json.dumps(current_qualification, indent=2) if current_qualification else "{}"
+    )
 
-    # Build the system prompt
+    # Build the system prompt — escape all user-controlled fields
     system = QUALIFY_SYSTEM_PROMPT.format(
-        rep_name=rep_name,
-        business_name=business_name,
-        trade_type=trade_type,
-        primary_services=", ".join(services.get("primary", [])),
-        secondary_services=", ".join(services.get("secondary", [])),
-        do_not_quote=", ".join(services.get("do_not_quote", [])),
+        rep_name=_escape_braces(rep_name),
+        business_name=_escape_braces(business_name),
+        trade_type=_escape_braces(trade_type),
+        primary_services=_escape_braces(", ".join(services.get("primary", []))),
+        secondary_services=_escape_braces(", ".join(services.get("secondary", []))),
+        do_not_quote=_escape_braces(", ".join(services.get("do_not_quote", []))),
         current_qualification=qual_text,
         conversation_history=history_text,
     )

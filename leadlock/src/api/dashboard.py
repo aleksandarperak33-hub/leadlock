@@ -69,8 +69,9 @@ async def _check_auth_rate_limit(
             )
     except HTTPException:
         raise
-    except Exception:
-        pass  # Fail open — don't block auth if Redis is down
+    except Exception as e:
+        # Fail open — don't block auth if Redis is down, but log it
+        logger.warning("Rate limiting unavailable (Redis error): %s", str(e))
 
 
 # === AUTH ===
@@ -889,6 +890,53 @@ async def get_leads(
     )
 
 
+@router.get("/api/v1/dashboard/leads/export")
+async def export_leads_csv(
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Export leads as CSV (capped at 10,000 rows for safety)."""
+    MAX_EXPORT_ROWS = 10000
+    result = await db.execute(
+        select(Lead)
+        .where(Lead.client_id == client.id)
+        .order_by(desc(Lead.created_at))
+        .limit(MAX_EXPORT_ROWS)
+    )
+    leads = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "first_name", "last_name", "phone", "source", "state",
+        "score", "service_type", "urgency", "first_response_ms",
+        "total_messages", "created_at",
+    ])
+
+    for lead in leads:
+        writer.writerow([
+            str(lead.id),
+            lead.first_name,
+            lead.last_name,
+            lead.phone[:6] + "***" if lead.phone else "",
+            lead.source,
+            lead.state,
+            lead.score,
+            lead.service_type,
+            lead.urgency,
+            lead.first_response_ms,
+            (lead.total_messages_sent or 0) + (lead.total_messages_received or 0),
+            lead.created_at.isoformat() if lead.created_at else "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads_export.csv"},
+    )
+
+
 @router.get("/api/v1/dashboard/leads/{lead_id}", response_model=LeadDetailResponse)
 async def get_lead_detail(
     lead_id: str,
@@ -1124,7 +1172,9 @@ async def update_settings(
     if "config" in payload:
         if not isinstance(payload["config"], dict):
             raise HTTPException(status_code=400, detail="config must be a JSON object")
-        client.config = payload["config"]
+        # Merge with existing config instead of overwriting to prevent data loss
+        existing = client.config or {}
+        client.config = {**existing, **payload["config"]}
     await db.commit()
     return {"status": "updated"}
 
@@ -1152,7 +1202,13 @@ async def complete_onboarding(
         client.crm_api_key_encrypted = encrypt_value(payload["crm_api_key"])
 
     # Save business registration info if provided (for later 10DLC submission)
+    _valid_business_types = {"sole_proprietorship", "llc", "corporation", "partnership"}
     if payload.get("business_type"):
+        if payload["business_type"] not in _valid_business_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid business_type. Must be one of: {', '.join(sorted(_valid_business_types))}",
+            )
         client.business_type = payload["business_type"]
     if payload.get("business_ein"):
         client.business_ein = payload["business_ein"]
@@ -1323,14 +1379,14 @@ async def get_bookings(
             start_date = datetime.fromisoformat(start)
             conditions.append(Booking.appointment_date >= start_date.date())
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail="Invalid start date format. Use ISO 8601.")
 
     if end:
         try:
             end_date = datetime.fromisoformat(end)
             conditions.append(Booking.appointment_date <= end_date.date())
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail="Invalid end date format. Use ISO 8601.")
 
     result = await db.execute(
         select(Booking)
@@ -1417,50 +1473,3 @@ async def get_custom_report(
         "bookings": booking_count,
         "avg_response_ms": round(float(avg_response)) if avg_response else None,
     }
-
-
-@router.get("/api/v1/dashboard/leads/export")
-async def export_leads_csv(
-    db: AsyncSession = Depends(get_db),
-    client: Client = Depends(get_current_client),
-):
-    """Export leads as CSV (capped at 10,000 rows for safety)."""
-    MAX_EXPORT_ROWS = 10000
-    result = await db.execute(
-        select(Lead)
-        .where(Lead.client_id == client.id)
-        .order_by(desc(Lead.created_at))
-        .limit(MAX_EXPORT_ROWS)
-    )
-    leads = result.scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "id", "first_name", "last_name", "phone", "source", "state",
-        "score", "service_type", "urgency", "first_response_ms",
-        "total_messages", "created_at",
-    ])
-
-    for lead in leads:
-        writer.writerow([
-            str(lead.id),
-            lead.first_name,
-            lead.last_name,
-            lead.phone[:6] + "***" if lead.phone else "",
-            lead.source,
-            lead.state,
-            lead.score,
-            lead.service_type,
-            lead.urgency,
-            lead.first_response_ms,
-            (lead.total_messages_sent or 0) + (lead.total_messages_received or 0),
-            lead.created_at.isoformat() if lead.created_at else "",
-        ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leads_export.csv"},
-    )

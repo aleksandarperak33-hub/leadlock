@@ -223,9 +223,15 @@ async def _handle_checkout_completed(session: dict) -> None:
             "Proceeding without tier sync.", subscription_id, str(e),
         )
 
+    try:
+        client_uuid = uuid.UUID(client_id)
+    except (ValueError, AttributeError):
+        logger.error("Checkout completed with invalid client_id UUID: %s", client_id)
+        return
+
     async with async_session_factory() as db:
         result = await db.execute(
-            select(Client).where(Client.id == uuid.UUID(client_id))
+            select(Client).where(Client.id == client_uuid)
         )
         client = result.scalar_one_or_none()
         if not client:

@@ -12,6 +12,11 @@ from src.schemas.agent_responses import BookResponse
 
 logger = logging.getLogger(__name__)
 
+
+def _escape_braces(text: str) -> str:
+    """Escape { and } in user-controlled text to prevent .format() injection."""
+    return text.replace("{", "{{").replace("}", "}}")
+
 BOOK_SYSTEM_PROMPT = """You are {rep_name}, scheduling an appointment for {business_name}.
 
 The customer needs: {service_type}
@@ -90,19 +95,20 @@ async def process_booking(
         slots_text = "No available slots found in the next 14 days."
 
     # Format conversation history for the prompt (last 8 messages)
+    # Escape braces in user-controlled content to prevent .format() injection
     history_text = ""
     for msg in conversation_history[-8:]:
-        direction = "Customer" if msg.get("direction") == "inbound" else rep_name
-        history_text += f"{direction}: {msg.get('content', '')}\n"
+        direction = "Customer" if msg.get("direction") == "inbound" else _escape_braces(rep_name)
+        history_text += f"{direction}: {_escape_braces(msg.get('content', ''))}\n"
 
-    # Build prompt
+    # Build prompt — escape all user-controlled fields
     system = BOOK_SYSTEM_PROMPT.format(
-        rep_name=rep_name,
-        business_name=business_name,
-        service_type=service_type or "service",
-        first_name=first_name or "there",
-        preferred_date=preferred_date or "not specified",
-        available_slots=slots_text,
+        rep_name=_escape_braces(rep_name),
+        business_name=_escape_braces(business_name),
+        service_type=_escape_braces(service_type or "service"),
+        first_name=_escape_braces(first_name or "there"),
+        preferred_date=_escape_braces(preferred_date or "not specified"),
+        available_slots=_escape_braces(slots_text),
         conversation_history=history_text or "No prior conversation.",
     )
 

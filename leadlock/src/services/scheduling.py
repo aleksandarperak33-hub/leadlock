@@ -67,9 +67,17 @@ def generate_available_slots(
             day_start = bh_start
             day_end = bh_end
 
+        # Count existing bookings for this day to deduct from max
+        existing_count = 0
+        if existing_bookings:
+            for b in existing_bookings:
+                b_date = b.get("date") or b.get("appointment_date")
+                if b_date == current_date or (hasattr(b_date, "date") and b_date.date() == current_date):
+                    existing_count += 1
+
         # Generate time slots for this day
         current_time = day_start
-        daily_count = 0
+        daily_count = existing_count  # Start counting from existing bookings
 
         while daily_count < max_daily_bookings:
             slot_end_minutes = (

@@ -209,10 +209,16 @@ def parse_address_components(address: str) -> dict:
     if zip_match:
         result["zip"] = zip_match.group(1)
 
-    # Try to extract state code (2-letter abbreviation)
-    state_match = re.search(r"\b([A-Z]{2})\b", address)
+    # Try to extract state code — anchor after comma and before ZIP to avoid
+    # matching directional prefixes (NW, SE, etc.) or other 2-letter words
+    state_match = re.search(r",\s*([A-Z]{2})\s+\d{5}", address)
     if state_match:
         result["state"] = state_match.group(1)
+    else:
+        # Fallback: last 2-letter uppercase word before ZIP
+        state_fallback = re.search(r"\b([A-Z]{2})\b\s+\d{5}", address)
+        if state_fallback:
+            result["state"] = state_fallback.group(1)
 
     # Try to extract city (typically before state code in comma-separated format)
     parts = [p.strip() for p in address.split(",")]

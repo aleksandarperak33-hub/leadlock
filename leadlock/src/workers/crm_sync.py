@@ -10,7 +10,7 @@ Retry logic:
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
@@ -60,11 +60,22 @@ async def run_crm_sync():
 async def sync_pending_bookings():
     """Find and sync all pending and retrying bookings to their CRM."""
     async with async_session_factory() as db:
-        # Find pending bookings AND failed bookings that are due for retry
+        # Find pending bookings AND retrying bookings that are past their retry-at time
+        now = datetime.now(timezone.utc)
         result = await db.execute(
             select(Booking)
             .where(
-                Booking.crm_sync_status.in_(["pending", "retrying"])
+                or_(
+                    Booking.crm_sync_status == "pending",
+                    and_(
+                        Booking.crm_sync_status == "retrying",
+                        # Only retry if crm_next_retry_at has passed (stored in extra_data JSON)
+                        or_(
+                            Booking.extra_data.is_(None),
+                            Booking.extra_data["crm_next_retry_at"].astext <= now.isoformat(),
+                        ),
+                    ),
+                )
             )
             .order_by(Booking.created_at)
             .limit(20)

@@ -71,11 +71,17 @@ class ServiceTitanCRM(CRMBase):
     ) -> dict:
         """Create customer in ServiceTitan."""
         try:
-            data = await self._request("POST", "/crm/v2/customers", json={
+            contacts = [{"type": "Phone", "value": phone}]
+            if email:
+                contacts.append({"type": "Email", "value": email})
+            payload = {
                 "name": f"{first_name} {last_name or ''}".strip(),
                 "type": "Residential",
-                "contacts": [{"type": "Phone", "value": phone}],
-            })
+                "contacts": contacts,
+            }
+            if address:
+                payload["locations"] = [{"address": {"street": address}}]
+            data = await self._request("POST", "/crm/v2/customers", json=payload)
             return {"customer_id": str(data.get("id")), "success": True, "error": None}
         except Exception as e:
             logger.error("ServiceTitan create_customer failed: %s", str(e))
@@ -104,11 +110,20 @@ class ServiceTitanCRM(CRMBase):
     ) -> dict:
         """Create job/booking in ServiceTitan."""
         try:
-            data = await self._request("POST", "/jpm/v2/jobs", json={
+            payload = {
                 "customerId": int(customer_id),
                 "typeId": 1,
                 "summary": notes or f"LeadLock booking: {service_type}",
-            })
+            }
+            if appointment_date:
+                payload["scheduledDate"] = appointment_date.isoformat()
+            if time_start and appointment_date:
+                payload["scheduledStart"] = f"{appointment_date.isoformat()}T{time_start.isoformat()}"
+            if time_end and appointment_date:
+                payload["scheduledEnd"] = f"{appointment_date.isoformat()}T{time_end.isoformat()}"
+            if tech_id:
+                payload["technicianId"] = int(tech_id)
+            data = await self._request("POST", "/jpm/v2/jobs", json=payload)
             return {"job_id": str(data.get("id")), "success": True, "error": None}
         except Exception as e:
             logger.error("ServiceTitan create_booking failed: %s", str(e))

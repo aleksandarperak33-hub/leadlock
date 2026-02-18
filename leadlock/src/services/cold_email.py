@@ -131,7 +131,8 @@ async def send_cold_email(
         response = None
         for attempt in range(max_retries):
             try:
-                response = sg.send(message)
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(None, lambda: sg.send(message))
                 break
             except Exception as send_err:
                 status_code = getattr(send_err, "status_code", None)

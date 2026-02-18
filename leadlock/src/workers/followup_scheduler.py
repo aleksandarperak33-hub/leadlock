@@ -15,7 +15,7 @@ from src.models.client import Client
 from src.models.consent import ConsentRecord
 from src.models.conversation import Conversation
 from src.models.event_log import EventLog
-from src.services.compliance import full_compliance_check
+from src.services.compliance import full_compliance_check, check_content_compliance
 from src.services.sms import send_sms
 from src.agents.followup import process_followup
 from src.schemas.client_config import ClientConfig
@@ -164,6 +164,21 @@ async def execute_followup_task(db: AsyncSession, task: FollowupTask):
         followup_type=task.task_type,
         sequence_number=task.sequence_number,
     )
+
+    # Post-generation content compliance check on the actual message
+    content_check = check_content_compliance(
+        message=response.message,
+        is_first_message=False,
+        business_name=client.business_name,
+    )
+    if not content_check:
+        task.status = "skipped"
+        task.skip_reason = f"Content compliance failed: {content_check.reason}"
+        logger.warning(
+            "Followup content blocked for lead %s: %s",
+            str(lead.id)[:8], content_check.reason,
+        )
+        return
 
     # Send SMS
     sms_result = await send_sms(

@@ -21,12 +21,19 @@ export default class ErrorBoundary extends Component {
           <h1 style={{ color: '#dc2626', fontSize: 20, marginBottom: 8 }}>
             Something went wrong
           </h1>
-          <pre style={{ color: '#6b7280', fontSize: 14, whiteSpace: 'pre-wrap' }}>
-            {this.state.error?.message}
-          </pre>
-          <pre style={{ color: '#9ca3af', fontSize: 12, marginTop: 12, whiteSpace: 'pre-wrap' }}>
-            {this.state.error?.stack}
-          </pre>
+          <p style={{ color: '#6b7280', fontSize: 14 }}>
+            An unexpected error occurred. Please try reloading the page.
+          </p>
+          {import.meta.env.DEV && (
+            <>
+              <pre style={{ color: '#6b7280', fontSize: 14, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+                {this.state.error?.message}
+              </pre>
+              <pre style={{ color: '#9ca3af', fontSize: 12, marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                {this.state.error?.stack}
+              </pre>
+            </>
+          )}
           <button
             onClick={() => window.location.reload()}
             style={{
