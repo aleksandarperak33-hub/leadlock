@@ -1,11 +1,20 @@
-:80 {
-	@api path /api/*
-	handle @api {
+{
+	email aleksandar.perak33@gmail.com
+}
+
+leadlock.org {
+	tls {
+		issuer acme {
+			dir https://acme.zerossl.com/v2/DV90
+			email aleksandar.perak33@gmail.com
+		}
+	}
+
+	handle /api/* {
 		reverse_proxy api:8000
 	}
 
-	@health path /health*
-	handle @health {
+	handle /health* {
 		reverse_proxy api:8000
 	}
 
@@ -14,4 +23,15 @@
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+api.leadlock.org {
+	tls {
+		issuer acme {
+			dir https://acme.zerossl.com/v2/DV90
+			email aleksandar.perak33@gmail.com
+		}
+	}
+
+	reverse_proxy api:8000
 }
