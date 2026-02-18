@@ -3,7 +3,7 @@ Report generator worker — creates weekly reports and sends via email.
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.database import async_session_factory
 from src.services.reporting import get_dashboard_metrics
@@ -29,7 +29,7 @@ async def run_report_generator():
 
 async def generate_weekly_reports():
     """Generate and email weekly reports for all active clients."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Only run on Mondays
     if now.weekday() != 0 or now.hour != 8:
         return

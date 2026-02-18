@@ -4,7 +4,7 @@ Each record is a prospective client being pursued.
 Extended with sales engine automation columns for scraping and email sequences.
 """
 import uuid
-from datetime import datetime, date
+from datetime import datetime, timezone, date
 from typing import Optional
 from sqlalchemy import String, Text, Float, Integer, Boolean, DateTime, Date, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -82,10 +82,10 @@ class Outreach(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

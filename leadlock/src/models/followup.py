@@ -3,7 +3,7 @@ Follow-up task model — scheduled outbound messages.
 Types: cold_nurture (max 3 per lead), day_before_reminder, review_request.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -58,10 +58,10 @@ class FollowupTask(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships

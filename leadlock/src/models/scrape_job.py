@@ -3,7 +3,7 @@ ScrapeJob model — tracks what areas have been scraped and when.
 Prevents re-scraping the same location too frequently.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, Float, Text, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,7 +44,7 @@ class ScrapeJob(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

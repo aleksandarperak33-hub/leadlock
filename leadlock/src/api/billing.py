@@ -174,8 +174,10 @@ async def billing_status(
         try:
             import stripe
             settings = get_settings()
-            stripe.api_key = settings.stripe_secret_key
-            sub = stripe.Subscription.retrieve(client.stripe_subscription_id)
+            sub = stripe.Subscription.retrieve(
+                client.stripe_subscription_id,
+                api_key=settings.stripe_secret_key,
+            )
             price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
             plan = billing_service._price_id_to_plan(price_id)
             current_period_end = sub.get("current_period_end")

@@ -4,7 +4,7 @@ into email generation. Tracks what works by trade, location, time, and step.
 """
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select, func, and_, case, text
@@ -145,7 +145,7 @@ async def get_insights_summary() -> dict:
         Dict with open rates by trade, by step, by day, top time buckets, etc.
     """
     async with async_session_factory() as db:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         since = now - timedelta(days=30)
 
         # Open rate by trade

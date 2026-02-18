@@ -2,7 +2,7 @@
 Admin reporting service — generates system-wide metrics for the admin dashboard.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy import select, func, and_, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,13 +31,13 @@ async def get_system_overview(db: AsyncSession) -> dict:
     )).scalar() or 0.0
 
     # Total leads (last 30d)
-    since_30d = datetime.utcnow() - timedelta(days=30)
+    since_30d = datetime.now(timezone.utc) - timedelta(days=30)
     total_leads_30d = (await db.execute(
         select(func.count(Lead.id)).where(Lead.created_at >= since_30d)
     )).scalar() or 0
 
     # Total leads (last 7d)
-    since_7d = datetime.utcnow() - timedelta(days=7)
+    since_7d = datetime.now(timezone.utc) - timedelta(days=7)
     total_leads_7d = (await db.execute(
         select(func.count(Lead.id)).where(Lead.created_at >= since_7d)
     )).scalar() or 0
@@ -97,7 +97,7 @@ async def get_client_list_with_metrics(
     per_page: int = 20,
 ) -> dict:
     """Get all clients with per-client lead/revenue metrics."""
-    since_30d = datetime.utcnow() - timedelta(days=30)
+    since_30d = datetime.now(timezone.utc) - timedelta(days=30)
 
     # Base query
     query = select(Client).where(Client.is_admin == False)

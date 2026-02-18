@@ -37,6 +37,18 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("LeadLock starting up (env=%s)", settings.app_env)
 
+    # Security warnings
+    if not settings.dashboard_jwt_secret:
+        logger.warning(
+            "DASHBOARD_JWT_SECRET not set — falling back to APP_SECRET_KEY. "
+            "Set a dedicated JWT secret for production."
+        )
+    if not settings.encryption_key:
+        logger.warning(
+            "ENCRYPTION_KEY not set — CRM API keys will be stored unencrypted. "
+            "Generate a Fernet key for production."
+        )
+
     # Initialize Sentry if configured
     if settings.sentry_dsn:
         try:
@@ -92,6 +104,11 @@ async def lifespan(app: FastAPI):
     from src.workers.lead_lifecycle import run_lead_lifecycle
     worker_tasks.append(asyncio.create_task(run_lead_lifecycle()))
     logger.info("Lead lifecycle worker started")
+
+    # Registration poller — monitors A2P / toll-free registration status
+    from src.workers.registration_poller import run_registration_poller
+    worker_tasks.append(asyncio.create_task(run_registration_poller()))
+    logger.info("Registration poller started")
 
     # Sales engine workers — gated behind config flag
     if settings.sales_engine_enabled:
@@ -185,8 +202,11 @@ def create_app() -> FastAPI:
             settings.app_base_url,
         ],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization", "Content-Type", "X-Correlation-ID",
+            "Accept", "Origin", "X-Requested-With",
+        ],
     )
 
     # Correlation ID middleware (must be added AFTER CORS so it runs on every request)

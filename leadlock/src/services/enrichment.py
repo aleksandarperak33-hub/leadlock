@@ -4,8 +4,10 @@ Zero external API cost. Scrapes contact pages for mailto: links and text emails,
 falls back to common pattern guessing (info@, contact@, etc).
 """
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -28,6 +30,69 @@ _IGNORE_EMAIL_DOMAINS = frozenset({
     "facebook.com", "twitter.com", "instagram.com", "schema.org",
     "w3.org", "cloudflare.com", "jquery.com", "bootstrapcdn.com",
 })
+
+
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+_ALLOWED_PORTS = frozenset({None, 80, 443, 8080, 8443})
+_BLOCKED_HOSTNAMES = frozenset({
+    "localhost", "127.0.0.1", "0.0.0.0", "::1",
+    "metadata.google.internal", "169.254.169.254",
+})
+
+
+def _is_safe_url(url: str) -> bool:
+    """
+    Validate that a URL doesn't target internal/private networks (SSRF protection).
+
+    Resolves the hostname and checks all resolved IPs are globally routable.
+    Blocks private, loopback, link-local, reserved, CGNAT, and multicast ranges.
+
+    Note: DNS rebinding is a residual risk. Network-level egress controls blocking
+    RFC-1918 ranges provide the strongest defense against that attack.
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Allowlist schemes — reject file://, gopher://, etc.
+        if parsed.scheme not in _ALLOWED_SCHEMES:
+            return False
+
+        # Allowlist ports — reject non-standard ports used for service probing
+        if parsed.port not in _ALLOWED_PORTS:
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block known-bad hostnames before DNS resolution
+        if hostname.lower() in _BLOCKED_HOSTNAMES:
+            return False
+
+        # Resolve hostname to IP and validate every returned address
+        try:
+            addr_infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False
+
+        for addr_info in addr_infos:
+            ip_str = addr_info[4][0]
+            try:
+                ip = ipaddress.ip_address(ip_str)
+            except ValueError:
+                return False
+
+            # Block any IP that is not globally routable or is multicast
+            # This catches: private, loopback, link-local, reserved, CGNAT (100.64/10)
+            if not ip.is_global or ip.is_multicast:
+                logger.warning(
+                    "SSRF blocked: %s resolves to non-public IP %s", hostname, ip_str,
+                )
+                return False
+
+        return True
+    except Exception:
+        return False
 
 
 def extract_domain(url: str) -> Optional[str]:
@@ -128,6 +193,11 @@ async def scrape_contact_emails(website: str) -> list[str]:
     if not website.startswith(("http://", "https://")):
         website = f"https://{website}"
 
+    # SSRF protection: block requests to internal/private networks
+    if not _is_safe_url(website):
+        logger.warning("SSRF protection blocked scrape of: %s", website)
+        return []
+
     base = website.rstrip("/")
     target_domain = extract_domain(website)
     found_emails: list[str] = []
@@ -138,17 +208,39 @@ async def scrape_contact_emails(website: str) -> list[str]:
         "Accept": "text/html,application/xhtml+xml",
     }
 
+    _REDIRECT_CODES = {301, 302, 303, 307, 308}
+    _MAX_REDIRECTS = 3
+
     async with httpx.AsyncClient(
         timeout=10.0,
-        follow_redirects=True,
-        max_redirects=3,
+        follow_redirects=False,
         headers=headers,
     ) as client:
         for path in _CONTACT_PATHS:
             url = f"{base}{path}" if path != "/" else base
             try:
-                response = await client.get(url)
-                if response.status_code != 200:
+                # Follow redirects manually, re-checking SSRF on each hop
+                current_url = url
+                response = await client.get(current_url)
+                for _ in range(_MAX_REDIRECTS):
+                    if response.status_code not in _REDIRECT_CODES:
+                        break
+                    location = response.headers.get("location", "")
+                    if not location:
+                        response = None
+                        break
+                    # Resolve relative redirects against the current URL
+                    if location.startswith("/"):
+                        parsed_current = urlparse(current_url)
+                        location = f"{parsed_current.scheme}://{parsed_current.netloc}{location}"
+                    if not _is_safe_url(location):
+                        logger.warning("SSRF redirect blocked: %s -> %s", current_url, location)
+                        response = None
+                        break
+                    current_url = location
+                    response = await client.get(current_url)
+
+                if response is None or response.status_code != 200:
                     continue
 
                 content_type = response.headers.get("content-type", "")

@@ -2,7 +2,7 @@
 Booking model — confirmed appointments with CRM sync tracking.
 """
 import uuid
-from datetime import datetime, date, time
+from datetime import datetime, timezone, date, time
 from typing import Optional
 from sqlalchemy import String, Text, Boolean, DateTime, Date, Time, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -62,10 +62,10 @@ class Booking(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships

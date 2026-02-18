@@ -11,7 +11,7 @@ Compliance checks:
 5. Must identify business
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -159,13 +159,13 @@ async def send_outreach_sms(
             twilio_sid=twilio_sid,
             status="sent",
             cost_usd=cost_usd,
-            sent_at=datetime.utcnow(),
+            sent_at=datetime.now(timezone.utc),
         )
         db.add(sms_record)
 
         # Update prospect cost
         prospect.total_cost_usd = (prospect.total_cost_usd or 0.0) + cost_usd
-        prospect.updated_at = datetime.utcnow()
+        prospect.updated_at = datetime.now(timezone.utc)
 
         logger.info(
             "Outreach SMS sent: prospect=%s to=%s sid=%s",

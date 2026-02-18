@@ -3,7 +3,7 @@ EmailBlacklist model — prevents sending to specific emails or domains.
 Used for manual blocks, competitor domains, and known-bad addresses.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID
@@ -29,7 +29,7 @@ class EmailBlacklist(Base):
     reason: Mapped[Optional[str]] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

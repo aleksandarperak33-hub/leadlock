@@ -4,7 +4,7 @@ Runs every 4 hours. Prospects with max steps reached and no reply → status "lo
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:outreach_cleanup", datetime.utcnow().isoformat(), ex=18000)
+        await redis.set("leadlock:worker_health:outreach_cleanup", datetime.now(timezone.utc).isoformat(), ex=18000)
     except Exception:
         pass
 
@@ -65,7 +65,7 @@ async def cleanup_cycle():
         if not config or not config.is_active:
             return
 
-        delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
+        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
         total_marked = 0
 
         # === PASS 1: Campaign-bound prospects ===
@@ -97,7 +97,7 @@ async def cleanup_cycle():
                         Outreach.last_email_sent_at <= delay_cutoff,
                     )
                 )
-                .values(status="lost", updated_at=datetime.utcnow())
+                .values(status="lost", updated_at=datetime.now(timezone.utc))
             )
             result = await db.execute(stmt)
             campaign_marked = result.rowcount
@@ -122,7 +122,7 @@ async def cleanup_cycle():
                     Outreach.last_email_sent_at <= delay_cutoff,
                 )
             )
-            .values(status="lost", updated_at=datetime.utcnow())
+            .values(status="lost", updated_at=datetime.now(timezone.utc))
         )
 
         result = await db.execute(stmt)

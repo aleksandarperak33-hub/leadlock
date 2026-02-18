@@ -3,7 +3,7 @@ Client model — represents a home services business using LeadLock.
 Stores business config as JSONB for flexible schema (persona, hours, services, etc.).
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Float, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -29,9 +29,20 @@ class Client(Base):
     # Twilio / 10DLC
     twilio_phone: Mapped[Optional[str]] = mapped_column(String(20), unique=True)
     twilio_phone_sid: Mapped[Optional[str]] = mapped_column(String(50))
+    twilio_messaging_service_sid: Mapped[Optional[str]] = mapped_column(String(100))
     ten_dlc_brand_id: Mapped[Optional[str]] = mapped_column(String(50))
     ten_dlc_campaign_id: Mapped[Optional[str]] = mapped_column(String(50))
     ten_dlc_status: Mapped[str] = mapped_column(String(30), default="pending")
+    ten_dlc_profile_sid: Mapped[Optional[str]] = mapped_column(String(100))
+    ten_dlc_verification_sid: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Business registration (for 10DLC / toll-free verification)
+    business_website: Mapped[Optional[str]] = mapped_column(String(255))
+    business_type: Mapped[Optional[str]] = mapped_column(
+        String(50)
+    )  # sole_proprietorship, llc, corporation, partnership
+    business_ein: Mapped[Optional[str]] = mapped_column(String(20))
+    business_address: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     # CRM
     crm_type: Mapped[str] = mapped_column(
@@ -78,10 +89,12 @@ class Client(Base):
     # Timestamps
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     # Relationships

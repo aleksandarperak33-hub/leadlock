@@ -7,7 +7,7 @@ Consent types:
 - PEWC (Prior Express Written Consent): Explicit opt-in → allows marketing SMS
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -57,10 +57,10 @@ class ConsentRecord(Base):
 
     # Timestamps — 5-year retention required
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 

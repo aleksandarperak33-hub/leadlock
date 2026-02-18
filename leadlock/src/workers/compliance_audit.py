@@ -3,7 +3,7 @@ Compliance audit worker — periodic check for violations.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, func, and_
 
 from src.database import async_session_factory
@@ -18,7 +18,7 @@ async def run_compliance_audit():
     logger.info("Compliance audit worker started")
 
     while True:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now.hour == 2:
             try:
                 await audit_compliance()
@@ -43,7 +43,7 @@ async def audit_compliance():
             select(func.count(ConsentRecord.id)).where(
                 and_(
                     ConsentRecord.expires_at.isnot(None),
-                    ConsentRecord.expires_at < datetime.utcnow(),
+                    ConsentRecord.expires_at < datetime.now(timezone.utc),
                     ConsentRecord.is_active == True,
                 )
             )

@@ -4,7 +4,7 @@ SMS only triggers after email reply expressing interest (TCPA compliance).
 Cold SMS to prospects without prior consent is illegal.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Float, DateTime, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -46,7 +46,7 @@ class OutreachSMS(Base):
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

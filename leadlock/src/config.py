@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     sendgrid_from_email: str = "reports@leadlock.io"
     sendgrid_from_name: str = "LeadLock"
+    sendgrid_webhook_verification_key: str = ""  # SendGrid Event Webhook signing key
 
     # Webhook secrets
     webhook_secret_google: str = ""

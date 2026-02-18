@@ -3,7 +3,7 @@ Google Sheets CRM fallback — for clients without a real CRM.
 Appends leads and bookings to a Google Sheet as rows.
 """
 import logging
-from datetime import date, time as dt_time
+from datetime import date, datetime, time as dt_time, timezone
 from typing import Optional
 from src.integrations.crm_base import CRMBase
 
@@ -38,9 +38,9 @@ class GoogleSheetsCRM(CRMBase):
         phone: str, email: Optional[str] = None, address: Optional[str] = None,
     ) -> dict:
         """Add customer row to Customers sheet."""
-        from datetime import datetime
+        from datetime import datetime, timezone
         success = await self._append_row("Customers", [
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             first_name,
             last_name or "",
             phone,
@@ -57,7 +57,7 @@ class GoogleSheetsCRM(CRMBase):
         """Add lead row to Leads sheet."""
         from datetime import datetime
         success = await self._append_row("Leads", [
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             customer_id,
             source,
             service_type or "",
@@ -73,7 +73,7 @@ class GoogleSheetsCRM(CRMBase):
         """Add booking row to Bookings sheet."""
         from datetime import datetime
         success = await self._append_row("Bookings", [
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             customer_id,
             str(appointment_date),
             str(time_start) if time_start else "",

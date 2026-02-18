@@ -3,7 +3,7 @@ OutreachEmail model — tracks individual emails in outreach sequences.
 Records both outbound (sent by sales engine) and inbound (replies from prospects).
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
@@ -46,7 +46,7 @@ class OutreachEmail(Base):
     ai_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

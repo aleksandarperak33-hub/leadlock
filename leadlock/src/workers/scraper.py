@@ -9,7 +9,7 @@ Processes 1 location+trade combo per cycle (round-robin via Redis).
 import asyncio
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,7 +87,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:scraper", datetime.utcnow().isoformat(), ex=7200)
+        await redis.set("leadlock:worker_health:scraper", datetime.now(timezone.utc).isoformat(), ex=7200)
     except Exception:
         pass
 
@@ -116,7 +116,7 @@ async def get_next_variant_and_offset(
     if num_variants == 0:
         return -1, -1
 
-    cooldown_cutoff = datetime.utcnow() - timedelta(days=cooldown_days)
+    cooldown_cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
     # Get variants used within cooldown period
     result = await db.execute(
@@ -217,7 +217,7 @@ async def scrape_cycle():
             return
 
         # Count today's scrapes
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         count_result = await db.execute(
             select(func.count()).select_from(ScrapeJob).where(
                 ScrapeJob.created_at >= today_start
@@ -289,7 +289,7 @@ async def scrape_location_trade(
         query_variant=query_variant,
         search_offset=search_offset,
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
     )
     db.add(job)
     await db.flush()
@@ -399,7 +399,7 @@ async def scrape_location_trade(
         job.new_prospects_created = new_count
         job.duplicates_skipped = dupe_count
         job.api_cost_usd = total_cost
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
 
         logger.info(
             "Scrape completed: %s in %s (variant=%d query='%s') — "
@@ -411,6 +411,6 @@ async def scrape_location_trade(
     except Exception as e:
         job.status = "failed"
         job.error_message = str(e)
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         job.api_cost_usd = total_cost
         logger.error("Scrape failed for %s in %s: %s", trade, location_str, str(e))

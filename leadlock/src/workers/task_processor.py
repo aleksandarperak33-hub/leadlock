@@ -4,7 +4,7 @@ Handles retries with exponential backoff. Runs every 10 seconds.
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:task_processor", datetime.utcnow().isoformat(), ex=120)
+        await redis.set("leadlock:worker_health:task_processor", datetime.now(timezone.utc).isoformat(), ex=120)
     except Exception:
         pass
 
@@ -43,7 +43,7 @@ async def run_task_processor():
 
 async def process_cycle():
     """Find and execute pending tasks that are due."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     async with async_session_factory() as db:
         # Fetch pending tasks that are due, ordered by priority (high first)
@@ -74,13 +74,13 @@ async def process_cycle():
 async def _execute_task(db: AsyncSession, task: TaskQueue) -> None:
     """Execute a single task and handle success/failure."""
     task.status = "processing"
-    task.started_at = datetime.utcnow()
+    task.started_at = datetime.now(timezone.utc)
     await db.flush()
 
     try:
         result = await _dispatch_task(task.task_type, task.payload or {})
         task.status = "completed"
-        task.completed_at = datetime.utcnow()
+        task.completed_at = datetime.now(timezone.utc)
         task.result_data = result
         logger.info("Task completed: id=%s type=%s", str(task.id)[:8], task.task_type)
 
@@ -91,7 +91,7 @@ async def _execute_task(db: AsyncSession, task: TaskQueue) -> None:
         if task.retry_count >= task.max_retries:
             task.status = "failed"
             task.error_message = error_msg
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             logger.error(
                 "Task failed (max retries): id=%s type=%s error=%s",
                 str(task.id)[:8], task.task_type, error_msg,
@@ -100,7 +100,7 @@ async def _execute_task(db: AsyncSession, task: TaskQueue) -> None:
             # Exponential backoff: 30s, 120s, 480s
             backoff = 30 * (4 ** (task.retry_count - 1))
             task.status = "pending"
-            task.scheduled_at = datetime.utcnow() + timedelta(seconds=backoff)
+            task.scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
             task.error_message = error_msg
             logger.warning(
                 "Task retry %d/%d: id=%s type=%s backoff=%ds",
@@ -263,7 +263,7 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
 
         # Check daily limit before sending deferred email
         daily_limit = config.daily_email_limit or 50
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         count_result = await db.execute(
             select(sqla_func.count()).select_from(OutreachEmail).where(
                 and_(
@@ -279,7 +279,7 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
             from src.services.task_dispatch import enqueue_task
 
             tomorrow_9am = (today_start + timedelta(days=1)).replace(hour=9)
-            delay_seconds = int((tomorrow_9am - datetime.utcnow()).total_seconds())
+            delay_seconds = int((tomorrow_9am - datetime.now(timezone.utc)).total_seconds())
             delay_seconds = max(60, delay_seconds)  # At least 60 seconds
 
             await enqueue_task(

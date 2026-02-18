@@ -3,7 +3,7 @@ Failed lead dead letter queue — captures leads that failed at any pipeline sta
 Supports retry with exponential backoff and manual resolution.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from src.database import Base
@@ -28,6 +28,6 @@ class FailedLead(Base):
         String(20), nullable=False, default="pending", server_default="pending", index=True
     )  # pending, retrying, resolved, dead
     correlation_id = Column(String(64), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolved_by = Column(String(100), nullable=True)

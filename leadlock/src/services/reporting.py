@@ -2,7 +2,7 @@
 Reporting service — generates metrics and reports for dashboard and email.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +28,7 @@ async def get_dashboard_metrics(
 ) -> DashboardMetrics:
     """Calculate dashboard KPI metrics for a given period."""
     days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 7)
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Total leads
     lead_count_result = await db.execute(

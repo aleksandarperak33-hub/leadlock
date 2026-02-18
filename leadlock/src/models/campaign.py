@@ -3,7 +3,7 @@ Campaign model — defines outreach campaigns with targeting and sequence config
 Campaigns group prospects by trade/location and define multi-step outreach sequences.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, Text, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -49,10 +49,10 @@ class Campaign(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

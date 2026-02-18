@@ -4,7 +4,7 @@ Supports delayed/scheduled tasks, retries with exponential backoff,
 and priority-based processing.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, Float, Text, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -38,7 +38,7 @@ class TaskQueue(Base):
 
     # Enables delayed/scheduled tasks
     scheduled_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -47,7 +47,7 @@ class TaskQueue(Base):
     result_data: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

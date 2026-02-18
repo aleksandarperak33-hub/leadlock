@@ -3,7 +3,7 @@ Agency partner model — referral partners who bring clients to LeadLock.
 Revenue share: 25% of monthly fee for referred clients.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Float, Integer, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -35,10 +35,10 @@ class AgencyPartner(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

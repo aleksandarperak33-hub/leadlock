@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
-import { Save, Check, AlertCircle, Phone, Plug, Search, Loader2 } from 'lucide-react';
+import { Save, Check, AlertCircle, Phone, Plug, Search, Loader2, Shield, Clock, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 
 const INPUT_CLASSES =
@@ -26,6 +26,13 @@ const CRM_OPTIONS = [
   { value: 'jobber', label: 'Jobber' },
   { value: 'gohighlevel', label: 'GoHighLevel' },
   { value: 'google_sheets', label: 'Google Sheets' },
+];
+
+const BUSINESS_TYPE_OPTIONS = [
+  { value: 'sole_proprietorship', label: 'Sole Proprietorship' },
+  { value: 'llc', label: 'LLC' },
+  { value: 'corporation', label: 'Corporation' },
+  { value: 'partnership', label: 'Partnership' },
 ];
 
 export default function Settings() {
@@ -126,7 +133,22 @@ export default function Settings() {
 
         <SectionDivider />
 
-        <PhoneProvisioningSection settings={settings} onProvisioned={(phone) => setSettings(s => ({ ...s, twilio_phone: phone }))} />
+        <PhoneProvisioningSection
+          settings={settings}
+          onProvisioned={(phone, data) => setSettings(s => ({
+            ...s,
+            twilio_phone: phone,
+            ten_dlc_status: data?.ten_dlc_status || 'collecting_info',
+            twilio_messaging_service_sid: data?.messaging_service_sid,
+          }))}
+        />
+
+        {settings?.twilio_phone && (
+          <>
+            <SectionDivider />
+            <RegistrationStatusSection settings={settings} setSettings={setSettings} />
+          </>
+        )}
 
         <SectionDivider />
 
@@ -172,7 +194,7 @@ function BusinessInfoSection({ settings }) {
     { label: 'Business Name', value: settings?.business_name },
     { label: 'Trade Type', value: settings?.trade_type, capitalize: true },
     { label: 'Twilio Number', value: settings?.twilio_phone || 'Not assigned' },
-    { label: '10DLC Status', value: settings?.ten_dlc_status || 'pending', capitalize: true },
+    { label: 'Registration', value: getDisplayStatus(settings?.ten_dlc_status), capitalize: true },
   ];
 
   return (
@@ -197,6 +219,317 @@ function BusinessInfoSection({ settings }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function getDisplayStatus(status) {
+  const map = {
+    pending: 'Not Started',
+    collecting_info: 'Info Needed',
+    profile_pending: 'In Review',
+    profile_approved: 'In Review',
+    profile_rejected: 'Action Required',
+    brand_pending: 'In Review',
+    brand_approved: 'Almost Ready',
+    brand_rejected: 'Action Required',
+    campaign_pending: 'Almost Ready',
+    campaign_rejected: 'Action Required',
+    tf_verification_pending: 'In Review',
+    tf_rejected: 'Action Required',
+    active: 'Active',
+  };
+  return map[status] || status || 'Not Started';
+}
+
+function RegistrationStatusSection({ settings, setSettings }) {
+  const status = settings?.ten_dlc_status || 'pending';
+  const isActive = status === 'active';
+  const isRejected = status.endsWith('_rejected');
+  const needsInfo = status === 'collecting_info' && !settings?.business_type;
+
+  return (
+    <div>
+      <SectionHeader
+        title="SMS Registration"
+        description="Your number must be registered before it can send outbound SMS."
+      />
+
+      {/* Status banner */}
+      <RegistrationStatusBanner status={status} />
+
+      {/* Business info form for 10DLC (only show if collecting_info and local number) */}
+      {needsInfo && (
+        <BusinessRegistrationForm settings={settings} setSettings={setSettings} />
+      )}
+    </div>
+  );
+}
+
+function RegistrationStatusBanner({ status }) {
+  if (status === 'active') {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200/60">
+        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-green-800">Registration Active</p>
+          <p className="text-xs text-green-600">Your number is fully registered and can send SMS.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status.endsWith('_rejected')) {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-200/60">
+        <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-red-800">Registration Rejected</p>
+          <p className="text-xs text-red-600">
+            Your registration was rejected. Please contact support for assistance.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'collecting_info') {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200/60 mb-6">
+        <Building2 className="w-5 h-5 text-amber-600 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-amber-800">Business Info Required</p>
+          <p className="text-xs text-amber-600">
+            Submit your business details below to register your number for SMS.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pending states
+  const progressSteps = [
+    { key: 'profile', label: 'Profile' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'campaign', label: 'Campaign' },
+  ];
+
+  const isTollFree = status.startsWith('tf_');
+
+  const getStepState = (stepKey) => {
+    const stateOrder = {
+      profile: ['profile_pending', 'profile_approved'],
+      brand: ['brand_pending', 'brand_approved'],
+      campaign: ['campaign_pending'],
+    };
+
+    const completedAfter = {
+      profile: ['brand_pending', 'brand_approved', 'campaign_pending', 'active'],
+      brand: ['campaign_pending', 'active'],
+      campaign: ['active'],
+    };
+
+    if (completedAfter[stepKey]?.includes(status)) return 'completed';
+    if (stateOrder[stepKey]?.includes(status)) return 'current';
+    return 'pending';
+  };
+
+  return (
+    <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200/60">
+      <Clock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+      <div className="flex-1">
+        <p className="text-sm font-medium text-blue-800">Registration In Progress</p>
+        <p className="text-xs text-blue-600 mb-3">
+          {isTollFree
+            ? 'Your toll-free number is being verified. This typically takes 1-3 business days.'
+            : 'Your number is being registered with carriers. This typically takes 1-5 business days.'}
+        </p>
+
+        {!isTollFree && (
+          <div className="flex items-center gap-2">
+            {progressSteps.map((step, i) => {
+              const state = getStepState(step.key);
+              return (
+                <div key={step.key} className="flex items-center gap-2">
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    state === 'completed' ? 'bg-green-100 text-green-700' :
+                    state === 'current' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-400'
+                  }`}>
+                    {state === 'completed' && <CheckCircle2 className="w-3 h-3" />}
+                    {state === 'current' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {step.label}
+                  </div>
+                  {i < progressSteps.length - 1 && (
+                    <div className={`w-4 h-px ${
+                      state === 'completed' ? 'bg-green-300' : 'bg-gray-200'
+                    }`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BusinessRegistrationForm({ settings, setSettings }) {
+  const [businessType, setBusinessType] = useState(settings?.business_type || '');
+  const [businessEin, setBusinessEin] = useState(settings?.business_ein || '');
+  const [businessWebsite, setBusinessWebsite] = useState(settings?.business_website || '');
+  const [street, setStreet] = useState(settings?.business_address?.street || '');
+  const [city, setCity] = useState(settings?.business_address?.city || '');
+  const [state, setState] = useState(settings?.business_address?.state || '');
+  const [zip, setZip] = useState(settings?.business_address?.zip || '');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!businessType) {
+      setError('Business type is required');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('ll_token');
+      const res = await fetch('/api/v1/settings/business-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          business_type: businessType,
+          business_ein: businessEin,
+          business_website: businessWebsite,
+          business_address: { street, city, state, zip },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Registration failed');
+
+      setSuccess(true);
+      setSettings(s => ({
+        ...s,
+        ten_dlc_status: data.status,
+        business_type: businessType,
+        business_ein: businessEin,
+        business_website: businessWebsite,
+        business_address: { street, city, state, zip },
+      }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200/60">
+        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-green-800">Registration Submitted</p>
+          <p className="text-xs text-green-600">
+            Your business info has been submitted for review. This typically takes 1-3 business days.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className={LABEL_CLASSES}>Business Type *</label>
+        <select
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value)}
+          className={`${INPUT_CLASSES} cursor-pointer`}
+        >
+          <option value="">Select business type...</option>
+          {BUSINESS_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className={LABEL_CLASSES}>
+          EIN / Tax ID {businessType === 'sole_proprietorship' ? '(optional)' : ''}
+        </label>
+        <input
+          type="text"
+          value={businessEin}
+          onChange={(e) => setBusinessEin(e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
+          className={INPUT_CLASSES}
+          placeholder="XX-XXXXXXX"
+        />
+      </div>
+
+      <div>
+        <label className={LABEL_CLASSES}>Business Website</label>
+        <input
+          type="url"
+          value={businessWebsite}
+          onChange={(e) => setBusinessWebsite(e.target.value)}
+          className={INPUT_CLASSES}
+          placeholder="https://yourcompany.com"
+        />
+      </div>
+
+      <div>
+        <label className={LABEL_CLASSES}>Business Address</label>
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            className={INPUT_CLASSES}
+            placeholder="Street address"
+          />
+          <div className="grid grid-cols-3 gap-3">
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className={INPUT_CLASSES}
+              placeholder="City"
+            />
+            <input
+              type="text"
+              value={state}
+              onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
+              className={INPUT_CLASSES}
+              placeholder="State"
+            />
+            <input
+              type="text"
+              value={zip}
+              onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+              className={INPUT_CLASSES}
+              placeholder="ZIP"
+            />
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="px-4 py-2 rounded-lg bg-red-50 border border-red-200/60 text-red-600 text-sm">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={submitting || !businessType}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 transition-colors cursor-pointer"
+      >
+        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+        {submitting ? 'Submitting...' : 'Submit Registration'}
+      </button>
     </div>
   );
 }
@@ -256,7 +589,7 @@ function PhoneProvisioningSection({ settings, onProvisioned }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Provisioning failed');
-      onProvisioned(data.phone_number);
+      onProvisioned(data.phone_number, data);
     } catch (e) {
       setError(e.message);
     } finally {

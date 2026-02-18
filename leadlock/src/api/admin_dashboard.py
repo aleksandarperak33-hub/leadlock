@@ -3,8 +3,9 @@ Admin Dashboard API — endpoints for the LeadLock operator dashboard.
 All endpoints require admin-level JWT authentication.
 """
 import logging
+import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,10 +66,24 @@ async def create_client(
     """Create a new client."""
     import bcrypt
 
+    # Validate required fields
+    business_name = (payload.get("business_name") or "").strip()
+    trade_type = (payload.get("trade_type") or "").strip()
+    if not business_name:
+        raise HTTPException(status_code=400, detail="business_name is required")
+    if not trade_type:
+        raise HTTPException(status_code=400, detail="trade_type is required")
+
+    # Validate tier
+    valid_tiers = {"starter", "pro", "business"}
+    tier = payload.get("tier", "starter")
+    if tier not in valid_tiers:
+        raise HTTPException(status_code=400, detail=f"tier must be one of: {', '.join(valid_tiers)}")
+
     client = Client(
-        business_name=payload["business_name"],
-        trade_type=payload["trade_type"],
-        tier=payload.get("tier", "starter"),
+        business_name=business_name,
+        trade_type=trade_type,
+        tier=tier,
         monthly_fee=payload.get("monthly_fee", 497.00),
         twilio_phone=payload.get("twilio_phone"),
         crm_type=payload.get("crm_type", "google_sheets"),
@@ -102,7 +117,11 @@ async def admin_client_detail(
     from datetime import timedelta
     from src.services.reporting import get_dashboard_metrics
 
-    client = await db.get(Client, uuid.UUID(client_id))
+    try:
+        cid = uuid.UUID(client_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid client ID")
+    client = await db.get(Client, cid)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
@@ -111,7 +130,7 @@ async def admin_client_detail(
     # Recent leads
     recent_leads = await db.execute(
         select(Lead)
-        .where(Lead.client_id == uuid.UUID(client_id))
+        .where(Lead.client_id == cid)
         .order_by(desc(Lead.created_at))
         .limit(20)
     )
@@ -175,9 +194,14 @@ async def admin_leads(
     if source:
         query = query.where(Lead.source == source)
     if client_id:
-        query = query.where(Lead.client_id == uuid.UUID(client_id))
+        try:
+            cid = uuid.UUID(client_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid client_id")
+        query = query.where(Lead.client_id == cid)
     if search:
-        pattern = f"%{search}%"
+        safe_search = search.replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{safe_search}%"
         query = query.where(
             Lead.first_name.ilike(pattern)
             | Lead.last_name.ilike(pattern)
@@ -247,7 +271,7 @@ async def admin_health(
 ):
     """System health — recent errors, integration status."""
     from datetime import timedelta
-    since_24h = datetime.utcnow() - timedelta(hours=24)
+    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
 
     # Recent errors
     error_result = await db.execute(
@@ -380,7 +404,11 @@ async def update_outreach(
     """Update an outreach prospect."""
     from datetime import date as date_type
 
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -393,9 +421,15 @@ async def update_outreach(
         prospect.demo_date = date_type.fromisoformat(payload["demo_date"]) if payload["demo_date"] else None
 
     if "converted_client_id" in payload:
-        prospect.converted_client_id = uuid.UUID(payload["converted_client_id"]) if payload["converted_client_id"] else None
+        if payload["converted_client_id"]:
+            try:
+                prospect.converted_client_id = uuid.UUID(payload["converted_client_id"])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid converted_client_id")
+        else:
+            prospect.converted_client_id = None
 
-    prospect.updated_at = datetime.utcnow()
+    prospect.updated_at = datetime.now(timezone.utc)
     await db.flush()
 
     return {"status": "updated"}
@@ -408,7 +442,11 @@ async def delete_outreach(
     admin: Client = Depends(get_current_admin),
 ):
     """Delete an outreach prospect."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -427,7 +465,11 @@ async def convert_outreach(
     """Convert a won/proposal_sent outreach prospect into a real client."""
     import bcrypt
 
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -451,12 +493,17 @@ async def convert_outreach(
         dashboard_email=prospect.prospect_email,
     )
 
-    # Set a temporary password based on prospect name
+    # Set a secure random temporary password
+    temp_password = None
     if prospect.prospect_email:
-        temp_password = f"LeadLock{prospect.prospect_name.split()[0]}2026!"
+        temp_password = secrets.token_urlsafe(16)
         client.dashboard_password_hash = bcrypt.hashpw(
             temp_password.encode(), bcrypt.gensalt()
         ).decode()
+        logger.info(
+            "Created client from prospect %s — temporary password generated",
+            str(prospect.id)[:8],
+        )
 
     db.add(client)
     await db.flush()
@@ -464,12 +511,16 @@ async def convert_outreach(
     # Link prospect to new client
     prospect.converted_client_id = client.id
     prospect.status = "won"
-    prospect.updated_at = datetime.utcnow()
+    prospect.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
 
-    return {
+    result = {
         "status": "converted",
         "client_id": str(client.id),
         "business_name": client.business_name,
     }
+    # Return temp password so admin can share it via secure channel
+    if temp_password:
+        result["temp_password"] = temp_password
+    return result

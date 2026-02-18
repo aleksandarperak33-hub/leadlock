@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Zap, ArrowRight, ArrowLeft, Building2, Bot, Wrench,
-  Clock, Globe, CheckCircle2, Copy, Check, Plug, ExternalLink,
+  Clock, Globe, CheckCircle2, Copy, Check, Plug, ExternalLink, Shield,
 } from 'lucide-react';
 
 const STEPS = [
@@ -11,6 +11,14 @@ const STEPS = [
   { label: 'AI Agent', icon: Bot },
   { label: 'CRM', icon: Plug },
   { label: 'Lead Sources', icon: Globe },
+  { label: 'Registration', icon: Shield },
+];
+
+const BUSINESS_TYPE_OPTIONS = [
+  { id: 'sole_proprietorship', label: 'Sole Proprietorship', desc: 'Individual owner, no separate entity' },
+  { id: 'llc', label: 'LLC', desc: 'Limited Liability Company' },
+  { id: 'corporation', label: 'Corporation', desc: 'Incorporated business (C-Corp or S-Corp)' },
+  { id: 'partnership', label: 'Partnership', desc: 'Two or more owners' },
 ];
 
 const TRADE_SERVICES = {
@@ -113,6 +121,14 @@ export default function Onboarding() {
     crm_type: 'google_sheets',
     crm_api_key: '',
     crm_tenant_id: '',
+    // Step 5: Registration (optional)
+    business_type: '',
+    business_ein: '',
+    business_website: '',
+    business_street: '',
+    business_city: '',
+    business_state: '',
+    business_zip: '',
   });
 
   const updateConfig = (field, value) => {
@@ -137,6 +153,16 @@ export default function Onboarding() {
         crm_type: config.crm_type === 'none' ? 'google_sheets' : config.crm_type,
         crm_api_key: config.crm_api_key || null,
         crm_tenant_id: config.crm_tenant_id || null,
+        // Business registration info (saved now, submitted to Twilio after phone provisioning)
+        business_type: config.business_type || null,
+        business_ein: config.business_ein || null,
+        business_website: config.business_website || null,
+        business_address: config.business_type ? {
+          street: config.business_street || '',
+          city: config.business_city || '',
+          state: config.business_state || '',
+          zip: config.business_zip || '',
+        } : null,
         config: {
           persona: {
             rep_name: config.rep_name || 'Sarah',
@@ -192,6 +218,8 @@ export default function Onboarding() {
     if (step === 1) return config.primary_services.length > 0;
     if (step === 2) return config.rep_name.trim().length > 0;
     if (step === 3) return true;
+    if (step === 4) return true;
+    if (step === 5) return true; // Registration is optional
     return true;
   };
 
@@ -494,6 +522,114 @@ export default function Onboarding() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Step 5: Business Registration (optional) ── */}
+          {step === 5 && (
+            <div className="space-y-6">
+              <div className="text-center mb-2">
+                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Business Registration</h2>
+                <p className="text-sm text-[#52526B]">
+                  Register your number for SMS delivery. You can skip this and complete it later in Settings.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20 mb-2">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-[#F8F8FC]">Why is this needed?</p>
+                    <p className="text-xs text-[#A1A1BC] mt-1">
+                      US carriers require all businesses to register before sending SMS. This is a one-time process that takes 1-5 business days.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Business type</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {BUSINESS_TYPE_OPTIONS.map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => updateConfig('business_type', opt.id)}
+                      className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                        config.business_type === opt.id
+                          ? 'border-orange-500/30 bg-orange-500/5'
+                          : 'border-[#222230] hover:border-[#333340]'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-[#F8F8FC]">{opt.label}</p>
+                      <p className="text-xs text-[#52526B] mt-0.5">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {config.business_type && (
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelClass}>
+                      EIN / Tax ID {config.business_type === 'sole_proprietorship' ? '(optional)' : ''}
+                    </label>
+                    <input
+                      type="text"
+                      value={config.business_ein}
+                      onChange={e => updateConfig('business_ein', e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
+                      className={inputClass}
+                      placeholder="XX-XXXXXXX"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Business website</label>
+                    <input
+                      type="url"
+                      value={config.business_website}
+                      onChange={e => updateConfig('business_website', e.target.value)}
+                      className={inputClass}
+                      placeholder="https://yourcompany.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Business address</label>
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={config.business_street}
+                        onChange={e => updateConfig('business_street', e.target.value)}
+                        className={inputClass}
+                        placeholder="Street address"
+                      />
+                      <div className="grid grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          value={config.business_city}
+                          onChange={e => updateConfig('business_city', e.target.value)}
+                          className={inputClass}
+                          placeholder="City"
+                        />
+                        <input
+                          type="text"
+                          value={config.business_state}
+                          onChange={e => updateConfig('business_state', e.target.value.toUpperCase().slice(0, 2))}
+                          className={inputClass}
+                          placeholder="State"
+                        />
+                        <input
+                          type="text"
+                          value={config.business_zip}
+                          onChange={e => updateConfig('business_zip', e.target.value.replace(/\D/g, '').slice(0, 5))}
+                          className={inputClass}
+                          placeholder="ZIP"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

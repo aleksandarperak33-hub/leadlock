@@ -3,23 +3,23 @@ Metrics API — lead funnel, deliverability, cost tracking, response times.
 Used by the admin dashboard for real-time monitoring.
 """
 import logging
+import uuid as uuid_mod
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, case
 
 from src.database import get_db
+from src.api.dashboard import get_current_admin
+from src.models.client import Client
 from src.models.lead import Lead
-from src.models.conversation import Conversation
-from src.models.booking import Booking
-from src.models.event_log import EventLog
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 
 
 @router.get("/deliverability")
-async def get_deliverability_metrics():
+async def get_deliverability_metrics(admin: Client = Depends(get_current_admin)):
     """
     Get SMS deliverability metrics — delivery rates, reputation scores, per-number stats.
     This is the key endpoint for diagnosing reputation issues.
@@ -29,7 +29,7 @@ async def get_deliverability_metrics():
 
 
 @router.get("/deliverability/{phone}")
-async def get_number_reputation(phone: str):
+async def get_number_reputation(phone: str, admin: Client = Depends(get_current_admin)):
     """Get reputation score for a specific Twilio number."""
     from src.services.deliverability import get_reputation_score
     return await get_reputation_score(phone)
@@ -40,6 +40,7 @@ async def get_lead_funnel(
     client_id: str = Query(None),
     days: int = Query(7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
 ):
     """
     Lead funnel metrics — count of leads in each state over a time period.
@@ -49,8 +50,11 @@ async def get_lead_funnel(
 
     filters = [Lead.created_at >= cutoff]
     if client_id:
-        import uuid
-        filters.append(Lead.client_id == uuid.UUID(client_id))
+        try:
+            cid = uuid_mod.UUID(client_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid client_id format")
+        filters.append(Lead.client_id == cid)
 
     # Count leads by state
     result = await db.execute(
@@ -111,6 +115,7 @@ async def get_response_times(
     client_id: str = Query(None),
     days: int = Query(7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
 ):
     """
     Response time metrics — how fast we're responding to leads.
@@ -123,8 +128,11 @@ async def get_response_times(
         Lead.first_response_ms.isnot(None),
     ]
     if client_id:
-        import uuid
-        filters.append(Lead.client_id == uuid.UUID(client_id))
+        try:
+            cid = uuid_mod.UUID(client_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid client_id format")
+        filters.append(Lead.client_id == cid)
 
     result = await db.execute(
         select(
@@ -153,7 +161,7 @@ async def get_response_times(
         .where(and_(*filters))
         .group_by("bucket")
     )
-    buckets = {row.bucket: row.count for row in bucket_result}
+    buckets = {r.bucket: r.count for r in bucket_result}
 
     total = row.total or 0
     under_10s = buckets.get("under_10s", 0)
@@ -177,6 +185,7 @@ async def get_cost_metrics(
     client_id: str = Query(None),
     days: int = Query(7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
+    admin: Client = Depends(get_current_admin),
 ):
     """
     Cost tracking — SMS and AI costs aggregated by period.
@@ -185,8 +194,11 @@ async def get_cost_metrics(
 
     filters = [Lead.created_at >= cutoff]
     if client_id:
-        import uuid
-        filters.append(Lead.client_id == uuid.UUID(client_id))
+        try:
+            cid = uuid_mod.UUID(client_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid client_id format")
+        filters.append(Lead.client_id == cid)
 
     result = await db.execute(
         select(
@@ -217,7 +229,7 @@ async def get_cost_metrics(
 
 
 @router.get("/health/workers")
-async def get_worker_health():
+async def get_worker_health(admin: Client = Depends(get_current_admin)):
     """Check health of all background workers via Redis heartbeats."""
     try:
         from src.utils.dedup import get_redis
@@ -260,4 +272,5 @@ async def get_worker_health():
 
         return {"workers": statuses}
     except Exception as e:
-        return {"workers": {}, "error": str(e)}
+        logger.error("Failed to check worker health: %s", str(e))
+        return {"workers": {}, "error": "Failed to check worker health"}

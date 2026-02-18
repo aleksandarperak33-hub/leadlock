@@ -3,7 +3,7 @@ SalesEngineConfig model — singleton config row for the sales engine.
 Admin-editable from the dashboard. Controls all automation behavior.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, Boolean, Float, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -69,10 +69,10 @@ class SalesEngineConfig(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     def __repr__(self) -> str:

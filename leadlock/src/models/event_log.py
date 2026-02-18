@@ -3,7 +3,7 @@ Event log model — complete audit trail for every significant action.
 Used for debugging, compliance audits, and performance analysis.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Float, Integer, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -47,7 +47,7 @@ class EventLog(Base):
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships

@@ -3,7 +3,7 @@ Health monitor worker — tracks system health metrics.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:health_monitor", datetime.utcnow().isoformat(), ex=600)
+        await redis.set("leadlock:worker_health:health_monitor", datetime.now(timezone.utc).isoformat(), ex=600)
     except Exception:
         pass
 

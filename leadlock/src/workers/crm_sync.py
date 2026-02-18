@@ -161,7 +161,7 @@ async def sync_booking(db: AsyncSession, booking: Booking):
     if job_result.get("success"):
         booking.crm_job_id = job_result.get("job_id")
         booking.crm_sync_status = "synced"
-        booking.crm_synced_at = datetime.utcnow()
+        booking.crm_synced_at = datetime.now(timezone.utc)
 
         db.add(EventLog(
             lead_id=lead.id,

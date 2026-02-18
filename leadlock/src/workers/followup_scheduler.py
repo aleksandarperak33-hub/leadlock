@@ -4,7 +4,7 @@ Runs every 60 seconds. Compliance check before every send.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,7 +58,7 @@ async def run_followup_scheduler():
 async def process_due_tasks():
     """Find and process all due followup tasks."""
     async with async_session_factory() as db:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Get pending tasks that are due
         result = await db.execute(
@@ -170,6 +170,7 @@ async def execute_followup_task(db: AsyncSession, task: FollowupTask):
         to=lead.phone,
         body=response.message,
         from_phone=client.twilio_phone,
+        messaging_service_sid=client.twilio_messaging_service_sid,
     )
 
     # Record conversation
@@ -190,13 +191,13 @@ async def execute_followup_task(db: AsyncSession, task: FollowupTask):
 
     # Update task
     task.status = "sent"
-    task.sent_at = datetime.utcnow()
+    task.sent_at = datetime.now(timezone.utc)
     task.message_content = response.message
 
     # Update lead
     lead.total_messages_sent += 1
     lead.total_sms_cost_usd += sms_result.get("cost_usd", 0.0)
-    lead.last_outbound_at = datetime.utcnow()
+    lead.last_outbound_at = datetime.now(timezone.utc)
     if task.task_type == "cold_nurture":
         lead.cold_outreach_count += 1
 

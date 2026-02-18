@@ -4,7 +4,7 @@ Tracks full lifecycle: new → intake_sent → qualifying → qualified → book
 Terminal states: cold → dead, opted_out.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Float, Integer, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -100,10 +100,10 @@ class Lead(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships

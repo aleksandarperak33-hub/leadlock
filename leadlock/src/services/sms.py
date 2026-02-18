@@ -56,6 +56,29 @@ LANDLINE_ERRORS = {"30006"}
 OPT_OUT_ERRORS = {"21610"}
 INVALID_NUMBER_ERRORS = {"21211", "21612"}
 
+# Twilio client timeout
+TWILIO_CLIENT_TIMEOUT = 10
+
+
+def _get_twilio_client():
+    """Get a Twilio REST client with configured timeout (cached per process)."""
+    from twilio.rest import Client as TwilioClient
+    from twilio.http.http_client import TwilioHttpClient
+    from src.config import get_settings
+    settings = get_settings()
+    http_client = TwilioHttpClient(timeout=TWILIO_CLIENT_TIMEOUT)
+    return TwilioClient(
+        settings.twilio_account_sid,
+        settings.twilio_auth_token,
+        http_client=http_client,
+    )
+
+
+async def _run_sync(func, *args, **kwargs):
+    """Run a synchronous function in the thread pool to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
 
 # GSM-7 basic character set (for encoding detection)
 _GSM7_BASIC = set(
@@ -149,14 +172,11 @@ async def search_available_numbers(area_code: str) -> list[dict]:
 
     Returns: [{"phone_number": str, "friendly_name": str, "locality": str, "region": str}]
     """
-    from twilio.rest import Client as TwilioClient
-    from src.config import get_settings
-    settings = get_settings()
-
-    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+    client = _get_twilio_client()
 
     try:
-        available = client.available_phone_numbers("US").local.list(
+        available = await _run_sync(
+            client.available_phone_numbers("US").local.list,
             area_code=area_code,
             sms_enabled=True,
             mms_enabled=True,
@@ -176,22 +196,36 @@ async def search_available_numbers(area_code: str) -> list[dict]:
         raise
 
 
-async def provision_phone_number(phone_number: str, client_id: str) -> dict:
+async def provision_phone_number(
+    phone_number: str,
+    client_id: str,
+    business_name: str = "Business",
+) -> dict:
     """
     Purchase and configure a Twilio phone number for a client.
-    Sets up SMS webhook URL for inbound messages.
+    Sets up SMS webhook URL, creates a per-client Messaging Service,
+    and attaches the number to it.
 
-    Returns: {"phone_number": str, "phone_sid": str, "error": str|None}
+    Returns: {
+        "phone_number": str, "phone_sid": str,
+        "messaging_service_sid": str|None, "is_tollfree": bool,
+        "error": str|None,
+    }
     """
-    from twilio.rest import Client as TwilioClient
     from src.config import get_settings
+    from src.services.twilio_registration import (
+        create_messaging_service,
+        add_phone_to_messaging_service,
+        is_tollfree,
+    )
     settings = get_settings()
 
-    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+    twilio_client = _get_twilio_client()
     webhook_url = f"{settings.app_base_url.rstrip('/')}/api/v1/webhook/twilio/sms/{client_id}"
 
     try:
-        incoming = client.incoming_phone_numbers.create(
+        incoming = await _run_sync(
+            twilio_client.incoming_phone_numbers.create,
             phone_number=phone_number,
             sms_url=webhook_url,
             sms_method="POST",
@@ -201,14 +235,42 @@ async def provision_phone_number(phone_number: str, client_id: str) -> dict:
             "Phone provisioned: %s (SID: %s) for client %s",
             phone_number[:6] + "***", incoming.sid, client_id[:8],
         )
-        return {
-            "phone_number": incoming.phone_number,
-            "phone_sid": incoming.sid,
-            "error": None,
-        }
     except Exception as e:
         logger.error("Phone provisioning failed: %s", str(e))
-        return {"phone_number": None, "phone_sid": None, "error": str(e)}
+        return {
+            "phone_number": None, "phone_sid": None,
+            "messaging_service_sid": None, "is_tollfree": False,
+            "error": str(e),
+        }
+
+    # Create a Messaging Service for this client
+    ms_result = await create_messaging_service(client_id, business_name)
+    messaging_service_sid = None
+    if ms_result["error"]:
+        logger.warning(
+            "Messaging Service creation failed (non-blocking): %s",
+            ms_result["error"],
+        )
+    else:
+        messaging_service_sid = ms_result["result"]["messaging_service_sid"]
+
+        # Attach the phone number to the Messaging Service
+        attach_result = await add_phone_to_messaging_service(
+            messaging_service_sid, incoming.sid,
+        )
+        if attach_result["error"]:
+            logger.warning(
+                "Phone attach to Messaging Service failed (non-blocking): %s",
+                attach_result["error"],
+            )
+
+    return {
+        "phone_number": incoming.phone_number,
+        "phone_sid": incoming.sid,
+        "messaging_service_sid": messaging_service_sid,
+        "is_tollfree": is_tollfree(incoming.phone_number),
+        "error": None,
+    }
 
 
 async def release_phone_number(phone_sid: str) -> dict:
@@ -217,14 +279,10 @@ async def release_phone_number(phone_sid: str) -> dict:
 
     Returns: {"released": bool, "error": str|None}
     """
-    from twilio.rest import Client as TwilioClient
-    from src.config import get_settings
-    settings = get_settings()
-
-    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+    client = _get_twilio_client()
 
     try:
-        client.incoming_phone_numbers(phone_sid).delete()
+        await _run_sync(client.incoming_phone_numbers(phone_sid).delete)
         logger.info("Phone released: %s", phone_sid)
         return {"released": True, "error": None}
     except Exception as e:
@@ -399,11 +457,10 @@ async def _send_twilio(
     from_phone: Optional[str] = None,
     messaging_service_sid: Optional[str] = None,
 ) -> dict:
-    """Send via Twilio REST API."""
-    from twilio.rest import Client as TwilioClient
+    """Send via Twilio REST API (non-blocking)."""
     from src.config import get_settings
     settings = get_settings()
-    client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
+    client = _get_twilio_client()
 
     kwargs = {"to": to, "body": body}
     if messaging_service_sid or settings.twilio_messaging_service_sid:
@@ -415,7 +472,7 @@ async def _send_twilio(
     else:
         raise ValueError("Either from_phone or messaging_service_sid required")
 
-    message = client.messages.create(**kwargs)
+    message = await _run_sync(client.messages.create, **kwargs)
     return {"sid": message.sid, "status": message.status}
 
 

@@ -5,7 +5,7 @@ Separated from sales_engine.py to keep files focused.
 """
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,7 +33,11 @@ async def get_campaign_detail(
     admin=Depends(get_current_admin),
 ):
     """Enriched campaign detail with prospect counts and email metrics."""
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -176,7 +180,11 @@ async def get_campaign_prospects(
     admin=Depends(get_current_admin),
 ):
     """Paginated prospects for a campaign."""
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -230,7 +238,11 @@ async def activate_campaign(
     Validates at least 1 sequence step exists, then auto-assigns
     matching unbound cold prospects by target_trades + target_locations.
     """
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -248,7 +260,7 @@ async def activate_campaign(
         )
 
     campaign.status = "active"
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = datetime.now(timezone.utc)
 
     # Auto-assign matching unbound cold prospects
     assigned = await _auto_assign_prospects(db, campaign)
@@ -305,7 +317,7 @@ async def _auto_assign_prospects(
 
     for prospect in prospects:
         prospect.campaign_id = campaign.id
-        prospect.updated_at = datetime.utcnow()
+        prospect.updated_at = datetime.now(timezone.utc)
 
     return len(prospects)
 
@@ -323,7 +335,11 @@ async def assign_prospects(
     or { prospect_ids: [...] }.
     Only assigns prospects where campaign_id IS NULL.
     """
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -344,7 +360,7 @@ async def assign_prospects(
                 prospect = await db.get(Outreach, uuid.UUID(pid))
                 if prospect and prospect.campaign_id is None:
                     prospect.campaign_id = campaign.id
-                    prospect.updated_at = datetime.utcnow()
+                    prospect.updated_at = datetime.now(timezone.utc)
                     assigned += 1
             except Exception as e:
                 logger.warning("Assign failed for %s: %s", str(pid)[:8], str(e))
@@ -373,7 +389,7 @@ async def assign_prospects(
         prospects = result.scalars().all()
         for prospect in prospects:
             prospect.campaign_id = campaign.id
-            prospect.updated_at = datetime.utcnow()
+            prospect.updated_at = datetime.now(timezone.utc)
             assigned += 1
 
     return {"status": "assigned", "count": assigned}
@@ -389,7 +405,11 @@ async def get_campaign_metrics(
     Per-campaign analytics: step performance, daily send volume (14 days),
     and conversion funnel.
     """
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -449,7 +469,7 @@ async def get_campaign_metrics(
         })
 
     # Daily send volume (last 14 days)
-    fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+    fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
     daily_result = await db.execute(
         select(
             func.date_trunc("day", OutreachEmail.sent_at).label("day"),
@@ -526,7 +546,11 @@ async def get_inbox(
 
     conditions = [latest_reply.c.last_reply_at.isnot(None)]
     if campaign_id:
-        conditions.append(Outreach.campaign_id == uuid.UUID(campaign_id))
+        try:
+                cid = uuid.UUID(campaign_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid campaign ID")
+            conditions.append(Outreach.campaign_id == cid)
 
     # Count total
     count_query = (
@@ -624,7 +648,11 @@ async def get_inbox_thread(
     Full email thread for a prospect — all outbound + inbound in chronological order.
     Includes prospect details and campaign name.
     """
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 

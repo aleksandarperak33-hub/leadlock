@@ -4,7 +4,7 @@ Records positive/negative signals from email engagement, replies,
 and bookings to feed back into email generation.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Float, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -37,7 +37,7 @@ class LearningSignal(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     __table_args__ = (

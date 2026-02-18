@@ -3,7 +3,7 @@ Conversation model — every SMS message sent or received.
 Complete audit trail with agent attribution, delivery status, and cost tracking.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Float, Integer, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -64,7 +64,7 @@ class Conversation(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 

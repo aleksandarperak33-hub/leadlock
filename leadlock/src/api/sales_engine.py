@@ -4,9 +4,10 @@ Public endpoints: inbound email webhook, email event webhook, unsubscribe.
 Admin endpoints: config, metrics, scrape jobs, prospects, email threads, blacklist.
 """
 import asyncio
+import hmac
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -124,6 +125,41 @@ async def _trigger_sms_followup(
     return True
 
 
+# === WEBHOOK VERIFICATION ===
+
+async def _verify_sendgrid_webhook(request: Request) -> bool:
+    """
+    Verify SendGrid webhook authenticity using a shared secret token.
+
+    The webhook URL should include ?token=<secret> when configured in SendGrid.
+    This is secure over HTTPS and simpler than implementing SendGrid's ECDSA
+    signature verification (which requires the cryptography library).
+
+    Returns True if valid or if no verification key is configured (with warning).
+    """
+    from src.config import get_settings
+    settings = get_settings()
+    verification_key = settings.sendgrid_webhook_verification_key
+
+    if not verification_key:
+        logger.warning(
+            "SENDGRID_WEBHOOK_VERIFICATION_KEY not set — accepting webhook without "
+            "verification. Set this key and add ?token=<key> to your SendGrid webhook URLs."
+        )
+        return True
+
+    # Check token from query parameter or custom header
+    token = request.query_params.get("token", "")
+    if not token:
+        token = request.headers.get("X-Webhook-Token", "")
+
+    if not token:
+        logger.warning("SendGrid webhook missing verification token")
+        return False
+
+    return hmac.compare_digest(token, verification_key)
+
+
 # === PUBLIC ENDPOINTS (webhooks, unsubscribe) ===
 
 @router.post("/inbound-email")
@@ -136,6 +172,11 @@ async def inbound_email_webhook(
     When a prospect replies, update their outreach record and record the email.
     """
     try:
+        # Verify webhook authenticity
+        if not await _verify_sendgrid_webhook(request):
+            logger.warning("Rejected inbound email webhook: invalid token")
+            raise HTTPException(status_code=403, detail="Invalid webhook token")
+
         form = await request.form()
         from_email = form.get("from", "")
         to_email = form.get("to", "")
@@ -162,7 +203,7 @@ async def inbound_email_webhook(
             logger.info("Inbound email from unknown sender: %s", from_email[:20] + "***")
             return {"status": "ignored", "reason": "unknown sender"}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Record inbound email
         email_record = OutreachEmail(
@@ -239,8 +280,8 @@ async def inbound_email_webhook(
         }
 
     except Exception as e:
-        logger.error("Inbound email processing error: %s", str(e))
-        return {"status": "error", "detail": str(e)}
+        logger.error("Inbound email processing error: %s", str(e), exc_info=True)
+        return {"status": "error"}
 
 
 @router.post("/email-events")
@@ -253,6 +294,11 @@ async def email_events_webhook(
     Events are matched by sendgrid_message_id or custom args.
     """
     try:
+        # Verify webhook authenticity
+        if not await _verify_sendgrid_webhook(request):
+            logger.warning("Rejected email events webhook: invalid token")
+            raise HTTPException(status_code=403, detail="Invalid webhook token")
+
         events = await request.json()
         if not isinstance(events, list):
             events = [events]
@@ -261,7 +307,7 @@ async def email_events_webhook(
             event_type = event.get("event", "")
             sg_message_id = event.get("sg_message_id", "").split(".")[0]
             outreach_id = event.get("outreach_id")
-            timestamp = datetime.utcfromtimestamp(event.get("timestamp", 0))
+            timestamp = datetime.fromtimestamp(event.get("timestamp", 0), tz=timezone.utc)
 
             # Find email record
             email_record = None
@@ -433,11 +479,12 @@ async def unsubscribe(
 ):
     """CAN-SPAM one-click unsubscribe. Public endpoint."""
     try:
-        prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+        pid = uuid.UUID(prospect_id)
+        prospect = await db.get(Outreach, pid)
         if prospect:
             prospect.email_unsubscribed = True
-            prospect.unsubscribed_at = datetime.utcnow()
-            prospect.updated_at = datetime.utcnow()
+            prospect.unsubscribed_at = datetime.now(timezone.utc)
+            prospect.updated_at = datetime.now(timezone.utc)
             logger.info("Prospect %s unsubscribed", prospect_id[:8])
     except Exception as e:
         logger.error("Unsubscribe error: %s", str(e))
@@ -531,7 +578,7 @@ async def update_sales_config(
         if field in payload:
             setattr(config, field, payload[field])
 
-    config.updated_at = datetime.utcnow()
+    config.updated_at = datetime.now(timezone.utc)
     await db.flush()
 
     return {"status": "updated"}
@@ -545,7 +592,7 @@ async def get_sales_metrics(
 ):
     """Sales engine performance metrics."""
     days = int(period.replace("d", ""))
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Prospect counts by status
     status_counts = {}
@@ -759,7 +806,7 @@ async def _run_scrape_background(
             query_variant=variant_idx,
             search_offset=offset,
             status="running",
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
         db.add(job)
         await db.flush()
@@ -844,7 +891,7 @@ async def _run_scrape_background(
             job.new_prospects_created = new_count
             job.duplicates_skipped = dupe_count
             job.api_cost_usd = total_cost
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
 
             logger.info(
                 "Manual scrape completed: %s in %s (variant=%d query='%s') — "
@@ -856,7 +903,7 @@ async def _run_scrape_background(
         except Exception as e:
             job.status = "failed"
             job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.api_cost_usd = total_cost
             logger.error("Background scrape failed for %s: %s", location_str, str(e))
 
@@ -915,9 +962,14 @@ async def list_prospects(
     if trade_type:
         conditions.append(Outreach.prospect_trade_type == trade_type)
     if campaign_id:
-        conditions.append(Outreach.campaign_id == uuid.UUID(campaign_id))
+        try:
+            cid = uuid.UUID(campaign_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid campaign_id")
+        conditions.append(Outreach.campaign_id == cid)
     if search:
-        search_term = f"%{search}%"
+        safe_search = search.replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{safe_search}%"
         conditions.append(
             or_(
                 Outreach.prospect_name.ilike(search_term),
@@ -958,7 +1010,11 @@ async def get_prospect(
     admin=Depends(get_current_admin),
 ):
     """Get single prospect detail."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     return _serialize_prospect(prospect)
@@ -972,7 +1028,11 @@ async def update_prospect(
     admin=Depends(get_current_admin),
 ):
     """Edit a prospect."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -985,7 +1045,7 @@ async def update_prospect(
         if field in payload:
             setattr(prospect, field, payload[field])
 
-    prospect.updated_at = datetime.utcnow()
+    prospect.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return _serialize_prospect(prospect)
 
@@ -997,7 +1057,11 @@ async def delete_prospect(
     admin=Depends(get_current_admin),
 ):
     """Delete a prospect and all related emails."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     await db.delete(prospect)
@@ -1040,7 +1104,11 @@ async def blacklist_prospect(
     admin=Depends(get_current_admin),
 ):
     """Blacklist a prospect's email and domain."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -1076,9 +1144,9 @@ async def blacklist_prospect(
 
     # Mark prospect as unsubscribed and lost
     prospect.email_unsubscribed = True
-    prospect.unsubscribed_at = datetime.utcnow()
+    prospect.unsubscribed_at = datetime.now(timezone.utc)
     prospect.status = "lost"
-    prospect.updated_at = datetime.utcnow()
+    prospect.updated_at = datetime.now(timezone.utc)
 
     return {"status": "blacklisted", "entries": entries_added}
 
@@ -1092,7 +1160,11 @@ async def get_prospect_emails(
     admin=Depends(get_current_admin),
 ):
     """Get all emails (outbound + inbound) for a prospect."""
-    prospect = await db.get(Outreach, uuid.UUID(prospect_id))
+    try:
+        pid = uuid.UUID(prospect_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid prospect ID")
+    prospect = await db.get(Outreach, pid)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -1149,7 +1221,7 @@ async def get_worker_status(
             heartbeat = await redis.get(key)
             if heartbeat:
                 last_beat = datetime.fromisoformat(heartbeat.decode() if isinstance(heartbeat, bytes) else heartbeat)
-                age_seconds = (datetime.utcnow() - last_beat).total_seconds()
+                age_seconds = (datetime.now(timezone.utc) - last_beat).total_seconds()
                 health = "healthy" if age_seconds < 600 else ("warning" if age_seconds < 1800 else "unhealthy")
                 status[name] = {
                     "last_heartbeat": last_beat.isoformat(),
@@ -1164,7 +1236,7 @@ async def get_worker_status(
                 }
 
         # Bounce rate check
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         sent_result = await db.execute(
             select(func.count()).select_from(OutreachEmail).where(
                 and_(
@@ -1197,7 +1269,7 @@ async def get_worker_status(
         }
     except Exception as e:
         logger.error("Worker status check failed: %s", str(e))
-        return {"workers": {}, "alerts": {}, "error": str(e)}
+        return {"workers": {}, "alerts": {}, "error": "Failed to check worker status"}
 
 
 # === WORKER CONTROLS (Phase 3) ===
@@ -1218,7 +1290,7 @@ async def pause_worker(
     config = result.scalar_one_or_none()
     if config and hasattr(config, field):
         setattr(config, field, True)
-        config.updated_at = datetime.utcnow()
+        config.updated_at = datetime.now(timezone.utc)
     return {"status": "paused", "worker": worker_name}
 
 
@@ -1238,7 +1310,7 @@ async def resume_worker(
     config = result.scalar_one_or_none()
     if config and hasattr(config, field):
         setattr(config, field, False)
-        config.updated_at = datetime.utcnow()
+        config.updated_at = datetime.now(timezone.utc)
     return {"status": "resumed", "worker": worker_name}
 
 
@@ -1326,7 +1398,11 @@ async def update_campaign(
     """Update a campaign."""
     from src.models.campaign import Campaign
 
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -1335,7 +1411,7 @@ async def update_campaign(
         if field in payload:
             setattr(campaign, field, payload[field])
 
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = datetime.now(timezone.utc)
     return {"status": "updated"}
 
 
@@ -1348,11 +1424,15 @@ async def pause_campaign(
     """Pause an active campaign."""
     from src.models.campaign import Campaign
 
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = "paused"
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = datetime.now(timezone.utc)
     return {"status": "paused"}
 
 
@@ -1365,11 +1445,15 @@ async def resume_campaign(
     """Resume a paused campaign."""
     from src.models.campaign import Campaign
 
-    campaign = await db.get(Campaign, uuid.UUID(campaign_id))
+    try:
+        cid = uuid.UUID(campaign_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID")
+    campaign = await db.get(Campaign, cid)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = "active"
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = datetime.now(timezone.utc)
     return {"status": "active"}
 
 
@@ -1442,7 +1526,11 @@ async def update_template(
     """Update an email template."""
     from src.models.email_template import EmailTemplate
 
-    template = await db.get(EmailTemplate, uuid.UUID(template_id))
+    try:
+        tid = uuid.UUID(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid template ID")
+    template = await db.get(EmailTemplate, tid)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -1463,7 +1551,11 @@ async def delete_template(
     """Delete an email template."""
     from src.models.email_template import EmailTemplate
 
-    template = await db.get(EmailTemplate, uuid.UUID(template_id))
+    try:
+        tid = uuid.UUID(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid template ID")
+    template = await db.get(EmailTemplate, tid)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     await db.delete(template)
@@ -1512,11 +1604,11 @@ async def bulk_update_prospects(
             elif action.startswith("status:"):
                 new_status = action.split(":")[1]
                 prospect.status = new_status
-                prospect.updated_at = datetime.utcnow()
+                prospect.updated_at = datetime.now(timezone.utc)
             elif action.startswith("campaign:"):
                 campaign_id = action.split(":")[1]
                 prospect.campaign_id = uuid.UUID(campaign_id)
-                prospect.updated_at = datetime.utcnow()
+                prospect.updated_at = datetime.now(timezone.utc)
 
             updated += 1
         except Exception as e:
@@ -1809,7 +1901,7 @@ async def get_command_center(
     sequence performance, geo performance, recent emails, activity feed, and alerts.
     """
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         thirty_days_ago = now - timedelta(days=30)
         sixty_days_ago = now - timedelta(days=60)

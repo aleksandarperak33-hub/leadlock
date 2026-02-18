@@ -119,13 +119,21 @@ async def validate_webhook_source(
     if source == "google_lsa":
         secret = settings.webhook_secret_google
         if not secret:
-            return True  # Soft enforcement
+            logger.warning(
+                "WEBHOOK_SECRET_GOOGLE not set — accepting %s webhook without "
+                "signature verification. Configure for production.", source,
+            )
+            return True
         sig = request.headers.get("X-Webhook-Signature", "")
         return validate_hmac_sha256(secret, sig, body)
 
     if source == "angi":
         secret = settings.webhook_secret_angi
         if not secret:
+            logger.warning(
+                "WEBHOOK_SECRET_ANGI not set — accepting %s webhook without "
+                "signature verification. Configure for production.", source,
+            )
             return True
         sig = request.headers.get("X-Webhook-Signature", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -133,6 +141,10 @@ async def validate_webhook_source(
     if source == "facebook":
         secret = settings.webhook_secret_facebook
         if not secret:
+            logger.warning(
+                "WEBHOOK_SECRET_FACEBOOK not set — accepting %s webhook without "
+                "signature verification. Configure for production.", source,
+            )
             return True
         sig = request.headers.get("X-Hub-Signature-256", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -143,4 +155,8 @@ async def validate_webhook_source(
         if sig:
             return validate_hmac_sha256(settings.webhook_signing_key, sig, body)
 
-    return True  # No signature configured for this source
+    logger.warning(
+        "No webhook secret configured for source '%s' — accepting without "
+        "signature verification. Configure webhook_signing_key for production.", source,
+    )
+    return True

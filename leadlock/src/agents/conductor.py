@@ -13,7 +13,7 @@ State machine:
 """
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -180,7 +180,7 @@ async def handle_new_lead(
         )
         db.add(inbound_conv)
         lead.total_messages_received = 1
-        lead.last_inbound_at = datetime.utcnow()
+        lead.last_inbound_at = datetime.now(timezone.utc)
 
     # Run compliance check before responding
     compliance = full_compliance_check(
@@ -244,7 +244,7 @@ async def handle_new_lead(
         to=phone,
         body=sms_body,
         from_phone=client.twilio_phone,
-        messaging_service_sid=None,
+        messaging_service_sid=client.twilio_messaging_service_sid,
     )
 
     response_ms = timer.stop()
@@ -272,7 +272,7 @@ async def handle_new_lead(
     lead.first_response_ms = response_ms
     lead.total_messages_sent = 1
     lead.total_sms_cost_usd = sms_result.get("cost_usd", 0.0)
-    lead.last_outbound_at = datetime.utcnow()
+    lead.last_outbound_at = datetime.now(timezone.utc)
 
     # Log response event
     db.add(EventLog(
@@ -364,7 +364,7 @@ async def _process_reply_locked(
     )
     db.add(inbound_conv)
     lead.total_messages_received += 1
-    lead.last_inbound_at = datetime.utcnow()
+    lead.last_inbound_at = datetime.now(timezone.utc)
     lead.conversation_turn += 1
 
     # Re-engage cold leads
@@ -424,6 +424,7 @@ async def _process_reply_locked(
                 to=lead.phone,
                 body=response["message"],
                 from_phone=client.twilio_phone,
+                messaging_service_sid=client.twilio_messaging_service_sid,
             )
 
             outbound_conv = Conversation(
@@ -447,7 +448,7 @@ async def _process_reply_locked(
             lead.total_messages_sent += 1
             lead.total_sms_cost_usd += sms_result.get("cost_usd", 0.0)
             lead.total_ai_cost_usd += response.get("ai_cost", 0.0)
-            lead.last_outbound_at = datetime.utcnow()
+            lead.last_outbound_at = datetime.now(timezone.utc)
             lead.last_agent_response = response["message"]
         else:
             logger.warning("Compliance blocked reply: %s", compliance.reason)
@@ -550,7 +551,7 @@ async def _route_to_book(
         booking = Booking(
             lead_id=lead.id,
             client_id=client.id,
-            appointment_date=datetime.strptime(result.appointment_date, "%Y-%m-%d").date() if result.appointment_date else datetime.utcnow().date(),
+            appointment_date=datetime.strptime(result.appointment_date, "%Y-%m-%d").date() if result.appointment_date else datetime.now(timezone.utc).date(),
             service_type=lead.service_type or "service",
             tech_name=result.tech_name,
             crm_sync_status="pending",
@@ -586,8 +587,8 @@ async def _handle_opt_out(
     db: AsyncSession, lead: Lead, client: Client, message: str, timer: Timer
 ) -> dict:
     """Process STOP/opt-out. Immediately cease all messaging."""
-    lead.state = "opted_out"
     lead.previous_state = lead.state
+    lead.state = "opted_out"
     lead.current_agent = None
 
     # Update consent record
@@ -595,7 +596,7 @@ async def _handle_opt_out(
         consent = await db.get(ConsentRecord, lead.consent_id)
         if consent:
             consent.opted_out = True
-            consent.opted_out_at = datetime.utcnow()
+            consent.opted_out_at = datetime.now(timezone.utc)
             consent.opt_out_method = "sms_stop"
             consent.is_active = False
 

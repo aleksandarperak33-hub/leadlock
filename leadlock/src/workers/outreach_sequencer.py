@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 from sqlalchemy import select, and_, or_, func
@@ -183,7 +183,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:outreach_sequencer", datetime.utcnow().isoformat(), ex=3600)
+        await redis.set("leadlock:worker_health:outreach_sequencer", datetime.now(timezone.utc).isoformat(), ex=3600)
     except Exception:
         pass
 
@@ -208,14 +208,14 @@ async def _get_warmup_limit(configured_limit: int) -> int:
 
         if started_at_raw is None:
             # First email send ever — record the start timestamp
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = datetime.now(timezone.utc).isoformat()
             await redis.set(warmup_key, now_iso)
             logger.info("Email warmup started — day 0, limit=5")
             return min(5, configured_limit)
 
         started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
         started_at = datetime.fromisoformat(started_at_str)
-        days_since_start = (datetime.utcnow() - started_at).days
+        days_since_start = (datetime.now(timezone.utc) - started_at).days
 
         for day_start, day_end, max_daily in EMAIL_WARMUP_SCHEDULE:
             if day_end is None:
@@ -366,7 +366,7 @@ async def sequence_cycle():
             return
 
         settings = get_settings()
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         # === PASS 1: Active campaigns ===
         campaigns_result = await db.execute(
@@ -427,7 +427,7 @@ async def sequence_cycle():
         )
 
         # Find prospects ready for next step
-        delay_cutoff = datetime.utcnow() - timedelta(hours=config.sequence_delay_hours)
+        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
 
         # Step 0: never contacted, has email, not unsubscribed, NOT campaign-bound
         step_0_query = select(Outreach).where(
@@ -567,7 +567,7 @@ async def _process_campaign_prospects(
             ).order_by(Outreach.created_at).limit(remaining)
         else:
             # Follow-up steps: at previous step, delay elapsed
-            delay_cutoff = datetime.utcnow() - timedelta(hours=delay_hours)
+            delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=delay_hours)
             query = select(Outreach).where(
                 and_(
                     Outreach.campaign_id == campaign.id,
@@ -793,7 +793,7 @@ async def send_sequence_email(
     except Exception as rep_err:
         logger.debug("Failed to record email send event: %s", str(rep_err))
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Record email
     email_record = OutreachEmail(

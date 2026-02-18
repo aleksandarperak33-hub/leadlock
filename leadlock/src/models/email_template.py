@@ -3,7 +3,7 @@ EmailTemplate model — reusable email templates for outreach campaigns.
 Can be static templates or AI-generation guidance.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
@@ -31,7 +31,7 @@ class EmailTemplate(Base):
     is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     def __repr__(self) -> str:

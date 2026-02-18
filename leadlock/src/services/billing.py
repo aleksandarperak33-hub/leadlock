@@ -2,8 +2,10 @@
 Stripe billing service — subscription management for LeadLock clients.
 
 Handles: customer creation, checkout sessions, billing portal, webhook processing.
-All Stripe calls have 10-second timeouts (per project standard).
+All Stripe calls are synchronous and run via run_in_executor to avoid blocking
+the asyncio event loop.
 """
+import asyncio
 import logging
 from typing import Optional
 
@@ -24,15 +26,25 @@ PLAN_AMOUNTS = {
     "business": "$1,497",
 }
 
+# Stripe API timeout (seconds)
+STRIPE_API_TIMEOUT = 10
+
 
 def _get_stripe():
-    """Get configured Stripe module. Raises if not configured."""
+    """Get configured Stripe module with per-request API key. Raises if not configured."""
     import stripe
     settings = get_settings()
     if not settings.stripe_secret_key:
         raise ValueError("Stripe secret key not configured")
     stripe.api_key = settings.stripe_secret_key
+    stripe.max_network_retries = 1
     return stripe
+
+
+async def _run_sync(func, *args, **kwargs):
+    """Run a synchronous Stripe SDK call in the default thread pool executor."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
 
 def _price_id_to_plan(price_id: str) -> str:
@@ -58,7 +70,8 @@ async def create_customer(
     """
     try:
         stripe = _get_stripe()
-        customer = stripe.Customer.create(
+        customer = await _run_sync(
+            stripe.Customer.create,
             email=email,
             name=business_name,
             metadata={"leadlock_client_id": client_id},
@@ -87,7 +100,8 @@ async def create_checkout_session(
     """
     try:
         stripe = _get_stripe()
-        session = stripe.checkout.Session.create(
+        session = await _run_sync(
+            stripe.checkout.Session.create,
             customer=stripe_customer_id,
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
@@ -119,7 +133,8 @@ async def create_billing_portal_session(
     """
     try:
         stripe = _get_stripe()
-        session = stripe.billing_portal.Session.create(
+        session = await _run_sync(
+            stripe.billing_portal.Session.create,
             customer=stripe_customer_id,
             return_url=return_url,
         )
@@ -138,9 +153,14 @@ async def handle_webhook(payload: bytes, sig_header: str) -> dict:
     """
     try:
         stripe = _get_stripe()
-        settings = get_settings()
+    except ValueError as e:
+        logger.error("Stripe not configured: %s", str(e))
+        return {"event_type": None, "handled": False, "error": str(e)}
 
-        event = stripe.Webhook.construct_event(
+    settings = get_settings()
+    try:
+        event = await _run_sync(
+            stripe.Webhook.construct_event,
             payload, sig_header, settings.stripe_webhook_secret,
         )
     except stripe.error.SignatureVerificationError:
@@ -190,6 +210,19 @@ async def _handle_checkout_completed(session: dict) -> None:
     dashboard_email = None
     plan_slug = "unknown"
 
+    # Fetch subscription from Stripe BEFORE acquiring DB session to avoid
+    # holding the connection open during a network call
+    try:
+        stripe = _get_stripe()
+        sub = await _run_sync(stripe.Subscription.retrieve, subscription_id)
+        price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
+        plan_slug = _price_id_to_plan(price_id)
+    except Exception as e:
+        logger.warning(
+            "Failed to retrieve Stripe subscription %s: %s. "
+            "Proceeding without tier sync.", subscription_id, str(e),
+        )
+
     async with async_session_factory() as db:
         result = await db.execute(
             select(Client).where(Client.id == uuid.UUID(client_id))
@@ -203,11 +236,6 @@ async def _handle_checkout_completed(session: dict) -> None:
         client.stripe_subscription_id = subscription_id
         client.billing_status = "active"
 
-        # Sync tier from Stripe subscription price
-        stripe = _get_stripe()
-        sub = stripe.Subscription.retrieve(subscription_id)
-        price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
-        plan_slug = _price_id_to_plan(price_id)
         if plan_slug != "unknown":
             client.tier = plan_slug
             logger.info("Client %s tier set to %s", client_id[:8], plan_slug)

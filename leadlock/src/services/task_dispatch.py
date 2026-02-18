@@ -3,7 +3,7 @@ Task dispatch service — enqueue tasks for event-driven processing.
 Central helper for creating tasks in the task queue.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from src.database import async_session_factory
@@ -32,7 +32,7 @@ async def enqueue_task(
     Returns:
         Task ID as string
     """
-    scheduled_at = datetime.utcnow()
+    scheduled_at = datetime.now(timezone.utc)
     if delay_seconds > 0:
         scheduled_at = scheduled_at + timedelta(seconds=delay_seconds)
 

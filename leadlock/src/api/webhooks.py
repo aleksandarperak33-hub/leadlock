@@ -520,6 +520,8 @@ async def facebook_webhook(
             return WebhookPayloadResponse(status="accepted", message="No entries")
 
         event.processing_status = "processing"
+        processed_count = 0
+        last_result = None
 
         for entry in entries:
             changes = entry.get("changes", [])
@@ -552,15 +554,16 @@ async def facebook_webhook(
                     consent_method="facebook",
                 )
 
-                result = await handle_new_lead(db, envelope)
-                await _complete_webhook_event(event)
-                return WebhookPayloadResponse(
-                    status="accepted",
-                    lead_id=result.get("lead_id"),
-                    message=f"Processed in {result.get('response_ms', 0)}ms",
-                )
+                last_result = await handle_new_lead(db, envelope)
+                processed_count += 1
 
         await _complete_webhook_event(event)
+        if processed_count > 0 and last_result:
+            return WebhookPayloadResponse(
+                status="accepted",
+                lead_id=last_result.get("lead_id"),
+                message=f"Processed {processed_count} lead(s)",
+            )
         return WebhookPayloadResponse(status="accepted", message="No valid leads found")
     except HTTPException:
         raise

@@ -114,11 +114,17 @@ async def _send_single_reminder(db, booking: Booking) -> bool:
 
     config = ClientConfig(**client.config) if client.config else ClientConfig()
 
-    # Compliance check
+    # Look up actual consent record
+    from src.models.consent import ConsentRecord
+    consent = None
+    if lead.consent_id:
+        consent = await db.get(ConsentRecord, lead.consent_id)
+
+    # Compliance check with actual consent data
     compliance = full_compliance_check(
-        has_consent=True,
-        consent_type="pec",
-        is_opted_out=False,
+        has_consent=consent is not None,
+        consent_type=consent.consent_type if consent else "pec",
+        is_opted_out=consent.opted_out if consent else False,
         state_code=lead.state_code,
         is_emergency=False,
         is_reply_to_inbound=False,
@@ -158,6 +164,7 @@ async def _send_single_reminder(db, booking: Booking) -> bool:
         to=lead.phone,
         body=response.message,
         from_phone=client.twilio_phone,
+        messaging_service_sid=client.twilio_messaging_service_sid,
     )
 
     # Record conversation
