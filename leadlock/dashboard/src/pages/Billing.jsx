@@ -185,11 +185,11 @@ export default function Billing() {
       {(!isActive || isTrial) && (
         <>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose a plan</h2>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-3 gap-5">
             {plans.map((plan) => (
               <div
                 key={plan.slug}
-                className={`bg-white border rounded-2xl p-6 relative ${
+                className={`bg-white border rounded-2xl p-6 relative flex flex-col ${
                   plan.popular ? 'border-orange-300 ring-1 ring-orange-100' : 'border-gray-200/60'
                 }`}
               >
@@ -198,29 +198,44 @@ export default function Billing() {
                     Most Popular
                   </div>
                 )}
-                <h3 className="text-base font-semibold text-gray-900 mb-1">{plan.name}</h3>
-                <div className="flex items-baseline gap-1 mb-5">
+                <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
+                {plan.subtitle && (
+                  <p className="text-xs text-gray-400 mb-3">{plan.subtitle}</p>
+                )}
+                <div className="flex items-baseline gap-1 mb-4">
                   <span className="text-3xl font-bold text-gray-900">{plan.price}</span>
                   <span className="text-sm text-gray-400">/mo</span>
                 </div>
-                <button
-                  onClick={() => handleCheckout(plan.price_id)}
-                  disabled={!!actionLoading}
-                  className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
-                    plan.popular
-                      ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
-                >
-                  {actionLoading === plan.price_id ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                      Loading...
-                    </span>
-                  ) : (
-                    'Subscribe'
-                  )}
-                </button>
+                {plan.features && plan.features.length > 0 && (
+                  <ul className="space-y-2.5 mb-6">
+                    {plan.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                        <Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-auto">
+                  <button
+                    onClick={() => handleCheckout(plan.price_id)}
+                    disabled={!!actionLoading}
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                      plan.popular
+                        ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    {actionLoading === plan.price_id ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                        Loading...
+                      </span>
+                    ) : (
+                      'Subscribe'
+                    )}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

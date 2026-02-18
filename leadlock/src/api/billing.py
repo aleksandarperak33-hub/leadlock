@@ -24,9 +24,63 @@ async def get_plans():
     settings = get_settings()
     return {
         "plans": [
-            {"slug": "starter", "name": "Starter", "price": "$297", "price_id": settings.stripe_price_starter},
-            {"slug": "pro", "name": "Professional", "price": "$597", "price_id": settings.stripe_price_pro, "popular": True},
-            {"slug": "business", "name": "Business", "price": "$1,497", "price_id": settings.stripe_price_business},
+            {
+                "slug": "starter",
+                "name": "Starter",
+                "price": "$297",
+                "price_id": settings.stripe_price_starter,
+                "subtitle": "Perfect for solo operators",
+                "features": [
+                    "Sub-60s AI response to every lead",
+                    "Up to 200 leads/month",
+                    "AI lead qualification (4-message flow)",
+                    "Smart appointment booking",
+                    "1 CRM integration",
+                    "Business hours & quiet hours compliance",
+                    "TCPA-compliant opt-out handling",
+                    "Real-time dashboard & analytics",
+                    "Email support",
+                ],
+            },
+            {
+                "slug": "pro",
+                "name": "Professional",
+                "price": "$597",
+                "price_id": settings.stripe_price_pro,
+                "popular": True,
+                "subtitle": "For growing home service businesses",
+                "features": [
+                    "Everything in Starter, plus:",
+                    "Up to 1,000 leads/month",
+                    "Multi-channel lead sources (web, Angi, Facebook)",
+                    "Advanced AI persona customization",
+                    "Automated follow-up sequences (up to 3 touches)",
+                    "Unlimited CRM integrations",
+                    "Lead scoring & priority routing",
+                    "Detailed conversion reports",
+                    "Dedicated Twilio number",
+                    "Priority support (< 4hr response)",
+                ],
+            },
+            {
+                "slug": "business",
+                "name": "Business",
+                "price": "$1,497",
+                "price_id": settings.stripe_price_business,
+                "subtitle": "For multi-location & high-volume teams",
+                "features": [
+                    "Everything in Professional, plus:",
+                    "Unlimited leads",
+                    "Multi-location support",
+                    "Custom AI training on your services & pricing",
+                    "Emergency call detection & routing",
+                    "White-glove onboarding & setup",
+                    "Revenue attribution & ROI tracking",
+                    "API access for custom integrations",
+                    "Dedicated account manager",
+                    "Phone & Slack support (< 1hr response)",
+                ],
+            },
         ]
     }
 
