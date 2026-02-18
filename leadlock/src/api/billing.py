@@ -13,6 +13,7 @@ from src.api.dashboard import get_current_client
 from src.models.client import Client
 from src.config import get_settings
 from src.services import billing as billing_service
+from src.services.plan_limits import get_plan_limits
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["billing"])
@@ -181,12 +182,27 @@ async def billing_status(
         except Exception as e:
             logger.warning("Failed to fetch subscription details: %s", str(e))
 
+    limits = get_plan_limits(client.tier)
+
     return {
         "billing_status": client.billing_status,
         "plan": plan,
+        "tier": client.tier,
         "stripe_customer_id": client.stripe_customer_id,
         "current_period_end": current_period_end,
         "trial_ends_at": client.trial_ends_at.isoformat() if hasattr(client, 'trial_ends_at') and client.trial_ends_at else None,
+        "plan_limits": limits,
+    }
+
+
+@router.get("/api/v1/billing/plan-limits")
+async def plan_limits(
+    client: Client = Depends(get_current_client),
+):
+    """Get the current client's plan limits based on their tier."""
+    return {
+        "tier": client.tier,
+        "plan_limits": get_plan_limits(client.tier),
     }
 
 

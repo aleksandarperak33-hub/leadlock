@@ -23,7 +23,7 @@ class Client(Base):
     )  # hvac, plumbing, roofing, electrical, solar, general
     tier: Mapped[str] = mapped_column(
         String(50), default="starter"
-    )  # starter, growth, enterprise
+    )  # starter, pro, business
     monthly_fee: Mapped[float] = mapped_column(Float, default=497.00)
 
     # Twilio / 10DLC

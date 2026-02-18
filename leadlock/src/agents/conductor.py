@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, and_
 
 from src.models.lead import Lead
 from src.models.client import Client
@@ -40,6 +40,7 @@ from src.utils.metrics import Timer
 from src.agents.intake import process_intake
 from src.agents.qualify import process_qualify
 from src.agents.book import process_booking
+from src.services.plan_limits import get_monthly_lead_limit
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,27 @@ async def handle_new_lead(
         return {"lead_id": None, "status": "client_not_found", "response_ms": timer.elapsed_ms}
 
     config = ClientConfig(**client.config) if client.config else ClientConfig()
+
+    # Enforce monthly lead limit based on plan tier
+    monthly_limit = get_monthly_lead_limit(client.tier)
+    if monthly_limit is not None:
+        from datetime import timezone as tz
+        month_start = datetime.now(tz.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        leads_this_month = (await db.execute(
+            select(func.count(Lead.id)).where(
+                and_(Lead.client_id == client.id, Lead.created_at >= month_start)
+            )
+        )).scalar() or 0
+        if leads_this_month >= monthly_limit:
+            logger.warning(
+                "Client %s hit monthly lead limit (%d/%d, tier=%s)",
+                str(client.id)[:8], leads_this_month, monthly_limit, client.tier,
+            )
+            return {
+                "lead_id": None,
+                "status": "monthly_lead_limit_reached",
+                "response_ms": timer.elapsed_ms,
+            }
 
     # Create consent record
     consent = ConsentRecord(

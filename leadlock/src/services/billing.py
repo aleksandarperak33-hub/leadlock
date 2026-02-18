@@ -187,6 +187,9 @@ async def _handle_checkout_completed(session: dict) -> None:
     from sqlalchemy import select
     import uuid
 
+    dashboard_email = None
+    plan_slug = "unknown"
+
     async with async_session_factory() as db:
         result = await db.execute(
             select(Client).where(Client.id == uuid.UUID(client_id))
@@ -199,21 +202,30 @@ async def _handle_checkout_completed(session: dict) -> None:
         client.stripe_customer_id = customer_id
         client.stripe_subscription_id = subscription_id
         client.billing_status = "active"
-        await db.commit()
 
-    logger.info("Subscription activated for client %s", client_id[:8])
-
-    # Send confirmation email
-    if client.dashboard_email:
+        # Sync tier from Stripe subscription price
         stripe = _get_stripe()
         sub = stripe.Subscription.retrieve(subscription_id)
         price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
         plan_slug = _price_id_to_plan(price_id)
+        if plan_slug != "unknown":
+            client.tier = plan_slug
+            logger.info("Client %s tier set to %s", client_id[:8], plan_slug)
+
+        # Capture values before session closes to avoid DetachedInstanceError
+        dashboard_email = client.dashboard_email
+
+        await db.commit()
+
+    logger.info("Subscription activated for client %s", client_id[:8])
+
+    # Send confirmation email (using captured values, session is closed)
+    if dashboard_email and plan_slug != "unknown":
         plan_name = PLAN_NAMES.get(plan_slug, "Unknown")
         amount = PLAN_AMOUNTS.get(plan_slug, "N/A")
 
         from src.services.transactional_email import send_subscription_confirmation
-        await send_subscription_confirmation(client.dashboard_email, plan_name, amount)
+        await send_subscription_confirmation(dashboard_email, plan_name, amount)
 
 
 async def _handle_invoice_paid(invoice: dict) -> None:
@@ -247,6 +259,10 @@ async def _handle_payment_failed(invoice: dict) -> None:
     from src.models.client import Client
     from sqlalchemy import select
 
+    dashboard_email = None
+    business_name = None
+    client_id = None
+
     async with async_session_factory() as db:
         result = await db.execute(
             select(Client).where(Client.stripe_customer_id == customer_id)
@@ -256,22 +272,28 @@ async def _handle_payment_failed(invoice: dict) -> None:
             return
 
         client.billing_status = "past_due"
+
+        # Capture values before session closes to avoid DetachedInstanceError
+        dashboard_email = client.dashboard_email
+        business_name = client.business_name
+        client_id = str(client.id)
+
         await db.commit()
 
-    logger.warning("Payment failed for client %s", client.business_name)
+    logger.warning("Payment failed for client %s", business_name)
 
-    # Send failure notification
-    if client.dashboard_email:
+    # Send failure notification (using captured values, session is closed)
+    if dashboard_email:
         from src.services.transactional_email import send_payment_failed
-        await send_payment_failed(client.dashboard_email, client.business_name)
+        await send_payment_failed(dashboard_email, business_name)
 
     # Alert ops team
     from src.utils.alerting import send_alert, AlertType
     await send_alert(
         "payment_failed",
-        f"Payment failed for {client.business_name}",
+        f"Payment failed for {business_name}",
         severity="warning",
-        extra={"client_id": str(client.id)},
+        extra={"client_id": client_id},
     )
 
 
@@ -304,6 +326,21 @@ async def _handle_subscription_updated(subscription: dict) -> None:
             new_status = status_mapping.get(status, client.billing_status)
             client.billing_status = new_status
             client.stripe_subscription_id = subscription.get("id")
+
+            # Sync tier from subscription price (handles upgrades/downgrades)
+            items = subscription.get("items", {}).get("data", [])
+            if items:
+                price_id = items[0].get("price", {}).get("id", "")
+                plan_slug = _price_id_to_plan(price_id)
+                if plan_slug != "unknown":
+                    old_tier = client.tier
+                    client.tier = plan_slug
+                    if old_tier != plan_slug:
+                        logger.info(
+                            "Client %s tier changed: %s -> %s",
+                            client.business_name, old_tier, plan_slug,
+                        )
+
             await db.commit()
             logger.info(
                 "Subscription updated for %s: %s", client.business_name, new_status,

@@ -16,8 +16,10 @@ from sqlalchemy import select, and_, update
 
 from src.database import async_session_factory
 from src.models.lead import Lead
+from src.models.client import Client
 from src.models.followup import FollowupTask
 from src.models.event_log import EventLog
+from src.services.plan_limits import is_cold_followup_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,11 @@ async def _schedule_cold_recycling() -> int:
         leads = result.scalars().all()
 
         for lead in leads:
+            # Check if cold follow-ups are enabled for this client's tier
+            client = await db.get(Client, lead.client_id)
+            if not client or not is_cold_followup_enabled(client.tier):
+                continue
+
             # Check if there's already a pending cold_nurture task
             existing = await db.execute(
                 select(FollowupTask).where(

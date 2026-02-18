@@ -19,6 +19,7 @@ from src.services.compliance import full_compliance_check
 from src.services.sms import send_sms
 from src.agents.followup import process_followup
 from src.schemas.client_config import ClientConfig
+from src.services.plan_limits import is_cold_followup_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,16 @@ async def execute_followup_task(db: AsyncSession, task: FollowupTask):
     if lead.state in ("opted_out", "dead"):
         task.status = "skipped"
         task.skip_reason = f"Lead state: {lead.state}"
+        return
+
+    # Enforce plan-based follow-up gating (Starter: no cold follow-ups)
+    if task.task_type == "cold_nurture" and not is_cold_followup_enabled(client.tier):
+        task.status = "skipped"
+        task.skip_reason = f"Cold follow-ups not available on {client.tier} plan"
+        logger.info(
+            "Followup skipped for lead %s: tier %s does not include cold follow-ups",
+            str(lead.id)[:8], client.tier,
+        )
         return
 
     # Skip if lead responded (cold nurture no longer needed)

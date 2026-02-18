@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database import get_db
 from src.api.dashboard import get_current_client
 from src.models.client import Client
+from src.services.plan_limits import get_crm_integration_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["integrations"])
@@ -97,6 +98,21 @@ async def connect_integration(
 
     if crm_type not in SUPPORTED_CRMS:
         raise HTTPException(status_code=400, detail="Unsupported CRM type")
+
+    # Enforce CRM integration limit based on plan tier
+    crm_limit = get_crm_integration_limit(client.tier)
+    if crm_limit is not None and crm_limit <= 1:
+        # Starter tier: only 1 CRM integration allowed
+        has_existing_crm = (
+            client.crm_type
+            and client.crm_type != "google_sheets"
+            and client.crm_type != crm_type
+        )
+        if has_existing_crm:
+            raise HTTPException(
+                status_code=403,
+                detail="Starter plan allows 1 CRM integration. Upgrade to Professional for unlimited CRMs.",
+            )
 
     client.crm_type = crm_type
     if api_key:
