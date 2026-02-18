@@ -119,9 +119,11 @@ def is_stop_keyword(message: str) -> bool:
         if phrase in normalized:
             return True
 
-    # Layer 4: Check if any stop keyword appears as a standalone word
-    words = set(cleaned.split())
-    if words & STOP_KEYWORDS:
+    # Layer 4: Check if any stop keyword appears as a standalone word,
+    # but only in short messages (≤4 words). Longer sentences like
+    # "Please don't stop the service" are NOT opt-out requests.
+    words = cleaned.split()
+    if len(words) <= 4 and set(words) & STOP_KEYWORDS:
         return True
 
     return False
