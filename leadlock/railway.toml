@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "alembic upgrade head && gunicorn src.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --timeout 120 --graceful-timeout 30"
+healthcheckPath = "/health"
+healthcheckTimeout = 5
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

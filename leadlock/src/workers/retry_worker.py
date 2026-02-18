@@ -91,13 +91,15 @@ async def _process_pending_retries() -> int:
 async def _retry_lead(db, failed_lead) -> None:
     """Attempt to reprocess a failed lead through the pipeline."""
     from src.schemas.lead_envelope import LeadEnvelope
-    from src.agents.conductor import handle_new_lead
+    from src.agents.conductor import handle_new_lead, handle_inbound_reply
+    from src.models.lead import Lead
+    from src.models.client import Client
+    from sqlalchemy import select
 
     payload = failed_lead.original_payload
     if not payload:
         raise ValueError("No original payload to retry")
 
-    # Reconstruct envelope from saved payload
     stage = failed_lead.failure_stage
 
     if stage in ("webhook", "intake"):
@@ -109,9 +111,27 @@ async def _retry_lead(db, failed_lead) -> None:
             return  # Success or already handled
         if "error" in result.get("status", ""):
             raise RuntimeError(f"Retry failed: {result.get('status')}")
+
+    elif stage in ("qualify", "book"):
+        # Recover lead from DB and re-route through conductor
+        lead_id = payload.get("lead_id")
+        if not lead_id:
+            raise ValueError(f"No lead_id in payload for {stage} retry")
+
+        lead = await db.get(Lead, lead_id)
+        if not lead:
+            raise ValueError(f"Lead {str(lead_id)[:8]} not found for {stage} retry")
+
+        client = await db.get(Client, lead.client_id)
+        if not client:
+            raise ValueError(f"Client not found for lead {str(lead_id)[:8]}")
+
+        # Use the last inbound message or a synthetic re-trigger
+        last_message = payload.get("last_message", "")
+        result = await handle_inbound_reply(db, lead, client, last_message)
+
+        if result.get("status") in ("lock_timeout",):
+            raise RuntimeError("Lead locked by another process, will retry later")
+
     else:
-        # For qualify/book failures, we'd need the lead record
-        # For now, log and mark as needing manual resolution
-        raise NotImplementedError(
-            f"Automatic retry for stage '{stage}' not yet implemented"
-        )
+        raise ValueError(f"Unknown failure stage: {stage}")
