@@ -185,3 +185,111 @@ class TestNonEmergencies:
     def test_general_complaint(self):
         result = detect_emergency("My AC isn't cooling as well as it used to")
         assert result["is_emergency"] is False
+
+
+class TestFalsePositives:
+    """Ambiguous keywords must NOT trigger on non-emergency contexts.
+
+    These are regression tests for known false positives where common
+    words like "fire", "smoke", and "flood" have non-emergency meanings.
+    """
+
+    # --- "fire" used as verb meaning "to dismiss" ---
+
+    def test_fire_the_contractor(self):
+        result = detect_emergency("We need to fire the old contractor")
+        assert result["is_emergency"] is False
+
+    def test_fire_our_plumber(self):
+        result = detect_emergency("I want to fire our plumber")
+        assert result["is_emergency"] is False
+
+    def test_fire_him(self):
+        result = detect_emergency("We should fire him and hire someone else")
+        assert result["is_emergency"] is False
+
+    def test_fire_them(self):
+        result = detect_emergency("Can you fire them for me?")
+        assert result["is_emergency"] is False
+
+    def test_got_fired(self):
+        result = detect_emergency("The last tech got fired")
+        assert result["is_emergency"] is False
+
+    def test_youre_fired(self):
+        result = detect_emergency("You're fired, we're going with another company")
+        assert result["is_emergency"] is False
+
+    # --- "fire" as actual emergency still works ---
+
+    def test_real_fire_standalone(self):
+        result = detect_emergency("Fire!")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    def test_real_fire_in_location(self):
+        result = detect_emergency("There's a fire in the basement")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    def test_real_on_fire(self):
+        result = detect_emergency("The furnace is on fire")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    # --- "smoke" used for personal habit ---
+
+    def test_smoke_outside(self):
+        result = detect_emergency("I'll smoke outside while you work")
+        assert result["is_emergency"] is False
+
+    def test_smoke_cigarettes(self):
+        result = detect_emergency("I smoke cigarettes on the patio")
+        assert result["is_emergency"] is False
+
+    def test_smoker(self):
+        result = detect_emergency("The tech was a smoker which I didn't like")
+        assert result["is_emergency"] is False
+
+    def test_going_to_smoke(self):
+        result = detect_emergency("I'm going outside to smoke")
+        assert result["is_emergency"] is False
+
+    # --- "smoke" as actual emergency still works ---
+
+    def test_real_smoke_from_furnace(self):
+        result = detect_emergency("There's smoke coming from the furnace")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    def test_real_smell_smoke(self):
+        result = detect_emergency("I smell smoke in the house")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    def test_real_smoke_standalone(self):
+        result = detect_emergency("Smoke everywhere!")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "critical"
+
+    # --- "flood" used metaphorically ---
+
+    def test_flooded_with_calls(self):
+        result = detect_emergency("She is flooded with calls")
+        assert result["is_emergency"] is False
+
+    def test_flood_of_requests(self):
+        result = detect_emergency("We got a flood of requests today")
+        assert result["is_emergency"] is False
+
+    # --- "flood" as actual emergency still works ---
+
+    def test_real_flood_in_basement(self):
+        result = detect_emergency("There's a flood in the basement")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "urgent"
+
+    def test_real_flooding(self):
+        result = detect_emergency("The basement is flooding")
+        assert result["is_emergency"] is True
+        assert result["severity"] == "urgent"

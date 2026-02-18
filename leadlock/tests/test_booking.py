@@ -28,12 +28,14 @@ class TestScheduling:
             assert slot.end <= time(17, 0)
 
     def test_skips_sunday(self):
-        """No slots should be on Sunday."""
+        """No slots should be on Sunday — should return 0 slots for a Sunday-only range."""
         # Feb 15, 2026 is a Sunday
         slots = generate_available_slots(
             start_date=date(2026, 2, 15),
             days_ahead=1,
         )
+        # With days_ahead=1 starting on Sunday (skipped), expect 0 slots
+        assert len(slots) == 0
         for slot in slots:
             assert slot.date.weekday() != 6
 
@@ -60,9 +62,9 @@ class TestScheduling:
             team_members=team,
             max_daily_bookings=4,
         )
-        if len(slots) >= 2:
-            assert slots[0].tech_name == "Mike"
-            assert slots[1].tech_name == "Carlos"
+        assert len(slots) >= 2, "Expected at least 2 slots for round-robin test"
+        assert slots[0].tech_name == "Mike"
+        assert slots[1].tech_name == "Carlos"
 
     def test_slot_display_format(self):
         """TimeSlot.to_display should return human-readable format."""
@@ -70,6 +72,6 @@ class TestScheduling:
             start_date=date(2026, 2, 16),
             days_ahead=1,
         )
-        if slots:
-            display = slots[0].to_display()
-            assert "AM" in display or "PM" in display
+        assert len(slots) > 0, "Expected at least 1 slot for display format test"
+        display = slots[0].to_display()
+        assert "AM" in display or "PM" in display

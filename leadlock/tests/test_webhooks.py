@@ -9,9 +9,8 @@ from unittest.mock import patch, AsyncMock
 class TestWebFormWebhook:
     """Test the website form webhook."""
 
-    @pytest.mark.asyncio
-    async def test_valid_form_submission(self):
-        """Valid form submission should create a lead."""
+    def test_valid_form_submission(self):
+        """Valid form submission should construct a valid payload."""
         from src.schemas.webhook_payloads import WebFormPayload
         payload = WebFormPayload(
             name="John Smith",

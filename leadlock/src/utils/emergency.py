@@ -58,6 +58,56 @@ URGENT_KEYWORDS = [
     "pipes are frozen",
 ]
 
+# False-positive exclusion patterns for ambiguous single-word keywords.
+# These patterns match non-emergency contexts where the keyword appears
+# with a different meaning (e.g., "fire the contractor", "smoke outside").
+_FALSE_POSITIVE_EXCLUSIONS: dict[str, list[re.Pattern]] = {
+    "fire": [
+        # "fire" as verb meaning "to dismiss someone"
+        re.compile(r"\bfire\s+(the|our|my|your|his|her|him|them|us|me|that|this)\b"),
+        # Past tense / adjective: "got fired", "you're fired"
+        re.compile(r"\bfired\b"),
+    ],
+    "smoke": [
+        # "smoke" as leisure verb: "smoke outside", "smoke cigarettes"
+        re.compile(r"\bsmoke\s+(outside|cigarettes?|weed|pot|a\s+cigar|break)\b"),
+        # "to smoke", "smoker" — personal habit context
+        re.compile(r"\b(smoker|to\s+smoke)\b"),
+    ],
+    "flood": [
+        # Metaphorical: "flooded with calls", "flood of requests"
+        re.compile(r"\bflooded?\s+(with|of|by)\b"),
+        re.compile(r"\bflood\s+of\b"),
+    ],
+}
+
+
+def _matches_keyword(keyword: str, message_lower: str) -> bool:
+    """Check if keyword matches in message.
+
+    Multi-word phrases use substring matching (already specific enough).
+    Single-word keywords use word-boundary regex matching with additional
+    false-positive exclusions for ambiguous words like "fire" and "smoke".
+    """
+    if " " in keyword:
+        return keyword in message_lower
+
+    # Single-word: require word boundary to prevent partial matches
+    if not re.search(rf"\b{re.escape(keyword)}\b", message_lower):
+        return False
+
+    # Check for known false-positive contexts
+    exclusions = _FALSE_POSITIVE_EXCLUSIONS.get(keyword, [])
+    return not any(pattern.search(message_lower) for pattern in exclusions)
+
+
+_NOT_EMERGENCY = {
+    "is_emergency": False,
+    "severity": None,
+    "matched_keyword": None,
+    "emergency_type": None,
+}
+
 
 def detect_emergency(
     message: str,
@@ -79,12 +129,7 @@ def detect_emergency(
         }
     """
     if not message:
-        return {
-            "is_emergency": False,
-            "severity": None,
-            "matched_keyword": None,
-            "emergency_type": None,
-        }
+        return {**_NOT_EMERGENCY}
 
     message_lower = message.lower().strip()
 
@@ -105,7 +150,7 @@ def detect_emergency(
 
     # Check critical keywords
     for keyword in CRITICAL_KEYWORDS:
-        if keyword in message_lower:
+        if _matches_keyword(keyword, message_lower):
             logger.warning(
                 "EMERGENCY DETECTED (critical): '%s' in message", keyword
             )
@@ -118,7 +163,7 @@ def detect_emergency(
 
     # Check urgent keywords
     for keyword in URGENT_KEYWORDS:
-        if keyword in message_lower:
+        if _matches_keyword(keyword, message_lower):
             logger.warning(
                 "EMERGENCY DETECTED (urgent): '%s' in message", keyword
             )
@@ -129,12 +174,7 @@ def detect_emergency(
                 "emergency_type": _categorize_emergency(keyword),
             }
 
-    return {
-        "is_emergency": False,
-        "severity": None,
-        "matched_keyword": None,
-        "emergency_type": None,
-    }
+    return {**_NOT_EMERGENCY}
 
 
 def _categorize_emergency(keyword: str) -> str:

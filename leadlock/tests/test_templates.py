@@ -33,7 +33,7 @@ class TestTemplates:
         assert "Austin HVAC" in result
 
     def test_missing_variable_doesnt_crash(self):
-        """Missing variables should not raise an error."""
+        """Missing variables should show as {var_name} placeholders."""
         result = render_template(
             template_key="standard",
             category="intake",
@@ -41,8 +41,9 @@ class TestTemplates:
             # Missing rep_name, business_name, service_type
         )
         assert "John" in result
-        # Missing vars should show as {var_name}
-        assert isinstance(result, str)
+        # Missing vars should show as {var_name} literals
+        assert "{rep_name}" in result
+        assert "{business_name}" in result
 
     def test_cold_nurture_renders(self):
         result = render_template(

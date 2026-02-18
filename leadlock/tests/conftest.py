@@ -3,19 +3,10 @@ Test configuration and fixtures.
 Uses SQLite in-memory for fast tests. Mocks all external services.
 """
 import pytest
-import asyncio
 import uuid
-from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from src.database import Base
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture
@@ -32,7 +23,8 @@ async def db():
 
 @pytest.fixture
 def mock_sms():
-    with patch("src.services.sms.send_sms") as mock:
+    """Mock for async send_sms — prevents real Twilio calls in tests."""
+    with patch("src.services.sms.send_sms", new_callable=AsyncMock) as mock:
         mock.return_value = {
             "sid": "SM_test_123",
             "status": "sent",
@@ -46,7 +38,8 @@ def mock_sms():
 
 @pytest.fixture
 def mock_ai():
-    with patch("src.services.ai.generate_response") as mock:
+    """Mock for async generate_response — prevents real AI API calls in tests."""
+    with patch("src.services.ai.generate_response", new_callable=AsyncMock) as mock:
         mock.return_value = {
             "content": '{"message": "Test response", "qualification": {}, "internal_notes": "", "next_action": "continue_qualifying", "score_adjustment": 0}',
             "provider": "anthropic",
@@ -62,6 +55,7 @@ def mock_ai():
 
 @pytest.fixture
 def mock_redis():
+    """Mock for async Redis — prevents real Redis calls in tests."""
     with patch("src.utils.dedup.get_redis") as mock:
         redis_mock = AsyncMock()
         redis_mock.set = AsyncMock(return_value=True)

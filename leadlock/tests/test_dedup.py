@@ -2,10 +2,11 @@
 Deduplication tests.
 """
 import pytest
-from src.utils.dedup import make_dedup_key
+from unittest.mock import AsyncMock, patch
+from src.utils.dedup import make_dedup_key, is_duplicate
 
 
-class TestDedup:
+class TestDedupKey:
     def test_same_input_same_key(self):
         """Same client + phone + source should produce same key."""
         key1 = make_dedup_key("client1", "+15125559876", "website")
@@ -34,3 +35,26 @@ class TestDedup:
         """Keys should have the correct prefix."""
         key = make_dedup_key("client1", "+15125559876", "website")
         assert key.startswith("leadlock:dedup:")
+
+
+class TestIsDuplicate:
+    """Test the async is_duplicate function with mocked Redis."""
+
+    async def test_new_lead_returns_false(self, mock_redis):
+        """New lead (SET NX succeeds) should return False."""
+        mock_redis.set = AsyncMock(return_value=True)
+        result = await is_duplicate("client1", "+15125559876", "website")
+        assert result is False
+
+    async def test_duplicate_lead_returns_true(self, mock_redis):
+        """Duplicate lead (SET NX returns None) should return True."""
+        mock_redis.set = AsyncMock(return_value=None)
+        result = await is_duplicate("client1", "+15125559876", "website")
+        assert result is True
+
+    async def test_redis_failure_returns_false(self):
+        """Redis failure should fail-open (assume not duplicate)."""
+        with patch("src.utils.dedup.get_redis") as mock_get_redis:
+            mock_get_redis.side_effect = Exception("Redis connection refused")
+            result = await is_duplicate("client1", "+15125559876", "website")
+            assert result is False

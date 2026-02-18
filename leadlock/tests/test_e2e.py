@@ -32,6 +32,17 @@ class TestPhoneNormalization:
     def test_invalid_us_phone(self):
         assert is_valid_us_phone("5125559876") is False
 
+    def test_empty_string_returns_none(self):
+        assert normalize_phone("") is None
+
+    def test_none_returns_none(self):
+        assert normalize_phone(None) is None
+
+    def test_toll_free_number(self):
+        result = normalize_phone("1-800-555-0000")
+        # Should either normalize to E.164 or return None
+        assert result is None or result.startswith("+1")
+
 
 class TestSmsSegments:
     def test_short_message_one_segment(self):
@@ -52,11 +63,21 @@ class TestTimer:
     def test_timer_basic(self):
         timer = Timer().start()
         ms = timer.stop()
+        assert isinstance(ms, (int, float))
         assert ms >= 0
 
     def test_elapsed_ms(self):
         timer = Timer().start()
+        assert isinstance(timer.elapsed_ms, (int, float))
         assert timer.elapsed_ms >= 0
+
+    def test_timer_measures_time(self):
+        """Timer should actually measure elapsed time, not always return 0."""
+        import time as time_mod
+        timer = Timer().start()
+        time_mod.sleep(0.01)  # 10ms
+        ms = timer.stop()
+        assert ms >= 5  # Allow margin but verify it's not 0
 
 
 class TestResponseTimeBucket:

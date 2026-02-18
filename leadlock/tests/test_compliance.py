@@ -12,6 +12,10 @@ from src.services.compliance import (
     check_message_limits,
     check_content_compliance,
     full_compliance_check,
+    is_california_number,
+    needs_ai_disclosure,
+    get_ai_disclosure,
+    STOP_PHRASES,
 )
 
 
@@ -268,3 +272,169 @@ class TestFullComplianceCheck:
         )
         assert result.allowed is False
         assert "opted out" in result.reason.lower()
+
+    def test_quiet_hours_blocks(self):
+        """Quiet hours should block within full_compliance_check."""
+        now = datetime(2026, 2, 14, 3, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = full_compliance_check(
+            has_consent=True,
+            consent_type="pewc",
+            state_code="NY",
+            message="Test",
+            now=now,
+        )
+        assert result.allowed is False
+        assert "8 AM" in result.reason
+
+    def test_message_limit_blocks(self):
+        """Message limit should block within full_compliance_check."""
+        now = datetime(2026, 2, 14, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = full_compliance_check(
+            has_consent=True,
+            consent_type="pewc",
+            cold_outreach_count=3,
+            max_cold_followups=3,
+            message="Test",
+            now=now,
+        )
+        assert result.allowed is False
+        assert "max" in result.reason.lower()
+
+    def test_content_compliance_blocks(self):
+        """Content compliance should block within full_compliance_check."""
+        now = datetime(2026, 2, 14, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = full_compliance_check(
+            has_consent=True,
+            consent_type="pewc",
+            message="Hi there!",
+            is_first_message=True,
+            business_name="ACME",
+            now=now,
+        )
+        assert result.allowed is False
+        assert "stop" in result.reason.lower()
+
+    def test_emergency_bypasses_quiet_hours_in_full_check(self):
+        """Emergency should bypass quiet hours even in full_compliance_check."""
+        now = datetime(2026, 2, 14, 3, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = full_compliance_check(
+            has_consent=True,
+            consent_type="pewc",
+            state_code="NY",
+            is_emergency=True,
+            message="Emergency response",
+            now=now,
+        )
+        assert result.allowed is True
+
+
+# === STOP PHRASE TESTS (TCPA $500-$1,500/violation) ===
+
+class TestStopPhrases:
+    """Every phrase in STOP_PHRASES must be recognized as opt-out."""
+
+    @pytest.mark.parametrize("phrase", STOP_PHRASES)
+    def test_stop_phrase_detected(self, phrase):
+        """Each STOP_PHRASES entry must trigger opt-out detection."""
+        assert is_stop_keyword(phrase) is True, f"Failed to detect STOP phrase: '{phrase}'"
+
+    @pytest.mark.parametrize("phrase", [
+        "stop texting me please",
+        "LEAVE ME ALONE",
+        "Please stop contacting me",
+        "I want out of this",
+        "No more messages from you",
+    ])
+    def test_stop_phrase_in_context(self, phrase):
+        assert is_stop_keyword(phrase) is True
+
+
+class TestRepeatedCharacterStopDetection:
+    """Layer 2: Repeated character collapsing (STOPPPP -> stop)."""
+
+    def test_stopppp(self):
+        assert is_stop_keyword("STOPPPP") is True
+
+    def test_quiiit(self):
+        assert is_stop_keyword("QUIIIT") is True
+
+    def test_endddd(self):
+        assert is_stop_keyword("ENDDDD") is True
+
+    def test_cancellll(self):
+        assert is_stop_keyword("CANCELLLL") is True
+
+    def test_stooop(self):
+        assert is_stop_keyword("STOOOP") is True
+
+
+# === QUIET HOURS DEFAULT TIMEZONE ===
+
+class TestQuietHoursDefaultTimezone:
+    def test_no_state_code_defaults_to_eastern(self):
+        """With no state_code, should default to Eastern timezone."""
+        # 3 AM Eastern is quiet hours
+        now = datetime(2026, 2, 14, 3, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = check_quiet_hours(now=now)
+        assert result.allowed is False
+
+    def test_no_state_code_during_business_hours(self):
+        now = datetime(2026, 2, 14, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = check_quiet_hours(now=now)
+        assert result.allowed is True
+
+
+# === FLORIDA HOLIDAY BLOCKING ===
+
+class TestFloridaHolidayBlocking:
+    def test_good_friday_2026_blocked(self):
+        """Florida FTSA: No messages on Good Friday (April 3, 2026)."""
+        # 12:00 PM on Good Friday 2026
+        now = datetime(2026, 4, 3, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = check_quiet_hours(state_code="FL", now=now)
+        assert result.allowed is False
+        assert "holiday" in result.reason.lower()
+
+    def test_day_after_thanksgiving_blocked(self):
+        """Florida FTSA: No messages on day after Thanksgiving (Nov 27, 2026)."""
+        now = datetime(2026, 11, 27, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = check_quiet_hours(state_code="FL", now=now)
+        assert result.allowed is False
+        assert "holiday" in result.reason.lower()
+
+    def test_christmas_blocked(self):
+        now = datetime(2026, 12, 25, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+        result = check_quiet_hours(state_code="FL", now=now)
+        assert result.allowed is False
+
+
+# === CALIFORNIA SB 1001 AI DISCLOSURE ===
+
+class TestCaliforniaAIDisclosure:
+    def test_california_area_code_detected(self):
+        assert is_california_number("+14155551234") is True  # 415 = SF
+
+    def test_non_california_area_code(self):
+        assert is_california_number("+15125551234") is False  # 512 = Austin TX
+
+    def test_invalid_phone_returns_false(self):
+        assert is_california_number("") is False
+        assert is_california_number("+1") is False
+        assert is_california_number(None) is False
+
+    def test_needs_disclosure_for_ca_state_code(self):
+        assert needs_ai_disclosure("+15125551234", state_code="CA") is True
+
+    def test_needs_disclosure_for_ca_area_code(self):
+        assert needs_ai_disclosure("+14155551234") is True
+
+    def test_no_disclosure_for_tx(self):
+        assert needs_ai_disclosure("+15125551234", state_code="TX") is False
+
+    def test_no_disclosure_if_already_sent(self):
+        assert needs_ai_disclosure("+14155551234", ai_disclosure_sent=True) is False
+
+    def test_disclosure_text_includes_business_name(self):
+        disclosure = get_ai_disclosure("Austin HVAC")
+        assert "Austin HVAC" in disclosure
+        assert "automated" in disclosure.lower() or "AI" in disclosure
