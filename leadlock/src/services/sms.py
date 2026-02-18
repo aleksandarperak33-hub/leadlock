@@ -188,7 +188,7 @@ async def provision_phone_number(phone_number: str, client_id: str) -> dict:
     settings = get_settings()
 
     client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
-    webhook_url = f"{settings.app_base_url.rstrip('/')}/api/v1/webhooks/twilio/inbound"
+    webhook_url = f"{settings.app_base_url.rstrip('/')}/api/v1/webhook/twilio/sms/{client_id}"
 
     try:
         incoming = client.incoming_phone_numbers.create(

@@ -73,8 +73,21 @@ def compute_payload_hash(body: bytes) -> str:
 
 
 async def get_webhook_url(request) -> str:
-    """Reconstruct the full URL for Twilio signature validation."""
-    return str(request.url)
+    """
+    Reconstruct the public URL for Twilio signature validation.
+    Behind a reverse proxy (Caddy), request.url returns the internal URL
+    (e.g., http://api:8000/...) but Twilio signs against the public URL
+    (e.g., https://api.leadlock.org/...). We use X-Forwarded-Proto and
+    X-Forwarded-Host headers (set by Caddy) to reconstruct the correct URL.
+    """
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    path = request.url.path
+    query = request.url.query
+    base = f"{proto}://{host}{path}"
+    if query:
+        return f"{base}?{query}"
+    return base
 
 
 async def validate_webhook_source(
