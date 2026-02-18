@@ -40,7 +40,7 @@ _BLOCKED_HOSTNAMES = frozenset({
 })
 
 
-def _is_safe_url(url: str) -> bool:
+async def _is_safe_url(url: str) -> bool:
     """
     Validate that a URL doesn't target internal/private networks (SSRF protection).
 
@@ -70,8 +70,12 @@ def _is_safe_url(url: str) -> bool:
             return False
 
         # Resolve hostname to IP and validate every returned address
+        # Use run_in_executor to avoid blocking the event loop
         try:
-            addr_infos = socket.getaddrinfo(hostname, None)
+            loop = asyncio.get_running_loop()
+            addr_infos = await loop.run_in_executor(
+                None, socket.getaddrinfo, hostname, None,
+            )
         except socket.gaierror:
             return False
 
@@ -194,7 +198,7 @@ async def scrape_contact_emails(website: str) -> list[str]:
         website = f"https://{website}"
 
     # SSRF protection: block requests to internal/private networks
-    if not _is_safe_url(website):
+    if not await _is_safe_url(website):
         logger.warning("SSRF protection blocked scrape of: %s", website)
         return []
 
@@ -233,7 +237,7 @@ async def scrape_contact_emails(website: str) -> list[str]:
                     if location.startswith("/"):
                         parsed_current = urlparse(current_url)
                         location = f"{parsed_current.scheme}://{parsed_current.netloc}{location}"
-                    if not _is_safe_url(location):
+                    if not await _is_safe_url(location):
                         logger.warning("SSRF redirect blocked: %s -> %s", current_url, location)
                         response = None
                         break

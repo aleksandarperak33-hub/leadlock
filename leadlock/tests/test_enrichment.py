@@ -22,80 +22,80 @@ from src.services.enrichment import (
 class TestIsSafeUrl:
     """URL safety checks to prevent SSRF attacks."""
 
-    def test_https_public_domain_allowed(self):
+    async def test_https_public_domain_allowed(self):
         """Normal HTTPS URL to a public domain is safe."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
-            assert _is_safe_url("https://example.com") is True
+            assert await _is_safe_url("https://example.com") is True
 
-    def test_http_allowed(self):
+    async def test_http_allowed(self):
         """HTTP scheme is also allowed."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
-            assert _is_safe_url("http://example.com") is True
+            assert await _is_safe_url("http://example.com") is True
 
-    def test_file_scheme_blocked(self):
+    async def test_file_scheme_blocked(self):
         """file:// scheme is blocked."""
-        assert _is_safe_url("file:///etc/passwd") is False
+        assert await _is_safe_url("file:///etc/passwd") is False
 
-    def test_ftp_scheme_blocked(self):
+    async def test_ftp_scheme_blocked(self):
         """ftp:// scheme is blocked."""
-        assert _is_safe_url("ftp://example.com") is False
+        assert await _is_safe_url("ftp://example.com") is False
 
-    def test_localhost_blocked(self):
+    async def test_localhost_blocked(self):
         """localhost is blocked by hostname check."""
-        assert _is_safe_url("http://localhost/admin") is False
+        assert await _is_safe_url("http://localhost/admin") is False
 
-    def test_127_0_0_1_blocked(self):
+    async def test_127_0_0_1_blocked(self):
         """127.0.0.1 is blocked by hostname check."""
-        assert _is_safe_url("http://127.0.0.1/admin") is False
+        assert await _is_safe_url("http://127.0.0.1/admin") is False
 
-    def test_private_ip_10_x_blocked(self):
+    async def test_private_ip_10_x_blocked(self):
         """10.x.x.x private range is blocked by IP validation."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("10.0.0.1", 0))]
-            assert _is_safe_url("http://internal.corp.com") is False
+            assert await _is_safe_url("http://internal.corp.com") is False
 
-    def test_private_ip_192_168_x_blocked(self):
+    async def test_private_ip_192_168_x_blocked(self):
         """192.168.x.x private range is blocked."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("192.168.1.1", 0))]
-            assert _is_safe_url("http://router.local") is False
+            assert await _is_safe_url("http://router.local") is False
 
-    def test_private_ip_172_16_blocked(self):
+    async def test_private_ip_172_16_blocked(self):
         """172.16.x.x private range is blocked."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("172.16.0.1", 0))]
-            assert _is_safe_url("http://internal-service") is False
+            assert await _is_safe_url("http://internal-service") is False
 
-    def test_metadata_endpoint_blocked(self):
+    async def test_metadata_endpoint_blocked(self):
         """Cloud metadata endpoint is blocked."""
-        assert _is_safe_url("http://169.254.169.254/latest/meta-data") is False
+        assert await _is_safe_url("http://169.254.169.254/latest/meta-data") is False
 
-    def test_dns_failure_returns_false(self):
+    async def test_dns_failure_returns_false(self):
         """DNS resolution failure returns False (safe)."""
         with patch(
             "src.services.enrichment.socket.getaddrinfo",
             side_effect=socket.gaierror("Name resolution failed"),
         ):
-            assert _is_safe_url("http://nonexistent.example.com") is False
+            assert await _is_safe_url("http://nonexistent.example.com") is False
 
-    def test_non_standard_port_blocked(self):
+    async def test_non_standard_port_blocked(self):
         """Non-standard ports like 9200 (Elasticsearch) are blocked."""
-        assert _is_safe_url("http://example.com:9200") is False
+        assert await _is_safe_url("http://example.com:9200") is False
 
-    def test_allowed_port_8080(self):
+    async def test_allowed_port_8080(self):
         """Port 8080 is in the allowed set."""
         with patch("src.services.enrichment.socket.getaddrinfo") as mock_dns:
             mock_dns.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
-            assert _is_safe_url("http://example.com:8080") is True
+            assert await _is_safe_url("http://example.com:8080") is True
 
-    def test_no_hostname_returns_false(self):
+    async def test_no_hostname_returns_false(self):
         """URL with no hostname is not safe."""
-        assert _is_safe_url("http://") is False
+        assert await _is_safe_url("http://") is False
 
-    def test_empty_string_returns_false(self):
-        assert _is_safe_url("") is False
+    async def test_empty_string_returns_false(self):
+        assert await _is_safe_url("") is False
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ class TestScrapeContactEmails:
     @pytest.mark.asyncio
     async def test_unsafe_url_returns_empty(self):
         """SSRF-blocked URL returns empty list."""
-        with patch("src.services.enrichment._is_safe_url", return_value=False):
+        with patch("src.services.enrichment._is_safe_url", new_callable=AsyncMock, return_value=False):
             result = await scrape_contact_emails("http://169.254.169.254")
         assert result == []
 
@@ -242,7 +242,7 @@ class TestScrapeContactEmails:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("src.services.enrichment._is_safe_url", return_value=True),
+            patch("src.services.enrichment._is_safe_url", new_callable=AsyncMock, return_value=True),
             patch("src.services.enrichment.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await scrape_contact_emails("https://hvacpro.com")
@@ -265,7 +265,7 @@ class TestScrapeContactEmails:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("src.services.enrichment._is_safe_url", return_value=True),
+            patch("src.services.enrichment._is_safe_url", new_callable=AsyncMock, return_value=True),
             patch("src.services.enrichment.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await scrape_contact_emails("https://hvacpro.com")

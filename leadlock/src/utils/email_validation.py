@@ -35,6 +35,7 @@ async def has_mx_record(domain: str) -> bool:
     """
     Check if domain has MX (mail exchange) DNS records.
     Falls back to A record check if no MX found.
+    Runs DNS resolution in a thread pool to avoid blocking the event loop.
 
     Args:
         domain: Domain to check (e.g. "example.com")
@@ -43,20 +44,25 @@ async def has_mx_record(domain: str) -> bool:
         True if domain can receive email
     """
     try:
+        import asyncio
         import dns.resolver
 
-        try:
-            answers = dns.resolver.resolve(domain, "MX")
-            return len(answers) > 0
-        except dns.resolver.NoAnswer:
-            # No MX record — check for A record as fallback
+        loop = asyncio.get_running_loop()
+
+        def _resolve_mx():
             try:
-                dns.resolver.resolve(domain, "A")
-                return True
-            except Exception:
+                answers = dns.resolver.resolve(domain, "MX")
+                return len(answers) > 0
+            except dns.resolver.NoAnswer:
+                try:
+                    dns.resolver.resolve(domain, "A")
+                    return True
+                except Exception:
+                    return False
+            except dns.resolver.NXDOMAIN:
                 return False
-        except dns.resolver.NXDOMAIN:
-            return False
+
+        return await loop.run_in_executor(None, _resolve_mx)
 
     except ImportError:
         # dnspython not installed — skip MX check, just validate format

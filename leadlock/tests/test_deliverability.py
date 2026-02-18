@@ -28,7 +28,7 @@ class TestClassifyOutcome:
         assert _classify_outcome("delivered", None) == "delivered"
 
     def test_sent_status(self):
-        assert _classify_outcome("sent", None) == "delivered"
+        assert _classify_outcome("sent", None) == "pending"
 
     def test_carrier_filter_30007(self):
         assert _classify_outcome("failed", "30007") == "filtered"

@@ -65,6 +65,16 @@ async def send_cold_email(
         logger.error("SendGrid API key not configured")
         return {"message_id": None, "status": "error", "cost_usd": 0.0, "error": "SendGrid not configured"}
 
+    # CAN-SPAM §5(a)(5) requires a valid physical postal address in every commercial email.
+    # Reject sends with empty company_address to prevent compliance violations.
+    if not company_address or not company_address.strip():
+        logger.error("CAN-SPAM violation: company_address is required but empty")
+        return {"message_id": None, "status": "error", "cost_usd": 0.0, "error": "company_address required for CAN-SPAM compliance"}
+
+    if not unsubscribe_url or not unsubscribe_url.strip():
+        logger.error("CAN-SPAM violation: unsubscribe_url is required but empty")
+        return {"message_id": None, "status": "error", "cost_usd": 0.0, "error": "unsubscribe_url required for CAN-SPAM compliance"}
+
     try:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (

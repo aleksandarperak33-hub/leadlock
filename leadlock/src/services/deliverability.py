@@ -68,11 +68,11 @@ async def record_sms_outcome(
         await redis.zadd(f"{base_key}:total", {f"{now}:{to_phone}": now})
 
         # Clean up old entries (older than 24h)
-        for suffix in ("delivered", "failed", "filtered", "invalid", "total"):
+        for suffix in ("delivered", "pending", "failed", "filtered", "invalid", "total"):
             await redis.zremrangebyscore(f"{base_key}:{suffix}", 0, day_ago)
 
         # Set TTL on all keys (48h to ensure cleanup)
-        for suffix in ("delivered", "failed", "filtered", "invalid", "total"):
+        for suffix in ("delivered", "pending", "failed", "filtered", "invalid", "total"):
             await redis.expire(f"{base_key}:{suffix}", 172800)
 
         # Also track per-client stats if client_id provided
@@ -80,7 +80,7 @@ async def record_sms_outcome(
             client_key = f"leadlock:deliverability:client:{client_id}"
             await redis.zadd(f"{client_key}:{outcome}", {f"{now}:{to_phone}": now})
             await redis.zadd(f"{client_key}:total", {f"{now}:{to_phone}": now})
-            for suffix in ("delivered", "failed", "filtered", "invalid", "total"):
+            for suffix in ("delivered", "pending", "failed", "filtered", "invalid", "total"):
                 await redis.zremrangebyscore(f"{client_key}:{suffix}", 0, day_ago)
                 await redis.expire(f"{client_key}:{suffix}", 172800)
 
@@ -90,8 +90,12 @@ async def record_sms_outcome(
 
 def _classify_outcome(status: str, error_code: Optional[str]) -> str:
     """Classify an SMS outcome for reputation tracking."""
-    if status in ("delivered", "sent"):
+    if status == "delivered":
         return "delivered"
+    if status == "sent":
+        # "sent" means accepted by Twilio/carrier, NOT confirmed delivered to handset.
+        # Do not count as "delivered" — this avoids inflating delivery rate metrics.
+        return "pending"
     if error_code in ("30007",):
         return "filtered"  # Carrier filtering — content issue
     if error_code in ("21211", "21612", "30006"):

@@ -188,13 +188,14 @@ async def _heartbeat():
         pass
 
 
-async def _get_warmup_limit(configured_limit: int) -> int:
+async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
     """
     Calculate the effective daily email limit based on domain warmup schedule.
-    On first call, stores the warmup start timestamp in Redis.
+    On first call, stores the warmup start timestamp in Redis keyed per sending domain.
 
     Args:
         configured_limit: The user-configured daily email limit.
+        from_email: The sender email address used to key warmup by domain.
 
     Returns:
         The minimum of the warmup limit and configured limit.
@@ -203,7 +204,8 @@ async def _get_warmup_limit(configured_limit: int) -> int:
         from src.utils.dedup import get_redis
         redis = await get_redis()
 
-        warmup_key = "leadlock:email_sending_started_at"
+        domain = from_email.split("@")[1].lower() if "@" in from_email else "default"
+        warmup_key = f"leadlock:email_warmup:{domain}"
         started_at_raw = await redis.get(warmup_key)
 
         if started_at_raw is None:
@@ -273,7 +275,7 @@ async def _check_email_health() -> tuple[bool, str]:
 
     except Exception as e:
         logger.warning("Email health check failed: %s — continuing with caution", str(e))
-        return True, "normal"  # Don't block on monitoring errors
+        return True, "reduced"  # Redis outage: apply 50% throttle as conservative fallback
 
 
 def _calculate_cycle_cap(
@@ -399,7 +401,7 @@ async def sequence_cycle():
         sent_today = sent_today_result.scalar() or 0
 
         # Apply warmup limit — ramp up daily sends for new domains
-        warmup_limit = await _get_warmup_limit(config.daily_email_limit)
+        warmup_limit = await _get_warmup_limit(config.daily_email_limit, config.from_email or "")
 
         # Apply reputation throttle factor
         from src.services.deliverability import EMAIL_THROTTLE_FACTORS
@@ -440,7 +442,7 @@ async def sequence_cycle():
                 Outreach.status.in_(["cold"]),
                 Outreach.last_email_replied_at.is_(None),
             )
-        ).order_by(Outreach.created_at).limit(remaining)
+        ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
 
         # Steps 1-2: contacted but no reply, delay elapsed, NOT campaign-bound
         followup_query = select(Outreach).where(
@@ -455,7 +457,7 @@ async def sequence_cycle():
                 Outreach.last_email_replied_at.is_(None),
                 Outreach.last_email_sent_at <= delay_cutoff,
             )
-        ).order_by(Outreach.last_email_sent_at).limit(remaining)
+        ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
         # Execute both queries
         step_0_result = await db.execute(step_0_query)
@@ -483,6 +485,7 @@ async def sequence_cycle():
                     continue
 
                 await send_sequence_email(db, config, settings, prospect)
+                await db.flush()
             except Exception as e:
                 logger.error(
                     "Failed to send outreach to %s: %s",
@@ -564,7 +567,7 @@ async def _process_campaign_prospects(
                     Outreach.status.in_(["cold"]),
                     Outreach.last_email_replied_at.is_(None),
                 )
-            ).order_by(Outreach.created_at).limit(remaining)
+            ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
         else:
             # Follow-up steps: at previous step, delay elapsed
             delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=delay_hours)
@@ -579,12 +582,21 @@ async def _process_campaign_prospects(
                     Outreach.last_email_replied_at.is_(None),
                     Outreach.last_email_sent_at <= delay_cutoff,
                 )
-            ).order_by(Outreach.last_email_sent_at).limit(remaining)
+            ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
         result = await db.execute(query)
         prospects = result.scalars().all()
         for p in prospects:
             all_prospects.append((p, template_id))
+
+    # Deduplicate by prospect ID (a prospect may appear in multiple step queries)
+    seen_ids = set()
+    deduped = []
+    for p, tmpl in all_prospects:
+        if p.id not in seen_ids:
+            seen_ids.add(p.id)
+            deduped.append((p, tmpl))
+    all_prospects = deduped
 
     # Limit to daily cap
     all_prospects = all_prospects[:remaining]
@@ -607,6 +619,7 @@ async def _process_campaign_prospects(
                 db, config, settings, prospect,
                 template_id=template_id, campaign=campaign,
             )
+            await db.flush()
         except Exception as e:
             logger.error(
                 "Campaign %s: failed to send to %s: %s",
