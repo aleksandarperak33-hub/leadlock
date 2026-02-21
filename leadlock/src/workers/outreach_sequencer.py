@@ -191,7 +191,10 @@ async def _heartbeat():
 async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
     """
     Calculate the effective daily email limit based on domain warmup schedule.
-    On first call, stores the warmup start timestamp in Redis keyed per sending domain.
+
+    Uses Redis to cache the warmup start date, but falls back to the DB
+    (first outbound email sent_at) if the Redis key is missing. This prevents
+    warmup resets when containers restart and Redis data is lost.
 
     Args:
         configured_limit: The user-configured daily email limit.
@@ -209,30 +212,55 @@ async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
         started_at_raw = await redis.get(warmup_key)
 
         if started_at_raw is None:
-            # First email send ever - record the start timestamp
-            now_iso = datetime.now(timezone.utc).isoformat()
-            await redis.set(warmup_key, now_iso)
-            logger.info("Email warmup started - day 0, limit=5")
-            return min(5, configured_limit)
+            # Redis key missing — recover from DB to avoid resetting warmup
+            started_at = await _recover_warmup_start_from_db()
+            if started_at is not None:
+                await redis.set(warmup_key, started_at.isoformat())
+                logger.info("Recovered warmup start from DB: %s", started_at.isoformat())
+            else:
+                # Truly first email ever — start warmup now
+                started_at = datetime.now(timezone.utc)
+                await redis.set(warmup_key, started_at.isoformat())
+                logger.info("Email warmup started - day 0, limit=5")
+        else:
+            started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
+            started_at = datetime.fromisoformat(started_at_str)
 
-        started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
-        started_at = datetime.fromisoformat(started_at_str)
         days_since_start = (datetime.now(timezone.utc) - started_at).days
 
         for day_start, day_end, max_daily in EMAIL_WARMUP_SCHEDULE:
             if day_end is None:
-                # Final entry: warmup complete, use configured limit
                 return configured_limit
             if day_start <= days_since_start <= day_end:
                 warmup_limit = max_daily if max_daily is not None else configured_limit
+                logger.info("Warmup day %d: limit=%d (configured=%d)", days_since_start, warmup_limit, configured_limit)
                 return min(warmup_limit, configured_limit)
 
-        # Fallback: warmup complete
         return configured_limit
 
     except Exception as e:
         logger.warning("Warmup limit check failed: %s - using configured limit", str(e))
         return configured_limit
+
+
+async def _recover_warmup_start_from_db() -> Optional[datetime]:
+    """
+    Recover the warmup start date from the earliest outbound email in the DB.
+    This prevents warmup resets when Redis data is lost on container restarts.
+    """
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(func.min(OutreachEmail.sent_at)).where(
+                    OutreachEmail.direction == "outbound",
+                    OutreachEmail.sent_at.isnot(None),
+                )
+            )
+            earliest = result.scalar()
+            return earliest
+    except Exception as e:
+        logger.warning("Failed to recover warmup start from DB: %s", str(e))
+        return None
 
 
 async def _check_email_health() -> tuple[bool, str]:
@@ -466,8 +494,9 @@ async def sequence_cycle():
         followup_result = await db.execute(followup_query)
         followup_prospects = followup_result.scalars().all()
 
-        # Combine and limit
-        all_prospects = step_0_prospects + followup_prospects
+        # Combine: follow-ups FIRST (they've already been waiting 48h+),
+        # then new contacts fill remaining slots
+        all_prospects = followup_prospects + step_0_prospects
         all_prospects = all_prospects[:remaining]
 
         if all_prospects:
