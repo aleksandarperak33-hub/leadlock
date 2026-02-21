@@ -635,7 +635,7 @@ async def _generate_email_with_template(
     prospect: Outreach,
     next_step: int,
     template: Optional[EmailTemplate] = None,
-    sender_name: str = "Alex",
+    sender_name: str = "Alek",
 ) -> dict:
     """
     Generate an outreach email, optionally using a template.
@@ -739,7 +739,7 @@ async def send_sequence_email(
         prospect=prospect,
         next_step=next_step,
         template=template,
-        sender_name=config.sender_name or "Alex",
+        sender_name=config.sender_name or "Alek",
     )
 
     if email_result.get("error"):

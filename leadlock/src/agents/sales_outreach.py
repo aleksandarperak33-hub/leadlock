@@ -121,7 +121,7 @@ async def generate_outreach_email(
     website: Optional[str] = None,
     sequence_step: int = 1,
     extra_instructions: Optional[str] = None,
-    sender_name: str = "Alex",
+    sender_name: str = "Alek",
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -136,7 +136,7 @@ async def generate_outreach_email(
         review_count: Number of reviews (optional)
         website: Business website (optional)
         sequence_step: 1, 2, or 3
-        sender_name: Human first name for sign-off (default "Alex")
+        sender_name: Human first name for sign-off (default "Alek")
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}

@@ -45,7 +45,7 @@ def _make_config(
     max_sequence_steps: int = 3,
     from_email: str = "sales@leadlock.ai",
     from_name: str = "LeadLock",
-    sender_name: str = "Alex",
+    sender_name: str = "Alek",
     reply_to_email: str = "reply@leadlock.ai",
     company_address: str = "123 Main St",
     sequencer_paused: bool = False,
