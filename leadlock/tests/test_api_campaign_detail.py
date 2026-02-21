@@ -913,25 +913,38 @@ class TestGetCampaignMetrics:
 
 
 class TestGetInbox:
-    """Tests for the get_inbox endpoint."""
+    """Tests for the get_inbox endpoint with filter support."""
+
+    def _inbox_side_effect(self, total, all_count, replies_count, sent_count, rows):
+        """
+        Build side_effect list for inbox queries.
+        Order: count, count_all, count_replies, count_sent, main_query.
+        """
+        return [
+            _scalar_result(total),        # count for current filter
+            _scalar_result(all_count),    # count_all_q
+            _scalar_result(replies_count), # count_replies_q
+            _scalar_result(sent_count),   # count_sent_q
+            _rows_result(rows),           # main page query
+        ]
 
     async def test_empty_inbox(self):
         from src.api.campaign_detail import get_inbox
 
         db = _mock_db()
-        db.execute.side_effect = [
-            _scalar_result(0),   # count
-            _rows_result([]),    # page rows
-        ]
+        db.execute.side_effect = self._inbox_side_effect(0, 0, 0, 0, [])
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert result["conversations"] == []
         assert result["total"] == 0
         assert result["page"] == 1
         assert result["pages"] == 1
+        assert result["total_conversations"] == 0
+        assert result["with_replies"] == 0
+        assert result["without_replies"] == 0
 
     async def test_inbox_invalid_campaign_filter(self):
         from src.api.campaign_detail import get_inbox
@@ -940,7 +953,7 @@ class TestGetInbox:
         with pytest.raises(HTTPException) as exc:
             await get_inbox(
                 page=1, per_page=25, campaign_id="not-uuid",
-                classification=None, db=db, admin=ADMIN_MOCK,
+                filter="all", db=db, admin=ADMIN_MOCK,
             )
         assert exc.value.status_code == 400
 
@@ -956,24 +969,26 @@ class TestGetInbox:
         last_email.body_text = "I am interested in your services"
         last_email.body_html = None
 
-        # count, page rows, last_email query, campaign lookup
+        # prospect row: (prospect, last_outbound_at, sent_count, last_inbound_at, reply_count)
         db.execute.side_effect = [
-            _scalar_result(1),
-            _rows_result([(prospect, now, 2)]),
-            _scalar_one_result(last_email),
+            *self._inbox_side_effect(1, 1, 1, 0, [(prospect, now, 3, now, 2)]),
+            _scalar_one_result(last_email),  # snippet query (reply)
         ]
         db.get.return_value = campaign_obj
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert result["total"] == 1
         assert len(result["conversations"]) == 1
         convo = result["conversations"][0]
         assert convo["prospect_name"] == "John Doe"
         assert convo["reply_count"] == 2
+        assert convo["sent_count"] == 3
         assert convo["campaign_name"] == "Test Campaign"
+        assert result["total_conversations"] == 1
+        assert result["with_replies"] == 1
 
     async def test_inbox_prospect_without_campaign(self):
         from src.api.campaign_detail import get_inbox
@@ -987,14 +1002,13 @@ class TestGetInbox:
         last_email.body_html = None
 
         db.execute.side_effect = [
-            _scalar_result(1),
-            _rows_result([(prospect, now, 1)]),
+            *self._inbox_side_effect(1, 1, 1, 0, [(prospect, now, 1, now, 1)]),
             _scalar_one_result(last_email),
         ]
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert result["conversations"][0]["campaign_name"] is None
         assert result["conversations"][0]["campaign_id"] is None
@@ -1003,17 +1017,15 @@ class TestGetInbox:
         from src.api.campaign_detail import get_inbox
 
         db = _mock_db()
-        db.execute.side_effect = [
-            _scalar_result(5),
-            _rows_result([]),
-        ]
+        db.execute.side_effect = self._inbox_side_effect(5, 5, 3, 2, [])
 
         result = await get_inbox(
             page=2, per_page=2, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert result["page"] == 2
         assert result["pages"] == 3
+        assert result["total_conversations"] == 5
 
     async def test_inbox_snippet_truncated_at_80_chars(self):
         from src.api.campaign_detail import get_inbox
@@ -1027,14 +1039,13 @@ class TestGetInbox:
         last_email.body_html = None
 
         db.execute.side_effect = [
-            _scalar_result(1),
-            _rows_result([(prospect, now, 1)]),
+            *self._inbox_side_effect(1, 1, 1, 0, [(prospect, now, 1, now, 1)]),
             _scalar_one_result(last_email),
         ]
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert len(result["conversations"][0]["last_reply_snippet"]) <= 80
 
@@ -1050,35 +1061,68 @@ class TestGetInbox:
         last_email.body_html = "<p>HTML content</p>"
 
         db.execute.side_effect = [
-            _scalar_result(1),
-            _rows_result([(prospect, now, 1)]),
+            *self._inbox_side_effect(1, 1, 1, 0, [(prospect, now, 1, now, 1)]),
             _scalar_one_result(last_email),
         ]
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="all", db=db, admin=ADMIN_MOCK,
         )
         assert "<p>HTML content</p>" in result["conversations"][0]["last_reply_snippet"]
 
-    async def test_inbox_no_last_email(self):
+    async def test_inbox_sent_only_filter(self):
+        """Conversations with only outbound emails (no replies) should appear with sent filter."""
         from src.api.campaign_detail import get_inbox
 
         db = _mock_db()
-        prospect = _make_outreach(name="No Email", campaign_id=None)
+        prospect = _make_outreach(name="Sent Only", campaign_id=None)
         now = datetime.now(timezone.utc)
 
+        last_email = MagicMock()
+        last_email.body_text = "My outbound email"
+        last_email.body_html = None
+
+        # Row has outbound data but no inbound (reply_count=0)
         db.execute.side_effect = [
-            _scalar_result(1),
-            _rows_result([(prospect, now, 1)]),
-            _scalar_one_result(None),
+            *self._inbox_side_effect(1, 1, 0, 1, [(prospect, now, 2, None, 0)]),
+            _scalar_one_result(last_email),  # snippet from outbound
         ]
 
         result = await get_inbox(
             page=1, per_page=25, campaign_id=None,
-            classification=None, db=db, admin=ADMIN_MOCK,
+            filter="sent", db=db, admin=ADMIN_MOCK,
         )
-        assert result["conversations"][0]["last_reply_snippet"] == ""
+        assert result["total"] == 1
+        convo = result["conversations"][0]
+        assert convo["reply_count"] == 0
+        assert convo["sent_count"] == 2
+        assert result["without_replies"] == 1
+
+    async def test_inbox_replies_filter(self):
+        """Replies filter should only return conversations with inbound emails."""
+        from src.api.campaign_detail import get_inbox
+
+        db = _mock_db()
+        prospect = _make_outreach(name="Has Replies", campaign_id=None)
+        now = datetime.now(timezone.utc)
+
+        last_email = MagicMock()
+        last_email.body_text = "Thanks for reaching out"
+        last_email.body_html = None
+
+        db.execute.side_effect = [
+            *self._inbox_side_effect(1, 2, 1, 1, [(prospect, now, 3, now, 1)]),
+            _scalar_one_result(last_email),
+        ]
+
+        result = await get_inbox(
+            page=1, per_page=25, campaign_id=None,
+            filter="replies", db=db, admin=ADMIN_MOCK,
+        )
+        assert result["total"] == 1
+        assert result["with_replies"] == 1
+        assert result["conversations"][0]["reply_count"] == 1
 
 
 # ---------------------------------------------------------------------------

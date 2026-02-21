@@ -24,6 +24,16 @@ const COLOR_MAP = {
     deltaUp: 'text-emerald-600',
     deltaDown: 'text-red-600',
   },
+  blue: {
+    badge: 'bg-blue-50 text-blue-500',
+    deltaUp: 'text-emerald-600',
+    deltaDown: 'text-red-600',
+  },
+  purple: {
+    badge: 'bg-purple-50 text-purple-500',
+    deltaUp: 'text-emerald-600',
+    deltaDown: 'text-red-600',
+  },
 };
 
 /**

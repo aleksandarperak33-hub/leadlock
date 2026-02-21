@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { POLL_INTERVALS } from '../lib/constants';
+import { CHART_COLORS, TOOLTIP_STYLE } from '../lib/colors';
 import { responseTimeColor } from '../lib/response-time';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
@@ -39,16 +40,6 @@ const ACTIVITY_DOT_COLORS = {
   booking_confirmed: 'bg-emerald-500',
   lead_created: 'bg-orange-500',
   opt_out: 'bg-red-500',
-};
-
-const TOOLTIP_STYLE = {
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: '12px',
-  color: '#111827',
-  fontSize: '12px',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-  padding: '10px 14px',
 };
 
 /**
@@ -239,47 +230,47 @@ export default function Dashboard() {
                   >
                     <stop
                       offset="5%"
-                      stopColor="#f97316"
+                      stopColor={CHART_COLORS.gradientStart}
                       stopOpacity={0.12}
                     />
                     <stop
                       offset="95%"
-                      stopColor="#f97316"
+                      stopColor={CHART_COLORS.gradientStart}
                       stopOpacity={0}
                     />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="#f3f4f6"
+                  stroke={CHART_COLORS.grid}
                   vertical={false}
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#9ca3af', fontSize: 11 }}
+                  tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#9ca3af', fontSize: 11 }}
+                  tick={{ fill: CHART_COLORS.axis, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  cursor={{ stroke: '#e5e7eb' }}
+                  cursor={{ stroke: CHART_COLORS.cursor }}
                 />
                 <Area
                   type="monotone"
                   dataKey="count"
-                  stroke="#f97316"
+                  stroke={CHART_COLORS.stroke.primary}
                   fill="url(#leadGradient)"
                   strokeWidth={2}
                 />
                 <Area
                   type="monotone"
                   dataKey="booked"
-                  stroke="#10b981"
+                  stroke={CHART_COLORS.stroke.secondary}
                   fill="none"
                   strokeWidth={1.5}
                   strokeDasharray="4 4"

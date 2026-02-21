@@ -446,7 +446,7 @@ export default function Landing() {
               </FadeUp>
 
               <FadeUp delay={0.1}>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-[-0.04em] leading-[1.05] mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-[-0.04em] leading-[1.05] mb-6">
                   Every lead answered
                   <br />
                   <span className="bg-gradient-to-r from-orange-500 to-orange-400 bg-clip-text text-transparent">in under 60 seconds</span>
@@ -498,7 +498,7 @@ export default function Landing() {
               { value: 500, suffix: '+', label: 'Contractors Served' },
             ].map((stat, i) => (
               <FadeUp key={i} delay={i * 0.1} className="text-center">
-                <div className="text-3xl sm:text-4xl font-black tracking-tight text-[#F8F8FC]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="text-3xl sm:text-4xl font-black tracking-tight text-[#F8F8FC]">
                   <CountUp target={stat.value} />{stat.suffix}
                 </div>
                 <p className="text-sm text-[#52526B] mt-1">{stat.label}</p>
@@ -516,7 +516,7 @@ export default function Landing() {
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(249,115,22,0.08),transparent_60%)]" />
               <div className="relative z-10">
                 <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-4">Average contractor savings</p>
-                <div className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.04em] text-[#F8F8FC] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-[-0.04em] text-[#F8F8FC] mb-4">
                   $<CountUp target={8500} /><span className="text-[#52526B]">/mo</span>
                 </div>
                 <p className="text-base sm:text-lg text-[#A1A1BC] max-w-2xl mx-auto leading-relaxed">
@@ -533,7 +533,7 @@ export default function Landing() {
       <section className="py-24 lg:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Slow follow-up is <span className="text-red-400">killing your revenue</span>
             </h2>
             <p className="text-[#A1A1BC] max-w-2xl mx-auto">
@@ -592,7 +592,7 @@ export default function Landing() {
       <section id="how-it-works" className="py-24 lg:py-32 ld-gradient-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               From lead to booked in <span className="text-orange-500">4 steps</span>
             </h2>
             <p className="text-[#A1A1BC] max-w-2xl mx-auto">
@@ -609,7 +609,7 @@ export default function Landing() {
             ].map((item, i) => (
               <FadeUp key={i} delay={i * 0.1}>
                 <div className="ld-card p-6 h-full relative overflow-hidden">
-                  <div className="absolute top-0 right-0 text-[80px] font-black text-[#1A1A24] leading-none pr-3 select-none" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  <div className="absolute top-0 right-0 text-[80px] font-black text-[#1A1A24] leading-none pr-3 select-none">
                     {item.step}
                   </div>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
@@ -633,7 +633,7 @@ export default function Landing() {
       <section id="features" className="py-24 lg:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Built for contractors who <span className="text-orange-500">demand more</span>
             </h2>
           </FadeUp>
@@ -658,7 +658,7 @@ export default function Landing() {
       <section className="py-24 lg:py-32 ld-gradient-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Compliance is <span className="text-emerald-400">non-negotiable</span>
             </h2>
             <p className="text-[#A1A1BC] max-w-2xl mx-auto">
@@ -690,7 +690,7 @@ export default function Landing() {
       <section className="py-24 lg:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Trusted by <span className="text-orange-500">top contractors</span>
             </h2>
           </FadeUp>
@@ -725,7 +725,7 @@ export default function Landing() {
       <section id="pricing" className="py-24 lg:py-32 ld-gradient-section">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Simple, transparent <span className="text-orange-500">pricing</span>
             </h2>
             <p className="text-[#A1A1BC] max-w-xl mx-auto">
@@ -746,7 +746,7 @@ export default function Landing() {
                   )}
                   <h3 className="text-lg font-bold text-[#F8F8FC] mb-2">{tier.name}</h3>
                   <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-4xl font-black text-[#F8F8FC]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    <span className="text-4xl font-black text-[#F8F8FC]">
                       ${tier.price.toLocaleString()}
                     </span>
                     <span className="text-sm text-[#52526B]">/mo</span>
@@ -804,7 +804,7 @@ export default function Landing() {
       <section id="faq" className="py-24 lg:py-32">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4">
               Frequently asked <span className="text-orange-500">questions</span>
             </h2>
           </FadeUp>
@@ -828,7 +828,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <FadeUp>
             <div className="ld-gradient-cta rounded-3xl p-12 sm:p-16 text-center border border-orange-500/10">
-              <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4 text-[#F8F8FC]" style={{ fontFamily: 'Inter, sans-serif' }}>
+              <h2 className="text-3xl sm:text-4xl font-black tracking-[-0.03em] mb-4 text-[#F8F8FC]">
                 Stop losing leads to slow follow-up
               </h2>
               <p className="text-lg text-[#A1A1BC] mb-8 max-w-xl mx-auto">

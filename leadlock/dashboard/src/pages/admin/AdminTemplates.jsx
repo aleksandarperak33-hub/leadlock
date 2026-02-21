@@ -180,6 +180,7 @@ function TemplateCard({ template, onEdit, onDelete }) {
 export default function AdminTemplates() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -190,10 +191,11 @@ export default function AdminTemplates() {
 
   const loadTemplates = async () => {
     try {
+      setError(null);
       const data = await api.getTemplates();
       setTemplates(data.templates || []);
-    } catch {
-      // API not yet implemented
+    } catch (err) {
+      setError('Failed to load templates.');
     } finally {
       setLoading(false);
     }
@@ -265,6 +267,19 @@ export default function AdminTemplates() {
           </button>
         }
       />
+
+      {error && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60">
+          <FileText className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            onClick={loadTemplates}
+            className="text-xs font-medium text-red-600 hover:text-red-800 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {showEditor && (
         <TemplateModal

@@ -722,7 +722,9 @@ async def get_sales_metrics(
             "bounced": email_row.bounced or 0,
             "replied": replies,
             "open_rate": round(opened / total_sent * 100, 1) if total_sent else 0,
+            "click_rate": round(clicked / total_sent * 100, 1) if total_sent else 0,
             "reply_rate": round(replies / total_sent * 100, 1) if total_sent else 0,
+            "bounce_rate": round((email_row.bounced or 0) / total_sent * 100, 1) if total_sent else 0,
         },
         "scraping": {
             "jobs_run": scrape_row.total_jobs,
@@ -2270,6 +2272,14 @@ async def get_command_center(
                 "reply_rate": _rate(geo_replies, geo_sent),
             })
 
+        # 11b. Total sent all-time
+        total_sent_all_result = await db.execute(
+            select(func.count()).select_from(OutreachEmail).where(
+                OutreachEmail.direction == "outbound"
+            )
+        )
+        total_sent_all_time = total_sent_all_result.scalar() or 0
+
         # 12. Recent emails (last 10)
         recent_emails_result = await db.execute(
             select(
@@ -2320,6 +2330,8 @@ async def get_command_center(
                 },
             },
             "email_pipeline": {
+                "sent_today": today_row.sent or 0,
+                "total_sent_all_time": total_sent_all_time,
                 "today": {
                     "sent": today_row.sent or 0,
                     "daily_limit": daily_limit,

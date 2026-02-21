@@ -238,6 +238,7 @@ export default function AdminCampaigns() {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
 
@@ -247,10 +248,11 @@ export default function AdminCampaigns() {
 
   const loadCampaigns = async () => {
     try {
+      setError(null);
       const data = await api.getCampaigns();
       setCampaigns(data.campaigns || []);
-    } catch {
-      // API not yet implemented, use empty list
+    } catch (err) {
+      setError('Failed to load campaigns.');
     } finally {
       setLoading(false);
     }
@@ -302,6 +304,19 @@ export default function AdminCampaigns() {
           </button>
         }
       />
+
+      {error && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60">
+          <Send className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            onClick={loadCampaigns}
+            className="text-xs font-medium text-red-600 hover:text-red-800 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {showCreate && (
         <CreateModal

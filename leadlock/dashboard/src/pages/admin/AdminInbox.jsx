@@ -18,6 +18,12 @@ const STATUS_VARIANT = {
   lost: 'danger',
 };
 
+const FILTER_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'replies', label: 'Replies' },
+  { id: 'sent', label: 'Sent Only' },
+];
+
 function timeAgo(dateStr) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -32,6 +38,8 @@ function timeAgo(dateStr) {
 }
 
 function ConversationItem({ conv, isActive, onSelect }) {
+  const hasReplies = conv.reply_count > 0;
+
   return (
     <button
       onClick={() => onSelect(conv.prospect_id)}
@@ -53,6 +61,11 @@ function ConversationItem({ conv, isActive, onSelect }) {
                 {conv.campaign_name}
               </Badge>
             )}
+            {!hasReplies && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+                No replies yet
+              </span>
+            )}
           </div>
           {conv.prospect_company && (
             <p className="text-xs text-gray-500 truncate mt-0.5">
@@ -65,11 +78,20 @@ function ConversationItem({ conv, isActive, onSelect }) {
         </div>
         <div className="flex flex-col items-end gap-1 ml-3 shrink-0">
           <span className="text-xs text-gray-400 font-mono whitespace-nowrap">
-            {timeAgo(conv.last_reply_at)}
+            {timeAgo(conv.last_activity_at || conv.last_inbound_at || conv.last_outbound_at)}
           </span>
-          <span className="flex items-center gap-1 text-xs text-gray-400">
-            <MessageSquare className="w-3 h-3" /> {conv.reply_count}
-          </span>
+          <div className="flex items-center gap-2">
+            {conv.sent_count > 0 && (
+              <span className="flex items-center gap-0.5 text-xs text-gray-400">
+                <Send className="w-3 h-3" /> {conv.sent_count}
+              </span>
+            )}
+            {hasReplies && (
+              <span className="flex items-center gap-0.5 text-xs text-orange-500">
+                <MessageSquare className="w-3 h-3" /> {conv.reply_count}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </button>
@@ -162,7 +184,7 @@ function EmailMessage({ email }) {
         <div className="flex items-center gap-2">
           {isOutbound ? (
             <span className="flex items-center gap-1 text-xs font-medium text-gray-500">
-              <Send className="w-3 h-3" /> Outbound
+              <Send className="w-3 h-3" /> Sent
             </span>
           ) : (
             <span className="flex items-center gap-1 text-xs font-medium text-orange-600">
@@ -214,9 +236,12 @@ function EmailMessage({ email }) {
 export default function AdminInbox() {
   const [conversations, setConversations] = useState([]);
   const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ total_conversations: 0, with_replies: 0, without_replies: 0 });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [campaignFilter, setCampaignFilter] = useState('');
+  const [inboxFilter, setInboxFilter] = useState('all');
   const [campaigns, setCampaigns] = useState([]);
   const [search, setSearch] = useState('');
 
@@ -227,17 +252,24 @@ export default function AdminInbox() {
   const loadConversations = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, per_page: 25 };
+      setError(null);
+      const params = { page, per_page: 25, filter: inboxFilter };
       if (campaignFilter) params.campaign_id = campaignFilter;
       const data = await api.getInbox(params);
       setConversations(data.conversations || []);
       setTotal(data.total || 0);
-    } catch {
-      // API may not be ready
+      setCounts({
+        total_conversations: data.total_conversations ?? 0,
+        with_replies: data.with_replies ?? 0,
+        without_replies: data.without_replies ?? 0,
+      });
+    } catch (err) {
+      setError('Failed to load inbox. Please try again.');
+      setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, [page, campaignFilter]);
+  }, [page, campaignFilter, inboxFilter]);
 
   const loadCampaigns = useCallback(async () => {
     try {
@@ -265,6 +297,13 @@ export default function AdminInbox() {
   const handleSelect = (prospectId) => {
     setSelectedId(prospectId);
     loadThread(prospectId);
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setInboxFilter(newFilter);
+    setPage(1);
+    setSelectedId(null);
+    setThread(null);
   };
 
   const handleStatusChange = async (status) => {
@@ -297,16 +336,61 @@ export default function AdminInbox() {
       )
     : conversations;
 
+  const subtitleText =
+    inboxFilter === 'all'
+      ? `${counts.total_conversations} conversations`
+      : inboxFilter === 'replies'
+        ? `${counts.with_replies} with replies`
+        : `${counts.without_replies} awaiting reply`;
+
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <PageHeader
         title="Inbox"
-        subtitle={`${total} conversations with replies`}
+        subtitle={subtitleText}
       />
+
+      {/* Filter tabs */}
+      <div className="flex items-center gap-1 mb-4">
+        {FILTER_TABS.map((tab) => {
+          const count =
+            tab.id === 'all' ? counts.total_conversations
+            : tab.id === 'replies' ? counts.with_replies
+            : counts.without_replies;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleFilterChange(tab.id)}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                inboxFilter === tab.id
+                  ? 'bg-orange-50 text-orange-600 border border-orange-200/60'
+                  : 'text-gray-500 hover:bg-gray-50 border border-transparent'
+              }`}
+            >
+              {tab.label}
+              <span className="ml-1.5 text-xs font-mono opacity-70">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            onClick={loadConversations}
+            className="text-xs font-medium text-red-600 hover:text-red-800 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div
         className="flex bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden"
-        style={{ height: 'calc(100vh - 200px)' }}
+        style={{ height: 'calc(100vh - 260px)' }}
       >
         {/* Left pane */}
         <div className="w-[360px] border-r border-gray-200/60 flex flex-col shrink-0">
@@ -339,9 +423,15 @@ export default function AdminInbox() {
             ) : filteredConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <Inbox className="w-10 h-10 text-gray-300 mb-3" />
-                <p className="text-sm font-medium text-gray-900">No replies yet</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {inboxFilter === 'replies' ? 'No replies yet' : inboxFilter === 'sent' ? 'No sent emails' : 'No conversations'}
+                </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Check back when prospects respond to your outreach.
+                  {inboxFilter === 'replies'
+                    ? 'Check back when prospects respond to your outreach.'
+                    : inboxFilter === 'sent'
+                      ? 'Sent emails awaiting reply will appear here.'
+                      : 'Start a campaign to see conversations here.'}
                 </p>
               </div>
             ) : (

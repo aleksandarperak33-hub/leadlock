@@ -45,6 +45,7 @@ function InsightSection({ title, icon: Icon, children }) {
 export default function AdminInsights() {
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadInsights();
@@ -52,10 +53,11 @@ export default function AdminInsights() {
 
   const loadInsights = async () => {
     try {
+      setError(null);
       const data = await api.getInsights();
       setInsights(data);
-    } catch {
-      // API not yet implemented
+    } catch (err) {
+      setError('Failed to load insights. The insights engine may still be collecting data.');
     } finally {
       setLoading(false);
     }
@@ -75,6 +77,19 @@ export default function AdminInsights() {
         title="Insights"
         subtitle={`${insights?.total_signals || 0} signals collected (last 30 days)`}
       />
+
+      {error && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60">
+          <LineChart className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            onClick={loadInsights}
+            className="text-xs font-medium text-red-600 hover:text-red-800 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {!insights || insights.total_signals === 0 ? (
         <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm">

@@ -1,3 +1,5 @@
+import { SOURCE_BAR_PALETTE } from '../lib/colors';
+
 /**
  * Label mapping for source keys.
  */
@@ -12,21 +14,6 @@ const SOURCE_LABELS = {
   referral: 'Referral',
   yelp: 'Yelp',
 };
-
-/**
- * Ordered orange palette for source bars.
- */
-const BAR_PALETTE = [
-  '#f97316',
-  '#fb923c',
-  '#fdba74',
-  '#fed7aa',
-  '#ffedd5',
-  '#f97316',
-  '#fb923c',
-  '#fdba74',
-  '#fed7aa',
-];
 
 /**
  * SourceBreakdown -- Horizontal bar chart showing lead sources.
@@ -51,7 +38,7 @@ export default function SourceBreakdown({ data = {} }) {
     <div className="space-y-4">
       {entries.map(([source, count], index) => {
         const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
-        const barColor = BAR_PALETTE[index % BAR_PALETTE.length];
+        const barColor = SOURCE_BAR_PALETTE[index % SOURCE_BAR_PALETTE.length];
 
         return (
           <div key={source}>
