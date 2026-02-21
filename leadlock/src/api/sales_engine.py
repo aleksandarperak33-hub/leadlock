@@ -142,7 +142,7 @@ async def _verify_sendgrid_webhook(request: Request) -> bool:
     verification_key = settings.sendgrid_webhook_verification_key
 
     if not verification_key:
-        if settings.environment == "production":
+        if settings.app_env == "production":
             logger.error(
                 "SENDGRID_WEBHOOK_VERIFICATION_KEY not set in production - "
                 "rejecting unauthenticated webhook traffic."
