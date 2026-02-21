@@ -30,19 +30,17 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
-# Email warmup schedule - ramps daily send volume over 60 days to protect
-# domain reputation with new sending domains.
+# Email warmup schedule - ramps daily send volume over 21 days.
+# Aggressive but safe: domain already has SPF/DKIM/DMARC and send history.
 # Format: (day_range_start, day_range_end, max_daily_emails)
 # day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
 EMAIL_WARMUP_SCHEDULE = [
-    (0, 3, 5),        # Days 0-3: 5 emails/day
-    (4, 7, 10),       # Days 4-7: 10 emails/day
-    (8, 14, 25),      # Week 2: 25 emails/day
-    (15, 21, 50),     # Week 3: 50 emails/day
-    (22, 30, 75),     # Week 4: 75 emails/day
-    (31, 45, 100),    # Week 5-6: 100 emails/day
-    (46, 60, 150),    # Week 7-8: 150 emails/day
-    (61, None, None), # After 60 days: use configured limit
+    (0, 1, 20),       # Days 0-1: 20 emails/day
+    (2, 4, 40),       # Days 2-4: 40 emails/day
+    (5, 7, 75),       # Days 5-7: 75 emails/day
+    (8, 14, 100),     # Week 2: 100 emails/day
+    (15, 21, 150),    # Week 3: 150 emails/day
+    (22, None, None), # After 3 weeks: use configured limit
 ]
 
 

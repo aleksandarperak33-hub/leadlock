@@ -59,6 +59,94 @@ async def _record_email_signal(
         logger.warning("Failed to record learning signal: %s", str(e))
 
 
+async def _send_booking_reply(
+    db: AsyncSession,
+    prospect: Outreach,
+    config: Optional[SalesEngineConfig],
+    original_subject: str = "",
+) -> bool:
+    """
+    Send auto-reply email with booking link to an interested prospect.
+    Returns True if sent successfully, False otherwise.
+    """
+    if not config or not config.booking_url:
+        logger.info(
+            "No booking URL configured, skipping auto-reply for %s",
+            str(prospect.id)[:8],
+        )
+        return False
+
+    if not config.from_email:
+        return False
+
+    from src.agents.sales_outreach import generate_booking_reply
+    from src.services.cold_email import send_cold_email
+
+    # Generate the reply
+    reply = await generate_booking_reply(
+        prospect_name=prospect.prospect_name or "",
+        trade_type=prospect.prospect_trade_type or "",
+        city=prospect.city or "",
+        booking_url=config.booking_url,
+        sender_name=config.sender_name or "Alek",
+        original_subject=original_subject,
+    )
+
+    if reply.get("error") or not reply.get("body_html"):
+        logger.warning("Auto-reply generation failed for %s", str(prospect.id)[:8])
+        return False
+
+    # Build unsubscribe URL
+    from src.config import get_settings
+    settings = get_settings()
+    base_url = getattr(settings, "app_base_url", "") or "https://api.leadlock.org"
+    unsubscribe_url = f"{base_url}/api/v1/sales/unsubscribe/{prospect.id}"
+
+    # Send via SendGrid
+    send_result = await send_cold_email(
+        to_email=prospect.prospect_email,
+        to_name=prospect.prospect_name or "",
+        subject=reply["subject"],
+        body_html=reply["body_html"],
+        from_email=config.from_email,
+        from_name=config.from_name or "Alek from LeadLock",
+        reply_to=config.reply_to_email or config.from_email,
+        unsubscribe_url=unsubscribe_url,
+        company_address=config.company_address or "",
+    )
+
+    if send_result.get("error"):
+        logger.warning(
+            "Auto-reply send failed for %s: %s",
+            str(prospect.id)[:8], send_result["error"],
+        )
+        return False
+
+    # Record the outbound reply
+    now = datetime.now(timezone.utc)
+    reply_record = OutreachEmail(
+        outreach_id=prospect.id,
+        direction="outbound",
+        subject=reply["subject"],
+        body_html=reply["body_html"],
+        body_text=reply.get("body_text", ""),
+        from_email=config.from_email,
+        to_email=prospect.prospect_email,
+        sequence_step=prospect.outreach_sequence_step,
+        sent_at=now,
+        ai_cost_usd=reply.get("ai_cost_usd", 0.0),
+        sendgrid_message_id=send_result.get("message_id"),
+    )
+    db.add(reply_record)
+    await db.commit()
+
+    logger.info(
+        "Auto-reply sent to %s with booking link",
+        str(prospect.id)[:8],
+    )
+    return True
+
+
 async def _trigger_sms_followup(
     db: AsyncSession,
     prospect: Outreach,
@@ -209,6 +297,10 @@ async def inbound_email_webhook(
             logger.info("Inbound email from unknown sender: %s", from_email[:20] + "***")
             return {"status": "ignored", "reason": "unknown sender"}
 
+        # Load config for auto-reply settings
+        config_result = await db.execute(select(SalesEngineConfig).limit(1))
+        config = config_result.scalar_one_or_none()
+
         now = datetime.now(timezone.utc)
 
         # Record inbound email
@@ -254,9 +346,22 @@ async def inbound_email_webhook(
         # Persist reply classification and prospect updates before attempting SMS
         await db.commit()
 
-        # SMS follow-up for interested prospects (Phase 4)
+        # Auto-reply + SMS follow-up for interested prospects
+        auto_reply_sent = False
         sms_sent = False
         if classification == "interested":
+            # Send auto-reply email with booking link
+            try:
+                auto_reply_sent = await _send_booking_reply(
+                    db, prospect, config, subject,
+                )
+            except Exception as reply_err:
+                logger.warning(
+                    "Auto-reply failed for %s: %s",
+                    str(prospect.id)[:8], str(reply_err),
+                )
+
+            # SMS follow-up (optional, if configured)
             try:
                 sms_sent = await _trigger_sms_followup(db, prospect)
             except Exception as sms_err:
@@ -266,15 +371,16 @@ async def inbound_email_webhook(
                 )
 
         logger.info(
-            "Inbound reply from prospect %s (%s) classified=%s sms=%s",
+            "Inbound reply from prospect %s (%s) classified=%s auto_reply=%s sms=%s",
             str(prospect.id)[:8], from_email[:20] + "***",
-            classification, sms_sent,
+            classification, auto_reply_sent, sms_sent,
         )
 
         return {
             "status": "processed",
             "prospect_id": str(prospect.id),
             "classification": classification,
+            "auto_reply_sent": auto_reply_sent,
             "sms_sent": sms_sent,
         }
 
@@ -567,6 +673,7 @@ async def get_sales_config(
         "from_email": config.from_email,
         "from_name": config.from_name,
         "sender_name": config.sender_name,
+        "booking_url": config.booking_url,
         "reply_to_email": config.reply_to_email,
         "company_address": config.company_address,
         "sms_after_email_reply": config.sms_after_email_reply,
@@ -604,7 +711,7 @@ async def update_sales_config(
     allowed_fields = [
         "is_active", "target_trade_types", "target_locations",
         "daily_email_limit", "daily_scrape_limit", "sequence_delay_hours",
-        "max_sequence_steps", "from_email", "from_name", "sender_name", "reply_to_email",
+        "max_sequence_steps", "from_email", "from_name", "sender_name", "booking_url", "reply_to_email",
         "company_address", "sms_after_email_reply", "sms_from_phone",
         "email_templates",
         "scraper_interval_minutes", "variant_cooldown_days",

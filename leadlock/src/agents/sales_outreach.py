@@ -279,3 +279,119 @@ async def classify_reply(reply_text: str) -> dict:
         "classification": classification,
         "ai_cost_usd": result.get("cost_usd", 0.0),
     }
+
+
+BOOKING_REPLY_PROMPT = """You write a short reply email from {sender_name} at LeadLock to a prospect who just replied showing interest.
+
+RULES:
+- You ARE {sender_name}. Sound like a real person, not a marketer.
+- Open with their first name.
+- Thank them for getting back to you - keep it casual (one sentence).
+- Give ONE concrete benefit of LeadLock in 1-2 sentences: "We make sure every lead that comes in gets a response in under 60 seconds, so you never lose a job to a competitor who called back first."
+- Include the booking link naturally: "Here's my calendar if you want to grab 15 minutes - [booking_link]"
+- Sign off with just "{sender_name}" on its own line.
+- No exclamation marks. No emojis. No em dashes or en dashes.
+- Under 80 words total.
+- Output valid JSON only.
+
+JSON format:
+{{"subject": "...", "body_html": "...", "body_text": "..."}}
+
+body_html: simple <p> tags only. Booking link as <a href="...">booking_link_text</a>.
+body_text: plain text version with raw URL. End with {sender_name} on its own line."""
+
+
+async def generate_booking_reply(
+    prospect_name: str,
+    trade_type: str,
+    city: str,
+    booking_url: str,
+    sender_name: str = "Alek",
+    original_subject: str = "",
+) -> dict:
+    """
+    Generate an auto-reply for a prospect who replied 'interested'.
+
+    Args:
+        prospect_name: Prospect's name
+        trade_type: Their trade (hvac, plumbing, etc.)
+        city: Their city
+        booking_url: Cal.com/Calendly booking link
+        sender_name: Human first name for sign-off
+        original_subject: Subject of the email they replied to
+
+    Returns:
+        {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
+    """
+    first_name = _extract_first_name(prospect_name)
+    greeting_name = first_name or "there"
+
+    # Reply subject: prepend Re: if not already
+    subject_prefix = "Re: " if original_subject and not original_subject.startswith("Re:") else ""
+    reply_subject = f"{subject_prefix}{original_subject}" if original_subject else ""
+
+    system_prompt = BOOKING_REPLY_PROMPT.replace("{sender_name}", sender_name)
+
+    user_message = f"""Prospect details:
+- First name: {greeting_name}
+- Trade: {trade_type}
+- City: {city}
+- Booking link: {booking_url}
+- Original email subject: {original_subject or 'N/A'}
+
+Write a reply to their interested response. Include the booking link."""
+
+    result = await generate_response(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        model_tier="fast",
+        max_tokens=300,
+        temperature=0.5,
+    )
+
+    if result.get("error"):
+        logger.error("AI booking reply failed: %s", result["error"])
+        return {
+            "subject": reply_subject or "Re: LeadLock",
+            "body_html": "",
+            "body_text": "",
+            "ai_cost_usd": result.get("cost_usd", 0.0),
+            "error": result["error"],
+        }
+
+    try:
+        content = result["content"].strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        email_data = json.loads(content)
+    except (json.JSONDecodeError, IndexError) as e:
+        logger.error("Failed to parse AI booking reply: %s", str(e))
+        # Fallback: send a simple non-AI reply
+        fallback_html = (
+            f"<p>Hey {greeting_name},</p>"
+            f"<p>Thanks for getting back to me. Would love to show you how LeadLock "
+            f"can help your {trade_type} business respond to every lead in under 60 seconds.</p>"
+            f'<p>Here\'s my calendar if you want to grab 15 minutes - '
+            f'<a href="{booking_url}">{booking_url}</a></p>'
+            f"<p>{sender_name}</p>"
+        )
+        fallback_text = (
+            f"Hey {greeting_name},\n\n"
+            f"Thanks for getting back to me. Would love to show you how LeadLock "
+            f"can help your {trade_type} business respond to every lead in under 60 seconds.\n\n"
+            f"Here's my calendar if you want to grab 15 minutes - {booking_url}\n\n"
+            f"{sender_name}"
+        )
+        return {
+            "subject": reply_subject or "Re: LeadLock",
+            "body_html": fallback_html,
+            "body_text": fallback_text,
+            "ai_cost_usd": result.get("cost_usd", 0.0),
+        }
+
+    return {
+        "subject": email_data.get("subject", reply_subject or "Re: LeadLock").strip(),
+        "body_html": email_data.get("body_html", "").strip(),
+        "body_text": email_data.get("body_text", "").strip(),
+        "ai_cost_usd": result.get("cost_usd", 0.0),
+    }

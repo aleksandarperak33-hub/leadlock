@@ -44,6 +44,9 @@ class SalesEngineConfig(Base):
     reply_to_email: Mapped[Optional[str]] = mapped_column(String(255))
     company_address: Mapped[Optional[str]] = mapped_column(String(500))
 
+    # Booking / demo config
+    booking_url: Mapped[Optional[str]] = mapped_column(String(500))  # Cal.com or Calendly link
+
     # SMS after email reply
     sms_after_email_reply: Mapped[bool] = mapped_column(Boolean, default=False)
     sms_from_phone: Mapped[Optional[str]] = mapped_column(String(20))
