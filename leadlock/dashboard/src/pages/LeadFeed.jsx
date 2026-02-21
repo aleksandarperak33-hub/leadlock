@@ -1,35 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { LEAD_STATE_TABS, POLL_INTERVALS, PER_PAGE } from '../lib/constants';
+import { responseTimeClass } from '../lib/response-time';
+import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/ui/PageHeader';
 import SearchInput from '../components/ui/SearchInput';
 import Tabs from '../components/ui/Tabs';
 import DataTable from '../components/ui/DataTable';
 import LeadStatusBadge from '../components/LeadStatusBadge';
-import { Clock, ChevronLeft, ChevronRight } from 'lucide-react';
-
-/**
- * Filter tab definitions for lead states.
- */
-const STATE_TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'new', label: 'New' },
-  { id: 'qualifying', label: 'Qualifying' },
-  { id: 'qualified', label: 'Qualified' },
-  { id: 'booked', label: 'Booked' },
-  { id: 'cold', label: 'Cold' },
-  { id: 'opted_out', label: 'Opted Out' },
-];
-
-/**
- * Returns a Tailwind text color class for response time values.
- */
-const responseTimeColor = (ms) => {
-  if (!ms) return 'text-gray-400';
-  if (ms < 10000) return 'text-emerald-600';
-  if (ms < 60000) return 'text-amber-600';
-  return 'text-red-600';
-};
+import Pagination from '../components/ui/Pagination';
+import { Clock } from 'lucide-react';
 
 /**
  * Column definitions for the leads DataTable.
@@ -93,7 +74,7 @@ const getColumns = () => [
     render: (val) =>
       val ? (
         <span
-          className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeColor(val)}`}
+          className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeClass(val)}`}
         >
           <Clock className="w-3 h-3" />
           {(val / 1000).toFixed(1)}s
@@ -115,7 +96,7 @@ const getColumns = () => [
 
 /**
  * LeadFeed -- Searchable, filterable table of all leads with pagination.
- * Fetches leads with 15-second auto-refresh.
+ * Fetches leads with auto-refresh.
  */
 export default function LeadFeed() {
   const navigate = useNavigate();
@@ -125,13 +106,14 @@ export default function LeadFeed() {
   const [pages, setPages] = useState(1);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [loading, setLoading] = useState(true);
 
   const fetchLeads = async () => {
     try {
-      const params = { page, per_page: 20 };
+      const params = { page, per_page: PER_PAGE.LEADS };
       if (stateFilter !== 'all') params.state = stateFilter;
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
 
       const data = await api.getLeads(params);
       setLeads(data.leads || []);
@@ -147,9 +129,9 @@ export default function LeadFeed() {
   useEffect(() => {
     setLoading(true);
     fetchLeads();
-    const interval = setInterval(fetchLeads, 15000);
+    const interval = setInterval(fetchLeads, POLL_INTERVALS.LEAD_FEED);
     return () => clearInterval(interval);
-  }, [page, stateFilter, search]);
+  }, [page, stateFilter, debouncedSearch]);
 
   const handleSearch = (val) => {
     setSearch(val);
@@ -181,7 +163,7 @@ export default function LeadFeed() {
       <PageHeader title="Leads" actions={headerActions} />
 
       <Tabs
-        tabs={STATE_TABS}
+        tabs={LEAD_STATE_TABS}
         activeId={stateFilter}
         onChange={handleFilterChange}
       />
@@ -206,48 +188,7 @@ export default function LeadFeed() {
         />
       )}
 
-      {/* Pagination */}
-      {pages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm font-mono text-gray-400">
-            Page {page} of {pages}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {(() => {
-              const startPage = Math.max(1, Math.min(page - 2, pages - 4));
-              const endPage = Math.min(pages, startPage + 4);
-              const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-              return pageNumbers.map((pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => setPage(pageNum)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
-                    page === pageNum
-                      ? 'bg-orange-500 text-white'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ));
-            })()}
-            <button
-              onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              disabled={page === pages}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={setPage} />
     </div>
   );
 }

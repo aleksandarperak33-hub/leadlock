@@ -1,101 +1,65 @@
+import { AUTH_KEYS } from '../lib/constants';
+
 const API_BASE = '/api/v1/dashboard';
 const ADMIN_BASE = '/api/v1/admin';
 const SALES_BASE = '/api/v1/sales';
 
-async function request(path, options = {}) {
-  const token = localStorage.getItem('ll_token');
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+const REQUEST_TIMEOUT_MS = 10_000;
 
-  if (res.status === 401) {
-    console.warn('API returned 401, clearing session');
-    localStorage.removeItem('ll_token');
-    localStorage.removeItem('ll_business');
-    localStorage.removeItem('ll_is_admin');
-    localStorage.removeItem('ll_client_id');
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
-  }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-
-  return res.json();
+/**
+ * Clears all auth state from localStorage and redirects to login.
+ */
+function clearSession() {
+  Object.values(AUTH_KEYS).forEach((key) => localStorage.removeItem(key));
+  window.location.href = '/login';
 }
 
-async function adminRequest(path, options = {}) {
-  const token = localStorage.getItem('ll_token');
-  const res = await fetch(`${ADMIN_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+/**
+ * Factory that creates a request function for a given base URL.
+ * Handles auth headers, 401 auto-logout, 403 errors, timeout, and JSON parsing.
+ */
+function createRequest(basePath) {
+  return async function request(path, options = {}) {
+    const token = localStorage.getItem(AUTH_KEYS.TOKEN);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  if (res.status === 401) {
-    console.warn('API returned 401, clearing session');
-    localStorage.removeItem('ll_token');
-    localStorage.removeItem('ll_business');
-    localStorage.removeItem('ll_is_admin');
-    localStorage.removeItem('ll_client_id');
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
-  }
+    try {
+      const res = await fetch(`${basePath}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
+        },
+      });
 
-  if (res.status === 403) {
-    throw new Error('Admin access required');
-  }
+      if (res.status === 401) {
+        console.warn('API returned 401, clearing session');
+        clearSession();
+        throw new Error('Unauthorized');
+      }
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
+      if (res.status === 403) {
+        throw new Error('Admin access required');
+      }
 
-  return res.json();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      return res.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
 }
 
-async function salesRequest(path, options = {}) {
-  const token = localStorage.getItem('ll_token');
-  const res = await fetch(`${SALES_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-
-  if (res.status === 401) {
-    console.warn('API returned 401, clearing session');
-    localStorage.removeItem('ll_token');
-    localStorage.removeItem('ll_business');
-    localStorage.removeItem('ll_is_admin');
-    localStorage.removeItem('ll_client_id');
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
-  }
-
-  if (res.status === 403) {
-    throw new Error('Admin access required');
-  }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-
-  return res.json();
-}
+const request = createRequest(API_BASE);
+const adminRequest = createRequest(ADMIN_BASE);
+const salesRequest = createRequest(SALES_BASE);
 
 export const api = {
   login: (email, password) =>
@@ -126,22 +90,25 @@ export const api = {
 
   getComplianceSummary: () => request('/compliance/summary'),
 
-  // Lead actions (Phase 2)
+  // Lead actions
   updateLeadStatus: (id, status) => request(`/leads/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   archiveLead: (id, archived) => request(`/leads/${id}/archive`, { method: 'PUT', body: JSON.stringify({ archived }) }),
   updateLeadTags: (id, tags) => request(`/leads/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
   updateLeadNotes: (id, notes) => request(`/leads/${id}/notes`, { method: 'PUT', body: JSON.stringify({ notes }) }),
 
-  // Bookings (Phase 2)
+  // Reply to lead conversation
+  sendReply: (leadId, message) => request(`/leads/${leadId}/reply`, { method: 'POST', body: JSON.stringify({ message }) }),
+
+  // Bookings
   getBookings: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/bookings?${qs}`);
   },
 
-  // Reports (Phase 2)
+  // Reports
   getCustomReport: (start, end) => request(`/reports/custom?start=${start}&end=${end}`),
   exportLeadsCSV: () => {
-    const token = localStorage.getItem('ll_token');
+    const token = localStorage.getItem(AUTH_KEYS.TOKEN);
     return fetch(`${API_BASE}/leads/export?format=csv`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).then(r => {
@@ -149,6 +116,9 @@ export const api = {
       return r.blob();
     });
   },
+
+  // Compliance
+  getComplianceDetails: (type) => request(`/compliance/details?type=${type}`),
 
   // Admin endpoints
   getAdminOverview: () => adminRequest('/overview'),
@@ -197,7 +167,7 @@ export const api = {
   pauseWorker: (name) => salesRequest(`/workers/${name}/pause`, { method: 'POST' }),
   resumeWorker: (name) => salesRequest(`/workers/${name}/resume`, { method: 'POST' }),
 
-  // Campaigns (Phase 3)
+  // Campaigns
   getCampaigns: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return salesRequest(`/campaigns?${qs}`);
@@ -225,18 +195,18 @@ export const api = {
   },
   getInboxThread: (id) => salesRequest(`/inbox/${id}/thread`),
 
-  // Templates (Phase 3)
+  // Templates
   getTemplates: () => salesRequest('/templates'),
   createTemplate: (data) => salesRequest('/templates', { method: 'POST', body: JSON.stringify(data) }),
   updateTemplate: (id, data) => salesRequest(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTemplate: (id) => salesRequest(`/templates/${id}`, { method: 'DELETE' }),
 
-  // Command Center (Phase 5)
+  // Command Center
   getCommandCenter: () => salesRequest('/command-center'),
 
-  // Insights (Phase 3)
+  // Insights
   getInsights: () => salesRequest('/insights'),
 
-  // Bulk operations (Phase 3)
+  // Bulk operations
   bulkUpdateProspects: (data) => salesRequest('/prospects/bulk', { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -259,12 +259,12 @@ export default function Onboarding() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Open</label>
-                  <input type="time" value={config.business_hours_start} onChange={e => updateConfig('business_hours_start', e.target.value)} className={inputClass} />
+                  <label htmlFor="ob-hours-open" className={labelClass}>Open</label>
+                  <input id="ob-hours-open" type="time" value={config.business_hours_start} onChange={e => updateConfig('business_hours_start', e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Close</label>
-                  <input type="time" value={config.business_hours_end} onChange={e => updateConfig('business_hours_end', e.target.value)} className={inputClass} />
+                  <label htmlFor="ob-hours-close" className={labelClass}>Close</label>
+                  <input id="ob-hours-close" type="time" value={config.business_hours_end} onChange={e => updateConfig('business_hours_end', e.target.value)} className={inputClass} />
                 </div>
               </div>
 
@@ -287,8 +287,8 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>After-hours handling</label>
-                <select value={config.after_hours} onChange={e => updateConfig('after_hours', e.target.value)} className={`${inputClass} appearance-none`}>
+                <label htmlFor="ob-after-hours" className={labelClass}>After-hours handling</label>
+                <select id="ob-after-hours" value={config.after_hours} onChange={e => updateConfig('after_hours', e.target.value)} className={`${inputClass} appearance-none`}>
                   <option value="ai_responds_books_next_available">AI responds & books next available slot</option>
                   <option value="ai_responds_owner_notified">AI responds & notifies you</option>
                   <option value="do_not_respond">Don't respond after hours</option>
@@ -296,8 +296,9 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>Service radius (miles)</label>
+                <label htmlFor="ob-radius" className={labelClass}>Service radius (miles)</label>
                 <input
+                  id="ob-radius"
                   type="number"
                   value={config.service_area_radius}
                   onChange={e => updateConfig('service_area_radius', e.target.value)}
@@ -307,8 +308,9 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>Zip codes (optional, comma-separated)</label>
+                <label htmlFor="ob-zips" className={labelClass}>Zip codes (optional, comma-separated)</label>
                 <input
+                  id="ob-zips"
                   type="text"
                   value={config.service_area_zips}
                   onChange={e => updateConfig('service_area_zips', e.target.value)}
@@ -350,8 +352,9 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>Secondary services (optional)</label>
+                <label htmlFor="ob-secondary-services" className={labelClass}>Secondary services (optional)</label>
                 <input
+                  id="ob-secondary-services"
                   type="text"
                   value={config.secondary_services.join(', ')}
                   onChange={e => updateConfig('secondary_services', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
@@ -371,8 +374,9 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>Agent name</label>
+                <label htmlFor="ob-agent-name" className={labelClass}>Agent name</label>
                 <input
+                  id="ob-agent-name"
                   type="text"
                   value={config.rep_name}
                   onChange={e => updateConfig('rep_name', e.target.value)}
@@ -412,8 +416,9 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <label className={labelClass}>Emergency contact phone</label>
+                <label htmlFor="ob-emergency" className={labelClass}>Emergency contact phone</label>
                 <input
+                  id="ob-emergency"
                   type="tel"
                   value={config.emergency_contact}
                   onChange={e => updateConfig('emergency_contact', e.target.value)}
@@ -453,8 +458,9 @@ export default function Onboarding() {
               {config.crm_type && !['google_sheets', 'none'].includes(config.crm_type) && (
                 <div className="space-y-4 pt-2">
                   <div>
-                    <label className={labelClass}>API Key / Access Token</label>
+                    <label htmlFor="ob-crm-key" className={labelClass}>API Key / Access Token</label>
                     <input
+                      id="ob-crm-key"
                       type="password"
                       value={config.crm_api_key}
                       onChange={e => updateConfig('crm_api_key', e.target.value)}
@@ -463,8 +469,9 @@ export default function Onboarding() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Tenant / Account ID</label>
+                    <label htmlFor="ob-crm-tenant" className={labelClass}>Tenant / Account ID</label>
                     <input
+                      id="ob-crm-tenant"
                       type="text"
                       value={config.crm_tenant_id}
                       onChange={e => updateConfig('crm_tenant_id', e.target.value)}
@@ -570,10 +577,11 @@ export default function Onboarding() {
               {config.business_type && (
                 <div className="space-y-4">
                   <div>
-                    <label className={labelClass}>
+                    <label htmlFor="ob-ein" className={labelClass}>
                       EIN / Tax ID {config.business_type === 'sole_proprietorship' ? '(optional)' : ''}
                     </label>
                     <input
+                      id="ob-ein"
                       type="text"
                       value={config.business_ein}
                       onChange={e => updateConfig('business_ein', e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
@@ -583,8 +591,9 @@ export default function Onboarding() {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Business website</label>
+                    <label htmlFor="ob-website" className={labelClass}>Business website</label>
                     <input
+                      id="ob-website"
                       type="url"
                       value={config.business_website}
                       onChange={e => updateConfig('business_website', e.target.value)}
@@ -594,9 +603,10 @@ export default function Onboarding() {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Business address</label>
+                    <label htmlFor="ob-street" className={labelClass}>Business address</label>
                     <div className="space-y-3">
                       <input
+                        id="ob-street"
                         type="text"
                         value={config.business_street}
                         onChange={e => updateConfig('business_street', e.target.value)}
@@ -605,25 +615,31 @@ export default function Onboarding() {
                       />
                       <div className="grid grid-cols-3 gap-3">
                         <input
+                          id="ob-city"
                           type="text"
                           value={config.business_city}
                           onChange={e => updateConfig('business_city', e.target.value)}
                           className={inputClass}
                           placeholder="City"
+                          aria-label="City"
                         />
                         <input
+                          id="ob-state"
                           type="text"
                           value={config.business_state}
                           onChange={e => updateConfig('business_state', e.target.value.toUpperCase().slice(0, 2))}
                           className={inputClass}
                           placeholder="State"
+                          aria-label="State"
                         />
                         <input
+                          id="ob-zip"
                           type="text"
                           value={config.business_zip}
                           onChange={e => updateConfig('business_zip', e.target.value.replace(/\D/g, '').slice(0, 5))}
                           className={inputClass}
                           placeholder="ZIP"
+                          aria-label="ZIP code"
                         />
                       </div>
                     </div>

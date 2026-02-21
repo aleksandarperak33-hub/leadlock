@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../api/client';
 
 export function useLeads(params = {}, pollInterval = 15000) {
@@ -7,6 +7,12 @@ export function useLeads(params = {}, pollInterval = 15000) {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Stable dependency key from explicit fields instead of JSON.stringify(params)
+  const paramsKey = useMemo(
+    () => `${params.page || 1}-${params.per_page || 20}-${params.state || ''}-${params.search || ''}`,
+    [params.page, params.per_page, params.state, params.search]
+  );
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -20,7 +26,7 @@ export function useLeads(params = {}, pollInterval = 15000) {
     } finally {
       setLoading(false);
     }
-  }, [JSON.stringify(params)]);
+  }, [paramsKey]);
 
   useEffect(() => {
     setLoading(true);

@@ -8,6 +8,8 @@ import {
   AlertCircle,
   Clock,
   Users,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { api } from '../api/client';
 import PageHeader from '../components/ui/PageHeader';
@@ -53,6 +55,9 @@ export default function Compliance() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [drillDownData, setDrillDownData] = useState(null);
+  const [drillDownLoading, setDrillDownLoading] = useState(false);
 
   useEffect(() => {
     loadCompliance();
@@ -68,6 +73,24 @@ export default function Compliance() {
       setError(err.message || 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMetricClick = async (metricKey) => {
+    if (expandedMetric === metricKey) {
+      setExpandedMetric(null);
+      setDrillDownData(null);
+      return;
+    }
+    setExpandedMetric(metricKey);
+    setDrillDownLoading(true);
+    try {
+      const data = await api.getComplianceDetails(metricKey);
+      setDrillDownData(data);
+    } catch (e) {
+      setDrillDownData({ items: [], error: e.message });
+    } finally {
+      setDrillDownLoading(false);
     }
   };
 
@@ -120,7 +143,14 @@ export default function Compliance() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {metrics.map((metric) => (
-          <MetricCard key={metric.label} {...metric} />
+          <MetricCard
+            key={metric.key}
+            {...metric}
+            expanded={expandedMetric === metric.key}
+            onClick={() => handleMetricClick(metric.key)}
+            drillDownData={expandedMetric === metric.key ? drillDownData : null}
+            drillDownLoading={expandedMetric === metric.key && drillDownLoading}
+          />
         ))}
       </div>
 
@@ -158,6 +188,7 @@ function buildMetrics(summary, optOutRate) {
 
   return [
     {
+      key: 'consent',
       label: 'Consent Records',
       value: summary?.total_consent_records || 0,
       subtitle: 'Total active consent records on file',
@@ -165,6 +196,7 @@ function buildMetrics(summary, optOutRate) {
       status: 'green',
     },
     {
+      key: 'opt_out',
       label: 'Opt-Out Count',
       value: summary?.opted_out_count || 0,
       subtitle: 'Contacts who opted out of messaging',
@@ -172,6 +204,7 @@ function buildMetrics(summary, optOutRate) {
       status: (summary?.opted_out_count || 0) > 0 ? 'yellow' : 'green',
     },
     {
+      key: 'quiet_hours',
       label: 'Quiet Hours Violations',
       value: summary?.messages_in_quiet_hours || 0,
       subtitle: 'Messages sent outside allowed hours',
@@ -179,6 +212,7 @@ function buildMetrics(summary, optOutRate) {
       status: quietStatus,
     },
     {
+      key: 'cold_outreach',
       label: 'Cold Outreach Violations',
       value: summary?.cold_outreach_violations || 0,
       subtitle: 'Messages exceeding per-lead limits',
@@ -186,6 +220,7 @@ function buildMetrics(summary, optOutRate) {
       status: coldStatus,
     },
     {
+      key: 'pending_followups',
       label: 'Pending Follow-ups',
       value: summary?.pending_followups || 0,
       subtitle: 'Queued follow-up messages',
@@ -193,6 +228,7 @@ function buildMetrics(summary, optOutRate) {
       status: 'green',
     },
     {
+      key: 'opt_out_rate',
       label: 'Opt-Out Rate',
       value: `${optOutRate}%`,
       subtitle: 'Percentage of contacts who opted out',
@@ -232,19 +268,59 @@ function buildChecklist(summary) {
   ];
 }
 
-function MetricCard({ label, value, subtitle, icon: Icon, status }) {
+function MetricCard({ label, value, subtitle, icon: Icon, status, expanded, onClick, drillDownData, drillDownLoading }) {
   const valueColor = METRIC_STATUS_COLORS[status] || 'text-gray-900';
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-gray-400" />
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-          {label}
-        </span>
-      </div>
-      <p className={`text-2xl font-bold font-mono ${valueColor}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>
+    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden">
+      <button
+        onClick={onClick}
+        className="w-full text-left p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Icon className="w-4 h-4 text-gray-400" />
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {label}
+            </span>
+          </div>
+          {expanded ? (
+            <ChevronUp className="w-4 h-4 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-400" />
+          )}
+        </div>
+        <p className={`text-2xl font-bold font-mono ${valueColor}`}>{value}</p>
+        <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 px-6 py-4 bg-gray-50/50 max-h-48 overflow-y-auto">
+          {drillDownLoading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+              Loading details...
+            </div>
+          ) : drillDownData?.error ? (
+            <p className="text-xs text-gray-400">{drillDownData.error}</p>
+          ) : drillDownData?.items?.length > 0 ? (
+            <div className="space-y-2">
+              {drillDownData.items.map((item, i) => (
+                <div key={item.id || i} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 truncate">
+                    {item.phone_masked || item.lead_name || `Record ${i + 1}`}
+                  </span>
+                  <span className="text-gray-400 font-mono ml-2 flex-shrink-0">
+                    {item.date || item.created_at ? new Date(item.date || item.created_at).toLocaleDateString() : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">No details available</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

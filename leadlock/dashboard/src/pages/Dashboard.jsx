@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import { POLL_INTERVALS } from '../lib/constants';
+import { responseTimeColor } from '../lib/response-time';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
 import ResponseTimeChart from '../components/ResponseTimeChart';
@@ -51,7 +53,7 @@ const TOOLTIP_STYLE = {
 
 /**
  * Dashboard -- Overview page with KPI cards, charts, and activity feed.
- * Fetches metrics and activity data with 30-second auto-refresh.
+ * Fetches metrics and activity data with auto-refresh.
  */
 export default function Dashboard() {
   const [period, setPeriod] = useState('7d');
@@ -80,7 +82,7 @@ export default function Dashboard() {
   useEffect(() => {
     setLoading(true);
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, POLL_INTERVALS.DASHBOARD);
     return () => clearInterval(interval);
   }, [period]);
 
@@ -90,13 +92,9 @@ export default function Dashboard() {
       ? (metrics.avg_response_time_ms / 1000).toFixed(1)
       : '\u2014'
     : '\u2014';
-  const responseColor = !hasResponseData
-    ? 'brand'
-    : metrics.avg_response_time_ms < 10000
-      ? 'green'
-      : metrics.avg_response_time_ms < 60000
-        ? 'yellow'
-        : 'red';
+  const avgResponseColor = hasResponseData
+    ? responseTimeColor(metrics.avg_response_time_ms)
+    : 'brand';
 
   if (loading && !metrics) {
     return (
@@ -169,7 +167,7 @@ export default function Dashboard() {
           label="Avg Response"
           value={hasResponseData ? `${avgResponseSec}s` : '\u2014'}
           icon={Timer}
-          color={responseColor}
+          color={avgResponseColor}
         />
         <StatCard
           label="Under 60s"
@@ -306,7 +304,7 @@ export default function Dashboard() {
           )}
           {activity.map((event, i) => (
             <div
-              key={i}
+              key={event.id || `${event.type}-${event.timestamp}-${i}`}
               className="flex items-start gap-3 text-sm py-2.5 rounded-lg hover:bg-gray-50/50 px-3 -mx-3 transition-colors group"
             >
               <div className="relative flex-shrink-0 mt-2">

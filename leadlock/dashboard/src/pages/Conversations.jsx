@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { POLL_INTERVALS, PER_PAGE } from '../lib/constants';
+import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/ui/PageHeader';
 import SearchInput from '../components/ui/SearchInput';
 import StatusDot from '../components/ui/StatusDot';
 import ConversationThread from '../components/ConversationThread';
 import LeadStatusBadge from '../components/LeadStatusBadge';
-import { MessageSquare, User, Calendar, ArrowLeft } from 'lucide-react';
+import { MessageSquare, User, Calendar, ArrowLeft, Send, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 /**
@@ -32,11 +34,12 @@ export default function Conversations() {
   const [leadDetail, setLeadDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const data = await api.getLeads({ per_page: 50 });
+        const data = await api.getLeads({ per_page: PER_PAGE.CONVERSATIONS });
         setLeads(data.leads || []);
       } catch (e) {
         console.error('Failed to fetch leads:', e);
@@ -66,7 +69,7 @@ export default function Conversations() {
       }
     };
     fetchConversation();
-    const interval = setInterval(fetchConversation, 10000);
+    const interval = setInterval(fetchConversation, POLL_INTERVALS.CONVERSATIONS);
     return () => clearInterval(interval);
   }, [selectedLead]);
 
@@ -75,11 +78,11 @@ export default function Conversations() {
     navigate(`/conversations/${id}`, { replace: true });
   };
 
-  const filteredLeads = searchQuery
+  const filteredLeads = debouncedSearch
     ? leads.filter((lead) => {
         const name =
           `${lead.first_name || ''} ${lead.last_name || ''}`.toLowerCase();
-        return name.includes(searchQuery.toLowerCase());
+        return name.includes(debouncedSearch.toLowerCase());
       })
     : leads;
 
@@ -209,6 +212,15 @@ export default function Conversations() {
                 <ConversationThread messages={conversations} />
               </div>
 
+              {/* Reply input */}
+              <ReplyCompose
+                leadId={selectedLead}
+                onSent={() => {
+                  // Re-fetch conversations after sending
+                  api.getConversations(selectedLead).then(c => setConversations(c || []));
+                }}
+              />
+
               {/* Timeline */}
               {leadDetail?.events?.length > 0 && (
                 <div className="px-6 py-3 max-h-28 overflow-y-auto border-t border-gray-200/60 bg-white">
@@ -241,6 +253,64 @@ export default function Conversations() {
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ReplyCompose({ leadId, onSent }) {
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSend = async () => {
+    if (!message.trim() || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await api.sendReply(leadId, message.trim());
+      setMessage('');
+      onSent();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <div className="px-6 py-3 border-t border-gray-200/60 bg-white">
+      {error && (
+        <p className="text-xs text-red-500 mb-2">{error}</p>
+      )}
+      <div className="flex items-end gap-2">
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a reply..."
+          rows={1}
+          className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 placeholder:text-gray-400 text-gray-900 transition-all resize-none"
+        />
+        <button
+          onClick={handleSend}
+          disabled={!message.trim() || sending}
+          className="flex items-center justify-center w-10 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed flex-shrink-0"
+          aria-label="Send reply"
+        >
+          {sending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </button>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import AdminLayout from './layouts/AdminLayout';
+import PageErrorBoundary from './components/PageErrorBoundary';
 
-// Loading fallback
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-64">
@@ -12,7 +13,20 @@ function PageLoader() {
   );
 }
 
-// Lazy-loaded pages — reduces initial bundle from ~1MB to ~200KB
+/**
+ * Wraps a lazy page component with Suspense + per-page error boundary.
+ */
+function Page({ component: Component }) {
+  return (
+    <PageErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Component />
+      </Suspense>
+    </PageErrorBoundary>
+  );
+}
+
+// Lazy-loaded pages
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const LeadFeed = lazy(() => import('./pages/LeadFeed'));
 const Conversations = lazy(() => import('./pages/Conversations'));
@@ -46,21 +60,20 @@ const AdminInsights = lazy(() => import('./pages/admin/AdminInsights'));
 const AdminTemplates = lazy(() => import('./pages/admin/AdminTemplates'));
 
 function App() {
-  const token = localStorage.getItem('ll_token');
-  const isAdmin = localStorage.getItem('ll_is_admin') === 'true';
+  const { token, isAdmin } = useAuth();
 
   if (!token) {
     return (
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/" element={<Page component={Landing} />} />
+          <Route path="/login" element={<Page component={Login} />} />
+          <Route path="/signup" element={<Page component={Signup} />} />
+          <Route path="/onboarding" element={<Page component={Onboarding} />} />
+          <Route path="/privacy" element={<Page component={Privacy} />} />
+          <Route path="/forgot-password" element={<Page component={ForgotPassword} />} />
+          <Route path="/reset-password" element={<Page component={ResetPassword} />} />
+          <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
@@ -72,21 +85,21 @@ function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<AdminLayout />}>
-            <Route path="/dashboard" element={<AdminCommandCenter />} />
-            <Route path="/overview" element={<AdminOverview />} />
-            <Route path="/clients" element={<AdminClients />} />
-            <Route path="/clients/:clientId" element={<AdminClientDetail />} />
-            <Route path="/leads" element={<AdminLeads />} />
-            <Route path="/revenue" element={<AdminRevenue />} />
-            <Route path="/outreach" element={<AdminOutreach />} />
-            <Route path="/sales-engine" element={<AdminSalesEngine />} />
-            <Route path="/campaigns" element={<AdminCampaigns />} />
-            <Route path="/campaigns/:campaignId" element={<AdminCampaignDetail />} />
-            <Route path="/inbox" element={<AdminInbox />} />
-            <Route path="/insights" element={<AdminInsights />} />
-            <Route path="/templates" element={<AdminTemplates />} />
+            <Route path="/dashboard" element={<Page component={AdminCommandCenter} />} />
+            <Route path="/overview" element={<Page component={AdminOverview} />} />
+            <Route path="/clients" element={<Page component={AdminClients} />} />
+            <Route path="/clients/:clientId" element={<Page component={AdminClientDetail} />} />
+            <Route path="/leads" element={<Page component={AdminLeads} />} />
+            <Route path="/revenue" element={<Page component={AdminRevenue} />} />
+            <Route path="/outreach" element={<Page component={AdminOutreach} />} />
+            <Route path="/sales-engine" element={<Page component={AdminSalesEngine} />} />
+            <Route path="/campaigns" element={<Page component={AdminCampaigns} />} />
+            <Route path="/campaigns/:campaignId" element={<Page component={AdminCampaignDetail} />} />
+            <Route path="/inbox" element={<Page component={AdminInbox} />} />
+            <Route path="/insights" element={<Page component={AdminInsights} />} />
+            <Route path="/templates" element={<Page component={AdminTemplates} />} />
           </Route>
-          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -98,18 +111,18 @@ function App() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/onboarding" element={<Page component={Onboarding} />} />
+        <Route path="/privacy" element={<Page component={Privacy} />} />
+        <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/leads" element={<LeadFeed />} />
-          <Route path="/conversations/:leadId?" element={<Conversations />} />
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/compliance" element={<Compliance />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/billing" element={<Billing />} />
+          <Route path="/dashboard" element={<Page component={Dashboard} />} />
+          <Route path="/leads" element={<Page component={LeadFeed} />} />
+          <Route path="/conversations/:leadId?" element={<Page component={Conversations} />} />
+          <Route path="/bookings" element={<Page component={Bookings} />} />
+          <Route path="/reports" element={<Page component={Reports} />} />
+          <Route path="/compliance" element={<Page component={Compliance} />} />
+          <Route path="/settings" element={<Page component={Settings} />} />
+          <Route path="/billing" element={<Page component={Billing} />} />
         </Route>
         <Route path="/login" element={<Navigate to="/dashboard" replace />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

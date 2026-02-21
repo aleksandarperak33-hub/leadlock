@@ -1,21 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LEAD_STATE_TABS, PER_PAGE } from '../../lib/constants';
+import { responseTimeClass } from '../../lib/response-time';
+import { useDebounce } from '../../hooks/useDebounce';
+import { Clock } from 'lucide-react';
+import Pagination from '../../components/ui/Pagination';
 import PageHeader from '../../components/ui/PageHeader';
 import SearchInput from '../../components/ui/SearchInput';
 import Tabs from '../../components/ui/Tabs';
 import DataTable from '../../components/ui/DataTable';
 import Badge from '../../components/ui/Badge';
-
-const STATE_TABS = [
-  { id: 'all', label: 'All' },
-  { id: 'new', label: 'New' },
-  { id: 'qualifying', label: 'Qualifying' },
-  { id: 'qualified', label: 'Qualified' },
-  { id: 'booked', label: 'Booked' },
-  { id: 'cold', label: 'Cold' },
-  { id: 'opted_out', label: 'Opted Out' },
-];
 
 /**
  * Maps a lead state to a Badge variant.
@@ -38,18 +32,6 @@ const stateVariant = (state) => {
     default:
       return 'neutral';
   }
-};
-
-/**
- * Returns the color class for a response time in milliseconds.
- * <=10s emerald, <=30s orange, <=60s amber, >60s red.
- */
-const responseTimeColor = (ms) => {
-  if (!ms) return 'text-gray-400';
-  if (ms <= 10000) return 'text-emerald-600';
-  if (ms <= 30000) return 'text-orange-500';
-  if (ms <= 60000) return 'text-amber-600';
-  return 'text-red-600';
 };
 
 const TABLE_COLUMNS = [
@@ -108,7 +90,7 @@ const TABLE_COLUMNS = [
     render: (val) => {
       if (!val) return <span className="text-xs text-gray-400">{'\u2014'}</span>;
       return (
-        <span className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeColor(val)}`}>
+        <span className={`text-xs font-mono font-medium flex items-center gap-1 ${responseTimeClass(val)}`}>
           <Clock className="w-3 h-3" />
           {(val / 1000).toFixed(1)}s
         </span>
@@ -133,15 +115,16 @@ export default function AdminLeads() {
   const [pages, setPages] = useState(1);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchLeads = async () => {
       setLoading(true);
       try {
-        const params = { page, per_page: 25 };
+        const params = { page, per_page: PER_PAGE.ADMIN_LEADS };
         if (stateFilter !== 'all') params.state = stateFilter;
-        if (search) params.search = search;
+        if (debouncedSearch) params.search = debouncedSearch;
         const data = await api.getAdminLeads(params);
         setLeads(data.leads || []);
         setTotal(data.total || 0);
@@ -153,7 +136,7 @@ export default function AdminLeads() {
       }
     };
     fetchLeads();
-  }, [page, stateFilter, search]);
+  }, [page, stateFilter, debouncedSearch]);
 
   const handleSearchChange = (val) => {
     setSearch(val);
@@ -183,7 +166,7 @@ export default function AdminLeads() {
 
       {/* State Tabs */}
       <Tabs
-        tabs={STATE_TABS}
+        tabs={LEAD_STATE_TABS}
         activeId={stateFilter}
         onChange={handleTabChange}
       />
@@ -203,30 +186,7 @@ export default function AdminLeads() {
         />
       )}
 
-      {/* Pagination */}
-      {pages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-xs font-mono text-gray-400">
-            Page {page} of {pages}
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(pages, p + 1))}
-              disabled={page === pages}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination page={page} pages={pages} onChange={setPage} />
     </div>
   );
 }

@@ -111,10 +111,11 @@ export default function ResetPassword() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                  <label htmlFor="reset-password" className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                     New Password
                   </label>
                   <input
+                    id="reset-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -125,10 +126,11 @@ export default function ResetPassword() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                  <label htmlFor="reset-confirm" className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                     Confirm Password
                   </label>
                   <input
+                    id="reset-confirm"
                     type="password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}

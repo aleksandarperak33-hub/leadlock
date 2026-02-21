@@ -17,35 +17,26 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 40, fontFamily: 'system-ui' }}>
-          <h1 style={{ color: '#dc2626', fontSize: 20, marginBottom: 8 }}>
+        <div className="p-10 font-sans">
+          <h1 className="text-red-600 text-xl font-semibold mb-2">
             Something went wrong
           </h1>
-          <p style={{ color: '#6b7280', fontSize: 14 }}>
+          <p className="text-gray-500 text-sm">
             An unexpected error occurred. Please try reloading the page.
           </p>
           {import.meta.env.DEV && (
             <>
-              <pre style={{ color: '#6b7280', fontSize: 14, whiteSpace: 'pre-wrap', marginTop: 12 }}>
+              <pre className="text-gray-500 text-sm whitespace-pre-wrap mt-3">
                 {this.state.error?.message}
               </pre>
-              <pre style={{ color: '#9ca3af', fontSize: 12, marginTop: 8, whiteSpace: 'pre-wrap' }}>
+              <pre className="text-gray-400 text-xs whitespace-pre-wrap mt-2">
                 {this.state.error?.stack}
               </pre>
             </>
           )}
           <button
             onClick={() => window.location.reload()}
-            style={{
-              marginTop: 16,
-              padding: '8px 16px',
-              background: '#f97316',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: 14,
-            }}
+            className="mt-4 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors cursor-pointer"
           >
             Reload Page
           </button>

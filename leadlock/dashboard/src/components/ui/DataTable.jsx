@@ -1,7 +1,7 @@
 import { ChevronUp, ChevronDown } from 'lucide-react';
 
 /**
- * DataTable — Sortable data table with consistent styling.
+ * DataTable -- Sortable data table with consistent styling, ARIA support, and loading state.
  *
  * @param {Array<{key: string, label: string, sortable?: boolean, render?: Function, align?: string}>} columns
  * @param {Array<Object>} data - Row data array
@@ -10,6 +10,8 @@ import { ChevronUp, ChevronDown } from 'lucide-react';
  * @param {Function} [onSort] - Callback when a sortable header is clicked: (key) => void
  * @param {string} [emptyMessage='No data available'] - Message shown when data is empty
  * @param {Function} [onRowClick] - Optional row click handler: (row) => void
+ * @param {boolean} [loading=false] - Show skeleton loading rows
+ * @param {number} [loadingRows=5] - Number of skeleton rows when loading
  */
 export default function DataTable({
   columns,
@@ -19,6 +21,8 @@ export default function DataTable({
   onSort,
   emptyMessage = 'No data available',
   onRowClick,
+  loading = false,
+  loadingRows = 5,
 }) {
   const handleHeaderClick = (column) => {
     if (column.sortable && onSort) {
@@ -35,10 +39,15 @@ export default function DataTable({
               const isSorted = sortKey === column.key;
               const SortIcon = isSorted && sortDir === 'desc' ? ChevronDown : ChevronUp;
               const alignClass = column.align === 'right' ? 'text-right' : 'text-left';
+              const ariaSort = column.sortable && isSorted
+                ? (sortDir === 'asc' ? 'ascending' : 'descending')
+                : undefined;
 
               return (
                 <th
                   key={column.key}
+                  scope="col"
+                  aria-sort={ariaSort}
                   className={`text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 ${alignClass} ${
                     column.sortable ? 'cursor-pointer hover:text-gray-700 select-none' : ''
                   }`}
@@ -56,7 +65,17 @@ export default function DataTable({
           </tr>
         </thead>
         <tbody>
-          {data.length === 0 ? (
+          {loading ? (
+            [...Array(loadingRows)].map((_, i) => (
+              <tr key={`skeleton-${i}`} className="border-b border-gray-100 last:border-0">
+                {columns.map((column) => (
+                  <td key={column.key} className="px-4 py-3.5">
+                    <div className="h-4 bg-gray-100 rounded-lg animate-pulse" />
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="text-center py-12">
                 <p className="text-sm text-gray-400">{emptyMessage}</p>

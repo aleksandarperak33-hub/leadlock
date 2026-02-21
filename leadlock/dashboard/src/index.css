@@ -50,6 +50,25 @@
   background-clip: text;
 }
 
+/* ========== COMPONENT CLASSES ========== */
+@layer components {
+  .glass-card {
+    @apply bg-white border border-gray-200/60 rounded-2xl shadow-sm;
+  }
+
+  .gradient-border {
+    @apply border border-gray-200/60;
+  }
+
+  .card-hover-lift {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .card-accent-top {
+    @apply border-t-2 border-t-orange-500;
+  }
+}
+
 /* ========== ANIMATIONS ========== */
 @keyframes live-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -86,6 +105,33 @@
 .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
 .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
 .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-in > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-in > *:nth-child(8) { animation-delay: 420ms; }
+.stagger-in > *:nth-child(9) { animation-delay: 480ms; }
+.stagger-in > *:nth-child(10) { animation-delay: 540ms; }
+.stagger-in > *:nth-child(11) { animation-delay: 600ms; }
+.stagger-in > *:nth-child(12) { animation-delay: 660ms; }
+
+/* ========== REDUCED MOTION ========== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-page-in,
+  .animate-live-pulse,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+  .stagger-in > * {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  .transition-all,
+  .transition-colors,
+  .transition-opacity,
+  .transition-transform {
+    transition: none !important;
+  }
+}
 
 /* ========== SUBTLE BACKGROUNDS ========== */
 .bg-dot-pattern {

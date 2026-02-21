@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { startOfDay, isSameDay, format, isBefore } from 'date-fns';
 import { api } from '../api/client';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
@@ -15,6 +16,7 @@ import Tabs from '../components/ui/Tabs';
 import Badge from '../components/ui/Badge';
 import StatusDot from '../components/ui/StatusDot';
 import EmptyState from '../components/ui/EmptyState';
+import BookingDetailModal from '../components/BookingDetailModal';
 
 const STATUS_BADGE_VARIANT = {
   confirmed: 'success',
@@ -40,6 +42,7 @@ export default function Bookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [view, setView] = useState('list');
+  const [selectedBooking, setSelectedBooking] = useState(null);
 
   useEffect(() => {
     loadBookings();
@@ -58,13 +61,15 @@ export default function Bookings() {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
-  const upcomingBookings = bookings.filter(
-    (b) => b.appointment_date >= today && b.status !== 'cancelled'
-  );
-  const pastBookings = bookings.filter(
-    (b) => b.appointment_date < today || b.status === 'cancelled'
-  );
+  const today = startOfDay(new Date());
+  const upcomingBookings = bookings.filter((b) => {
+    const bookingDate = startOfDay(new Date(b.appointment_date));
+    return (isSameDay(bookingDate, today) || !isBefore(bookingDate, today)) && b.status !== 'cancelled';
+  });
+  const pastBookings = bookings.filter((b) => {
+    const bookingDate = startOfDay(new Date(b.appointment_date));
+    return isBefore(bookingDate, today) || b.status === 'cancelled';
+  });
 
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
   const pendingCount = bookings.filter((b) => b.status === 'pending').length;
@@ -122,15 +127,23 @@ export default function Bookings() {
           upcoming={upcomingBookings}
           past={pastBookings}
           total={bookings.length}
+          onBookingClick={setSelectedBooking}
         />
       )}
 
-      {view === 'calendar' && <CalendarGrid bookings={bookings} />}
+      {view === 'calendar' && <CalendarGrid bookings={bookings} onBookingClick={setSelectedBooking} />}
+
+      {selectedBooking && (
+        <BookingDetailModal
+          booking={selectedBooking}
+          onClose={() => setSelectedBooking(null)}
+        />
+      )}
     </div>
   );
 }
 
-function BookingList({ upcoming, past, total }) {
+function BookingList({ upcoming, past, total, onBookingClick }) {
   if (total === 0) {
     return (
       <EmptyState
@@ -150,7 +163,7 @@ function BookingList({ upcoming, past, total }) {
           </h2>
           <div className="space-y-3">
             {upcoming.map((b) => (
-              <BookingCard key={b.id} booking={b} />
+              <BookingCard key={b.id} booking={b} onClick={() => onBookingClick(b)} />
             ))}
           </div>
         </div>
@@ -162,7 +175,7 @@ function BookingList({ upcoming, past, total }) {
           </h2>
           <div className="space-y-3">
             {past.map((b) => (
-              <BookingCard key={b.id} booking={b} />
+              <BookingCard key={b.id} booking={b} onClick={() => onBookingClick(b)} />
             ))}
           </div>
         </div>
@@ -171,20 +184,23 @@ function BookingList({ upcoming, past, total }) {
   );
 }
 
-function BookingCard({ booking }) {
+function BookingCard({ booking, onClick }) {
   const date = new Date(booking.appointment_date);
   const variant = STATUS_BADGE_VARIANT[booking.status] || 'neutral';
   const syncColor = booking.crm_sync_status === 'synced' ? 'green' : 'yellow';
   const syncLabel = booking.crm_sync_status === 'synced' ? 'Synced' : 'Pending sync';
 
   return (
-    <div className="flex items-center gap-4 bg-white border border-gray-200/60 rounded-xl p-5 hover:bg-gray-50/50 transition-colors cursor-pointer">
+    <div
+      onClick={onClick}
+      className="flex items-center gap-4 bg-white border border-gray-200/60 rounded-xl p-5 hover:bg-gray-50/50 transition-colors cursor-pointer"
+    >
       <div className="text-center w-14 flex-shrink-0">
         <p className="text-[10px] font-semibold uppercase text-gray-400">
-          {date.toLocaleDateString('en-US', { month: 'short' })}
+          {format(date, 'MMM')}
         </p>
         <p className="text-2xl font-bold font-mono leading-tight text-gray-900">
-          {date.getDate()}
+          {format(date, 'd')}
         </p>
       </div>
 
@@ -225,7 +241,7 @@ function BookingCard({ booking }) {
   );
 }
 
-function CalendarGrid({ bookings }) {
+function CalendarGrid({ bookings, onBookingClick }) {
   const [calendarDate, setCalendarDate] = useState(new Date());
   const today = new Date();
 
@@ -245,10 +261,7 @@ function CalendarGrid({ bookings }) {
   for (let i = 0; i < firstDay; i++) days.push(null);
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
 
-  const monthLabel = calendarDate.toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const monthLabel = format(calendarDate, 'MMMM yyyy');
 
   const goToPrevMonth = () => {
     setCalendarDate(new Date(year, month - 1, 1));
@@ -258,7 +271,7 @@ function CalendarGrid({ bookings }) {
     setCalendarDate(new Date(year, month + 1, 1));
   };
 
-  const isToday = (day) =>
+  const isTodayCell = (day) =>
     day === today.getDate() &&
     month === today.getMonth() &&
     year === today.getFullYear();
@@ -269,6 +282,7 @@ function CalendarGrid({ bookings }) {
         <button
           onClick={goToPrevMonth}
           className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+          aria-label="Previous month"
         >
           <ChevronLeft className="w-4 h-4 text-gray-500" />
         </button>
@@ -276,6 +290,7 @@ function CalendarGrid({ bookings }) {
         <button
           onClick={goToNextMonth}
           className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+          aria-label="Next month"
         >
           <ChevronRight className="w-4 h-4 text-gray-500" />
         </button>
@@ -295,18 +310,18 @@ function CalendarGrid({ bookings }) {
 
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const dayBookings = bookingsByDate[dateStr] || [];
-          const todayCell = isToday(day);
+          const todayHighlight = isTodayCell(day);
 
           return (
             <div
               key={day}
               className={`border border-gray-100 min-h-[80px] p-1.5 ${
-                todayCell ? 'bg-orange-50/50 border-orange-200' : ''
+                todayHighlight ? 'bg-orange-50/50 border-orange-200' : ''
               }`}
             >
               <p
                 className={`text-sm font-medium mb-1 ${
-                  todayCell ? 'text-orange-600' : 'text-gray-600'
+                  todayHighlight ? 'text-orange-600' : 'text-gray-600'
                 }`}
               >
                 {day}
@@ -315,10 +330,12 @@ function CalendarGrid({ bookings }) {
                 {dayBookings.map((b) => {
                   const dotColor = CALENDAR_DOT_COLORS[b.status] || 'bg-gray-300';
                   return (
-                    <span
+                    <button
                       key={b.id}
-                      className={`w-[6px] h-[6px] rounded-full ${dotColor}`}
+                      onClick={() => onBookingClick(b)}
+                      className={`w-[6px] h-[6px] rounded-full ${dotColor} cursor-pointer hover:scale-150 transition-transform`}
                       title={`${b.service_type || 'Appointment'} (${b.status})`}
+                      aria-label={`Booking: ${b.service_type || 'Appointment'}`}
                     />
                   );
                 })}

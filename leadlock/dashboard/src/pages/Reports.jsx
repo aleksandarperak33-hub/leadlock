@@ -32,14 +32,33 @@ const DEFAULT_RESPONSE_COLORS = {
   border: 'border-red-100',
 };
 
+const PERIOD_OPTIONS = [
+  { id: '7d', label: '7 Days' },
+  { id: '30d', label: '30 Days' },
+  { id: '90d', label: '90 Days' },
+  { id: 'custom', label: 'Custom' },
+];
+
 export default function Reports() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [period, setPeriod] = useState('7d');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   const fetchReport = async () => {
+    setLoading(true);
     try {
-      const data = await api.getWeeklyReport();
+      let data;
+      if (period === 'custom' && customStart && customEnd) {
+        data = await api.getCustomReport(customStart, customEnd);
+      } else if (period !== 'custom') {
+        data = await api.getWeeklyReport(period === '7d' ? undefined : period);
+      } else {
+        setLoading(false);
+        return;
+      }
       setReport(data);
       setError(null);
     } catch (e) {
@@ -52,9 +71,13 @@ export default function Reports() {
 
   useEffect(() => {
     fetchReport();
-  }, []);
+  }, [period]);
 
-  if (loading) {
+  const handleCustomApply = () => {
+    if (customStart && customEnd) fetchReport();
+  };
+
+  if (loading && !report) {
     return (
       <div className="space-y-4">
         <div className="h-6 w-40 rounded-lg bg-gray-100 animate-pulse" />
@@ -71,19 +94,69 @@ export default function Reports() {
     : 'N/A';
   const conversionPct = ((report?.conversion_rate ?? 0) * 100).toFixed(1);
 
-  const printButton = (
-    <button
-      onClick={() => window.print()}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors cursor-pointer"
-    >
-      <Printer className="w-4 h-4" />
-      Print
-    </button>
+  const headerActions = (
+    <div className="flex items-center gap-3">
+      <div className="flex rounded-xl p-1 bg-gray-100/80 border border-gray-200/60">
+        {PERIOD_OPTIONS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPeriod(p.id)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              period === p.id
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => window.print()}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors cursor-pointer"
+      >
+        <Printer className="w-4 h-4" />
+        Print
+      </button>
+    </div>
   );
 
   return (
     <div>
-      <PageHeader title="Weekly Report" actions={printButton} />
+      <PageHeader title="Reports" actions={headerActions} />
+
+      {/* Custom date range picker */}
+      {period === 'custom' && (
+        <div className="flex items-end gap-3 mb-6 p-4 bg-white border border-gray-200/60 rounded-xl">
+          <div>
+            <label htmlFor="report-start" className="text-xs font-medium text-gray-500 mb-1 block">Start Date</label>
+            <input
+              id="report-start"
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+            />
+          </div>
+          <div>
+            <label htmlFor="report-end" className="text-xs font-medium text-gray-500 mb-1 block">End Date</label>
+            <input
+              id="report-end"
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+            />
+          </div>
+          <button
+            onClick={handleCustomApply}
+            disabled={!customStart || !customEnd}
+            className="px-5 py-2 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            Apply
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60 text-red-600 text-sm flex items-center gap-2">
@@ -154,10 +227,10 @@ function SourceTable({ title, entries }) {
       <table className="w-full">
         <thead>
           <tr className="bg-gray-50/80 border-b border-gray-200/60">
-            <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
               {title.includes('Source') ? 'Source' : 'State'}
             </th>
-            <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
               Count
             </th>
           </tr>

@@ -97,10 +97,11 @@ export default function Signup() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+              <label htmlFor="signup-business" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                 Business Name
               </label>
               <input
+                id="signup-business"
                 type="text"
                 value={form.business_name}
                 onChange={e => updateField('business_name', e.target.value)}
@@ -112,10 +113,11 @@ export default function Signup() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+                <label htmlFor="signup-name" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                   Your Name
                 </label>
                 <input
+                  id="signup-name"
                   type="text"
                   value={form.name}
                   onChange={e => updateField('name', e.target.value)}
@@ -125,10 +127,11 @@ export default function Signup() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+                <label htmlFor="signup-trade" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                   Trade Type
                 </label>
                 <select
+                  id="signup-trade"
                   value={form.trade_type}
                   onChange={e => updateField('trade_type', e.target.value)}
                   required
@@ -143,10 +146,11 @@ export default function Signup() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+              <label htmlFor="signup-email" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                 Email
               </label>
               <input
+                id="signup-email"
                 type="email"
                 value={form.email}
                 onChange={e => updateField('email', e.target.value)}
@@ -157,10 +161,11 @@ export default function Signup() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+              <label htmlFor="signup-phone" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                 Phone
               </label>
               <input
+                id="signup-phone"
                 type="tel"
                 value={form.phone}
                 onChange={e => updateField('phone', e.target.value)}
@@ -171,10 +176,11 @@ export default function Signup() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
+              <label htmlFor="signup-password" className="block text-xs font-semibold uppercase tracking-wider mb-2 text-[#52526B]">
                 Password
               </label>
               <input
+                id="signup-password"
                 type="password"
                 value={form.password}
                 onChange={e => updateField('password', e.target.value)}
