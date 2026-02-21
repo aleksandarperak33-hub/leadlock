@@ -635,6 +635,7 @@ async def _generate_email_with_template(
     prospect: Outreach,
     next_step: int,
     template: Optional[EmailTemplate] = None,
+    sender_name: str = "Alex",
 ) -> dict:
     """
     Generate an outreach email, optionally using a template.
@@ -642,13 +643,18 @@ async def _generate_email_with_template(
     - is_ai_generated=False with body_template: render static template with substitutions
     - Fallback: standard AI generation
     """
+    from src.agents.sales_outreach import _extract_first_name
+    first_name = _extract_first_name(prospect.prospect_name or "")
+
     if template and not template.is_ai_generated and template.body_template:
         # Static template with variable substitution
         substitutions = {
             "{prospect_name}": prospect.prospect_name or "",
+            "{first_name}": first_name or "there",
             "{company}": prospect.prospect_company or prospect.prospect_name or "",
             "{city}": prospect.city or "",
             "{trade}": prospect.prospect_trade_type or "home services",
+            "{sender_name}": sender_name,
         }
 
         body_text = template.body_template
@@ -684,6 +690,7 @@ async def _generate_email_with_template(
         website=prospect.website,
         sequence_step=next_step,
         extra_instructions=extra_instructions,
+        sender_name=sender_name,
     )
 
 
@@ -732,6 +739,7 @@ async def send_sequence_email(
         prospect=prospect,
         next_step=next_step,
         template=template,
+        sender_name=config.sender_name or "Alex",
     )
 
     if email_result.get("error"):

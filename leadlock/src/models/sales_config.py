@@ -40,6 +40,7 @@ class SalesEngineConfig(Base):
     # Email sender config
     from_email: Mapped[Optional[str]] = mapped_column(String(255))
     from_name: Mapped[Optional[str]] = mapped_column(String(100))
+    sender_name: Mapped[Optional[str]] = mapped_column(String(50))  # Human first name for sign-off (e.g. "Alex")
     reply_to_email: Mapped[Optional[str]] = mapped_column(String(255))
     company_address: Mapped[Optional[str]] = mapped_column(String(500))
 

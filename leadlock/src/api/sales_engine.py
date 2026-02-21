@@ -566,6 +566,7 @@ async def get_sales_config(
         "max_sequence_steps": config.max_sequence_steps,
         "from_email": config.from_email,
         "from_name": config.from_name,
+        "sender_name": config.sender_name,
         "reply_to_email": config.reply_to_email,
         "company_address": config.company_address,
         "sms_after_email_reply": config.sms_after_email_reply,
@@ -603,7 +604,7 @@ async def update_sales_config(
     allowed_fields = [
         "is_active", "target_trade_types", "target_locations",
         "daily_email_limit", "daily_scrape_limit", "sequence_delay_hours",
-        "max_sequence_steps", "from_email", "from_name", "reply_to_email",
+        "max_sequence_steps", "from_email", "from_name", "sender_name", "reply_to_email",
         "company_address", "sms_after_email_reply", "sms_from_phone",
         "email_templates",
         "scraper_interval_minutes", "variant_cooldown_days",

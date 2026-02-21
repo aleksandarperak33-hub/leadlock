@@ -11,25 +11,33 @@ from src.services.ai import generate_response
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a sales copywriter for LeadLock, an AI speed-to-lead platform for home services contractors.
-Your job is to write cold outreach emails to contractors (HVAC, plumbing, roofing, electrical, solar).
+SYSTEM_PROMPT = """You write cold outreach emails from {sender_name} at LeadLock to home services contractors.
 
-RULES:
-- Write in a casual, peer-to-peer tone - NOT salesy or corporate
-- Reference specific details about their business (trade, city, reviews)
-- Focus on ONE pain point: slow lead response = lost revenue
-- No exclamation marks. No "game-changer" or "revolutionary"
+VOICE:
+- You ARE {sender_name}. Write like a real person texting a colleague, not a marketer.
+- Casual, direct, zero fluff. Talk like you'd talk to a buddy in the trades.
+- ALWAYS open with their first name: "Hey Mike," or "Mike," - never "Hey," or "Hey there,"
+- ALWAYS sign off with just "{sender_name}" on its own line at the end. Nothing else after it.
+
+CONTENT:
+- Reference something SPECIFIC about their business - their Google rating, their city, their trade
+- One pain point per email: slow lead response kills revenue
+- Include a real-sounding stat or observation (e.g. "most HVAC shops in Austin take 3+ hours to call back")
+- Soft CTA - ask a question, don't push a demo
+
+FORMATTING:
+- No exclamation marks. No "game-changer", "revolutionary", "transform", or "unlock"
 - No emojis
-- NEVER use em dashes or en dashes. Use regular hyphens (-) or rewrite the sentence instead
-- Keep it SHORT - contractors are busy
-- End with a soft CTA (reply or link to learn more)
+- NEVER use em dashes or en dashes. Use hyphens (-) or commas instead
+- NEVER use ellipsis (...)
+- Subject lines must be unique and specific - reference their company name, city, or trade. NEVER reuse the same subject across prospects
 - Output valid JSON only
 
-You must output JSON with these fields:
-{"subject": "...", "body_html": "...", "body_text": "..."}
+JSON format:
+{{"subject": "...", "body_html": "...", "body_text": "..."}}
 
-body_html should use simple <p> tags. No complex HTML.
-body_text is the plain text version (no HTML tags)."""
+body_html: simple <p> tags only. No complex HTML.
+body_text: plain text version (no HTML tags). End with {sender_name} on its own line."""
 
 async def _get_learning_context(trade_type: str, state: str) -> str:
     """
@@ -58,18 +66,48 @@ async def _get_learning_context(trade_type: str, state: str) -> str:
 
 
 STEP_INSTRUCTIONS = {
-    1: """Write a STEP 1 email (first contact).
-Focus on a specific pain point for their trade in their city. Reference their Google rating/reviews if available.
-Under 150 words. Subject line under 50 chars.""",
+    1: """STEP 1 - First contact.
+Open with their first name. Reference something specific about their business (rating, reviews, city, trade).
+Ask a question about their lead response time. Mention how contractors in their area are losing jobs.
+Under 120 words. Subject under 50 chars - must include their company name or city.""",
 
-    2: """Write a STEP 2 email (follow-up, they didn't reply to step 1).
-Casual tone, mention you reached out before. Include a brief case study or stat about speed-to-lead.
-Under 100 words. Subject line under 50 chars.""",
+    2: """STEP 2 - Follow-up (they didn't reply to step 1).
+Open with their first name. Mention you sent them a note last week - keep it casual.
+Share a specific stat: "contractors who respond in under 5 minutes close 40% more jobs."
+Ask if they're happy with how fast their team gets back to leads.
+Under 90 words. Subject under 50 chars - different angle than step 1.""",
 
-    3: """Write a STEP 3 email (break-up email, final attempt).
-Short and direct. Let them know this is your last email. No pressure.
-Under 80 words. Subject line under 40 chars.""",
+    3: """STEP 3 - Final email.
+Open with their first name. Keep it to 3-4 sentences max.
+Say something like "last thing from me" - no guilt, no pressure.
+Leave the door open: "if this ever becomes a priority, just reply."
+Under 60 words. Subject under 40 chars.""",
 }
+
+
+def _extract_first_name(full_name: str) -> str:
+    """Extract a usable first name from a full name or company name."""
+    if not full_name or not full_name.strip():
+        return ""
+    # Common suffixes that indicate a company name, not a person
+    company_indicators = [
+        "llc", "inc", "corp", "ltd", "co", "services", "solutions",
+        "hvac", "plumbing", "roofing", "electrical", "solar",
+        "construction", "mechanical", "systems", "contractors",
+        "heating", "cooling", "air", "electric", "energy",
+    ]
+    name = full_name.strip()
+    # If name looks like a company (contains company indicators), return empty
+    name_lower = name.lower()
+    for indicator in company_indicators:
+        if indicator in name_lower.split():
+            return ""
+    # Take first word as first name
+    first = name.split()[0] if name else ""
+    # Skip if it's too short, all caps (likely abbreviation), or has digits
+    if len(first) < 2 or first.isupper() or any(c.isdigit() for c in first):
+        return ""
+    return first.capitalize()
 
 
 async def generate_outreach_email(
@@ -83,6 +121,7 @@ async def generate_outreach_email(
     website: Optional[str] = None,
     sequence_step: int = 1,
     extra_instructions: Optional[str] = None,
+    sender_name: str = "Alex",
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -97,6 +136,7 @@ async def generate_outreach_email(
         review_count: Number of reviews (optional)
         website: Business website (optional)
         sequence_step: 1, 2, or 3
+        sender_name: Human first name for sign-off (default "Alex")
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
@@ -104,8 +144,12 @@ async def generate_outreach_email(
     step = min(max(sequence_step, 1), 3)
     step_instruction = STEP_INSTRUCTIONS[step]
 
+    first_name = _extract_first_name(prospect_name)
+    greeting_name = first_name or "there"
+
     prospect_details = f"""Prospect details:
-- Name: {prospect_name}
+- First name: {greeting_name}
+- Full name: {prospect_name}
 - Company: {company_name}
 - Trade: {trade_type}
 - Location: {city}, {state}"""
@@ -127,8 +171,11 @@ async def generate_outreach_email(
 
     user_message = f"{step_instruction}\n\n{prospect_details}"
 
+    # Inject sender_name into system prompt
+    system_prompt = SYSTEM_PROMPT.replace("{sender_name}", sender_name)
+
     result = await generate_response(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         user_message=user_message,
         model_tier="fast",
         max_tokens=500,

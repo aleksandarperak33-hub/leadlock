@@ -9,6 +9,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from src.agents.sales_outreach import (
     generate_outreach_email,
     classify_reply,
+    _extract_first_name,
     STEP_INSTRUCTIONS,
     VALID_CLASSIFICATIONS,
 )
@@ -33,6 +34,57 @@ def _valid_email_json(subject="Quick question", body_html="<p>Hi</p>", body_text
     })
 
 
+class TestExtractFirstName:
+    """Test first name extraction from prospect names."""
+
+    def test_simple_first_name(self):
+        assert _extract_first_name("John Smith") == "John"
+
+    def test_single_name(self):
+        assert _extract_first_name("Mike") == "Mike"
+
+    def test_lowercase_capitalized(self):
+        assert _extract_first_name("john doe") == "John"
+
+    def test_empty_string(self):
+        assert _extract_first_name("") == ""
+
+    def test_none_input(self):
+        assert _extract_first_name(None) == ""
+
+    def test_whitespace_only(self):
+        assert _extract_first_name("   ") == ""
+
+    def test_company_name_llc(self):
+        assert _extract_first_name("Smith HVAC LLC") == ""
+
+    def test_company_name_services(self):
+        assert _extract_first_name("Comfort Air Services") == ""
+
+    def test_company_name_plumbing(self):
+        assert _extract_first_name("ABC Plumbing") == ""
+
+    def test_company_name_roofing(self):
+        assert _extract_first_name("Top Roofing Co") == ""
+
+    def test_all_caps_abbreviation(self):
+        """All-caps first word (likely abbreviation) returns empty."""
+        assert _extract_first_name("ABC Corp") == ""
+
+    def test_single_char_too_short(self):
+        assert _extract_first_name("J") == ""
+
+    def test_name_with_digits(self):
+        assert _extract_first_name("123 Heating") == ""
+
+    def test_valid_name_with_company_word_later(self):
+        """Company indicator must be a whole word match."""
+        assert _extract_first_name("Mike Johnson") == "Mike"
+
+    def test_strips_whitespace(self):
+        assert _extract_first_name("  Sarah Connor  ") == "Sarah"
+
+
 class TestStepInstructions:
     """Verify step instruction configuration."""
 
@@ -43,15 +95,15 @@ class TestStepInstructions:
 
     def test_step_1_is_first_contact(self):
         assert "STEP 1" in STEP_INSTRUCTIONS[1]
-        assert "150 words" in STEP_INSTRUCTIONS[1]
+        assert "120 words" in STEP_INSTRUCTIONS[1]
 
     def test_step_2_is_followup(self):
         assert "STEP 2" in STEP_INSTRUCTIONS[2]
-        assert "100 words" in STEP_INSTRUCTIONS[2]
+        assert "90 words" in STEP_INSTRUCTIONS[2]
 
     def test_step_3_is_breakup(self):
         assert "STEP 3" in STEP_INSTRUCTIONS[3]
-        assert "80 words" in STEP_INSTRUCTIONS[3]
+        assert "60 words" in STEP_INSTRUCTIONS[3]
 
 
 class TestGenerateOutreachEmail:
