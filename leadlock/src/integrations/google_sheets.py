@@ -1,5 +1,5 @@
 """
-Google Sheets CRM fallback — for clients without a real CRM.
+Google Sheets CRM fallback - for clients without a real CRM.
 Appends leads and bookings to a Google Sheet as rows.
 """
 import logging
@@ -87,9 +87,9 @@ class GoogleSheetsCRM(CRMBase):
     async def get_availability(
         self, start_date: date, end_date: date, tech_ids: Optional[list[str]] = None,
     ) -> list[dict]:
-        """Sheets CRM doesn't support availability queries — return empty."""
+        """Sheets CRM doesn't support availability queries - return empty."""
         return []
 
     async def get_technicians(self) -> list[dict]:
-        """Sheets CRM doesn't support technician queries — return empty."""
+        """Sheets CRM doesn't support technician queries - return empty."""
         return []

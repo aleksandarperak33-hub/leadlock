@@ -1,5 +1,5 @@
 """
-Client model — represents a home services business using LeadLock.
+Client model - represents a home services business using LeadLock.
 Stores business config as JSONB for flexible schema (persona, hours, services, etc.).
 """
 import uuid
@@ -70,7 +70,7 @@ class Client(Base):
     owner_email: Mapped[Optional[str]] = mapped_column(String(255))
     owner_phone: Mapped[Optional[str]] = mapped_column(String(20))
 
-    # Dashboard auth — hashed password for the client's dashboard login
+    # Dashboard auth - hashed password for the client's dashboard login
     dashboard_email: Mapped[Optional[str]] = mapped_column(String(255), unique=True)
     dashboard_password_hash: Mapped[Optional[str]] = mapped_column(String(255))
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -78,7 +78,7 @@ class Client(Base):
     # Trial
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Admin flag — True for LeadLock operators who see the admin dashboard
+    # Admin flag - True for LeadLock operators who see the admin dashboard
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Agency partner

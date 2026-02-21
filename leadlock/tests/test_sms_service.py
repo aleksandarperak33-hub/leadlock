@@ -1,5 +1,5 @@
 """
-SMS service tests — error classification, encoding, message length enforcement.
+SMS service tests - error classification, encoding, message length enforcement.
 """
 import pytest
 from src.services.sms import (

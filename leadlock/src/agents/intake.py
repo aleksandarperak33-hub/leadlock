@@ -1,13 +1,13 @@
 """
-Intake Agent — first response to every new lead.
+Intake Agent - first response to every new lead.
 TEMPLATE-BASED ONLY. No free-form AI on the first message.
 Must respond in <2 seconds. Uses pre-built templates for speed and compliance.
 
 Why template-based:
-1. Speed — templates render in microseconds, AI takes 1-3 seconds
-2. Compliance — templates are pre-approved, guaranteed to include STOP language
-3. Consistency — every first message follows the same pattern
-4. Cost — zero AI cost for the first message
+1. Speed - templates render in microseconds, AI takes 1-3 seconds
+2. Compliance - templates are pre-approved, guaranteed to include STOP language
+3. Consistency - every first message follows the same pattern
+4. Cost - zero AI cost for the first message
 """
 import logging
 from typing import Optional
@@ -30,7 +30,7 @@ async def process_intake(
 ) -> IntakeResponse:
     """
     Generate the first response to a new lead using templates.
-    No AI involved — pure template selection and rendering.
+    No AI involved - pure template selection and rendering.
 
     Template selection logic:
     1. If emergency detected → emergency template

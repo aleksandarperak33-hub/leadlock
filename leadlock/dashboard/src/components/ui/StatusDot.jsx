@@ -9,7 +9,7 @@ const COLOR_CLASSES = {
 };
 
 /**
- * StatusDot — Small colored circle indicator for status display.
+ * StatusDot - Small colored circle indicator for status display.
  *
  * @param {string} [color='gray'] - Dot color: green | yellow | red | gray
  */

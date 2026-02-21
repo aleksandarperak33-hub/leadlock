@@ -1,5 +1,5 @@
 """
-Tests for src/workers/registration_poller.py — registration status poller.
+Tests for src/workers/registration_poller.py - registration status poller.
 Covers the full state machine: profile_pending, profile_approved,
 brand_pending, brand_approved, campaign_pending, tf_verification_pending,
 plus heartbeat, main loop, alert webhook, and error paths.
@@ -520,7 +520,7 @@ class TestHandleTfPending:
 
 
 # ---------------------------------------------------------------------------
-# _advance_single_client — dispatch + logging + alert
+# _advance_single_client - dispatch + logging + alert
 # ---------------------------------------------------------------------------
 
 class TestAdvanceSingleClient:
@@ -724,7 +724,7 @@ class TestSendStatusAlert:
 
 
 # ---------------------------------------------------------------------------
-# poll_registration_statuses (integration-level — mocks DB session)
+# poll_registration_statuses (integration-level - mocks DB session)
 # ---------------------------------------------------------------------------
 
 class TestPollRegistrationStatuses:
@@ -815,7 +815,7 @@ class TestPollRegistrationStatuses:
 
 
 # ---------------------------------------------------------------------------
-# run_registration_poller — main loop
+# run_registration_poller - main loop
 # ---------------------------------------------------------------------------
 
 class TestRunRegistrationPoller:

@@ -1,5 +1,5 @@
 """
-Tests for src/api/integrations.py — CRM integration endpoints (test, connect, status).
+Tests for src/api/integrations.py - CRM integration endpoints (test, connect, status).
 """
 import pytest
 import uuid

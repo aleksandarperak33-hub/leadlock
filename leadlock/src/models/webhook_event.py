@@ -1,5 +1,5 @@
 """
-Webhook event audit trail — every incoming webhook is recorded before processing.
+Webhook event audit trail - every incoming webhook is recorded before processing.
 Enables debugging, replay, and compliance auditing.
 """
 import uuid

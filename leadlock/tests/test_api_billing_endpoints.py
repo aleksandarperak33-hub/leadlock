@@ -1,5 +1,5 @@
 """
-Tests for src/api/billing.py — billing API endpoints (plans, checkout, portal,
+Tests for src/api/billing.py - billing API endpoints (plans, checkout, portal,
 status, plan-limits, Stripe webhook).
 """
 import pytest

@@ -1,5 +1,5 @@
 """
-Extended agent tests — covers uncovered lines in conductor, book, qualify,
+Extended agent tests - covers uncovered lines in conductor, book, qualify,
 followup, and sales_outreach agents.
 
 All external services (AI, SMS, CRM, DB, Redis) are mocked.
@@ -40,7 +40,7 @@ from src.utils.metrics import Timer
 
 
 # ============================================================
-# Helpers — reusable factory functions for test objects
+# Helpers - reusable factory functions for test objects
 # ============================================================
 
 def _make_envelope(
@@ -155,7 +155,7 @@ def _make_config():
 
 
 # ============================================================
-# Conductor: handle_new_lead — emergency detection (lines 153-156)
+# Conductor: handle_new_lead - emergency detection (lines 153-156)
 # ============================================================
 
 class TestConductorEmergencyDetection:
@@ -213,7 +213,7 @@ class TestConductorEmergencyDetection:
 
 
 # ============================================================
-# Conductor: handle_new_lead — inbound_message recording (lines 172-183)
+# Conductor: handle_new_lead - inbound_message recording (lines 172-183)
 # ============================================================
 
 class TestConductorInboundMessage:
@@ -269,7 +269,7 @@ class TestConductorInboundMessage:
 
 
 # ============================================================
-# Conductor: handle_new_lead — compliance blocked (lines 209-215)
+# Conductor: handle_new_lead - compliance blocked (lines 209-215)
 # ============================================================
 
 class TestConductorComplianceBlocked:
@@ -313,7 +313,7 @@ class TestConductorComplianceBlocked:
 
 
 # ============================================================
-# Conductor: handle_new_lead — template compliance error (lines 238-240)
+# Conductor: handle_new_lead - template compliance error (lines 238-240)
 # ============================================================
 
 class TestConductorTemplateComplianceError:
@@ -368,7 +368,7 @@ class TestConductorTemplateComplianceError:
 
 
 # ============================================================
-# Conductor: handle_new_lead — AI disclosure (lines 249-251)
+# Conductor: handle_new_lead - AI disclosure (lines 249-251)
 # ============================================================
 
 class TestConductorAIDisclosure:
@@ -425,7 +425,7 @@ class TestConductorAIDisclosure:
 
 
 # ============================================================
-# Conductor: _process_reply_locked — emergency in reply (lines 361-364)
+# Conductor: _process_reply_locked - emergency in reply (lines 361-364)
 # ============================================================
 
 class TestProcessReplyLockedEmergency:
@@ -480,7 +480,7 @@ class TestProcessReplyLockedEmergency:
 
 
 # ============================================================
-# Conductor: _process_reply_locked — cold/dead re-engagement (lines 383-385)
+# Conductor: _process_reply_locked - cold/dead re-engagement (lines 383-385)
 # ============================================================
 
 class TestProcessReplyLockedColdReEngagement:
@@ -567,7 +567,7 @@ class TestProcessReplyLockedColdReEngagement:
 
 
 # ============================================================
-# Conductor: _process_reply_locked — conversation turn limit (lines 391-403)
+# Conductor: _process_reply_locked - conversation turn limit (lines 391-403)
 # ============================================================
 
 class TestProcessReplyLockedTurnLimit:
@@ -636,7 +636,7 @@ class TestProcessReplyLockedTurnLimit:
 
 
 # ============================================================
-# Conductor: _process_reply_locked — routing (lines 411-415)
+# Conductor: _process_reply_locked - routing (lines 411-415)
 # ============================================================
 
 class TestProcessReplyLockedRouting:
@@ -720,7 +720,7 @@ class TestProcessReplyLockedRouting:
 
 
 # ============================================================
-# Conductor: _process_reply_locked — compliance blocked reply (line 471)
+# Conductor: _process_reply_locked - compliance blocked reply (line 471)
 # ============================================================
 
 class TestProcessReplyLockedComplianceBlocked:
@@ -771,7 +771,7 @@ class TestProcessReplyLockedComplianceBlocked:
 
 
 # ============================================================
-# Conductor: _route_to_qualify — conversation history (line 484)
+# Conductor: _route_to_qualify - conversation history (line 484)
 # and qualification data updates (lines 502-514, 521-528)
 # ============================================================
 
@@ -877,7 +877,7 @@ class TestRouteToQualify:
 
 
 # ============================================================
-# Conductor: _route_to_book — booking confirmed and fallback paths
+# Conductor: _route_to_book - booking confirmed and fallback paths
 # (lines 544-604)
 # ============================================================
 
@@ -1010,7 +1010,7 @@ class TestRouteToBook:
 
 
 # ============================================================
-# Book Agent — full process_booking flow (lines 71-163)
+# Book Agent - full process_booking flow (lines 71-163)
 # ============================================================
 
 class TestBookAgent:
@@ -1241,7 +1241,7 @@ class TestBookAgent:
 
 
 # ============================================================
-# Book Agent — _fallback_booking (lines 168-185)
+# Book Agent - _fallback_booking (lines 168-185)
 # ============================================================
 
 class TestBookFallback:
@@ -1279,7 +1279,7 @@ class TestBookFallback:
 
 
 # ============================================================
-# Book Agent — _escape_braces (line 18)
+# Book Agent - _escape_braces (line 18)
 # ============================================================
 
 class TestBookEscapeBraces:
@@ -1293,7 +1293,7 @@ class TestBookEscapeBraces:
 
 
 # ============================================================
-# Qualify Agent — process_qualify full flow (lines 87-159)
+# Qualify Agent - process_qualify full flow (lines 87-159)
 # ============================================================
 
 class TestQualifyAgent:
@@ -1522,7 +1522,7 @@ class TestQualifyAgent:
 
 
 # ============================================================
-# Qualify Agent — _fallback_response (lines 164-171)
+# Qualify Agent - _fallback_response (lines 164-171)
 # ============================================================
 
 class TestQualifyFallback:
@@ -1556,7 +1556,7 @@ class TestQualifyFallback:
 
 
 # ============================================================
-# Qualify Agent — _escape_braces (line 23)
+# Qualify Agent - _escape_braces (line 23)
 # ============================================================
 
 class TestQualifyEscapeBraces:
@@ -1568,7 +1568,7 @@ class TestQualifyEscapeBraces:
 
 
 # ============================================================
-# Followup Agent — unknown type (lines 94-95)
+# Followup Agent - unknown type (lines 94-95)
 # ============================================================
 
 class TestFollowupUnknownType:
@@ -1607,7 +1607,7 @@ class TestFollowupUnknownType:
 
 
 # ============================================================
-# Sales Outreach Agent — _get_learning_context (lines 39-57)
+# Sales Outreach Agent - _get_learning_context (lines 39-57)
 # ============================================================
 
 class TestSalesOutreachLearningContext:
@@ -1671,7 +1671,7 @@ class TestSalesOutreachLearningContext:
 
 
 # ============================================================
-# Sales Outreach Agent — generate_outreach_email (lines 118, 123, 126)
+# Sales Outreach Agent - generate_outreach_email (lines 118, 123, 126)
 # ============================================================
 
 class TestSalesOutreachGenerate:
@@ -1908,7 +1908,7 @@ class TestSalesOutreachGenerate:
 
 
 # ============================================================
-# Sales Outreach Agent — classify_reply
+# Sales Outreach Agent - classify_reply
 # ============================================================
 
 class TestSalesOutreachClassify:

@@ -1,5 +1,5 @@
 """
-Lead scraper worker — discovers home services contractors via Brave Search API.
+Lead scraper worker - discovers home services contractors via Brave Search API.
 Runs every 15 minutes (configurable). Uses query rotation (6 variants per trade)
 so re-scrapes always return fresh results instead of duplicates. Each query
 fetches ALL location IDs from Brave (up to 100 POIs via batch requests).
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
 DEFAULT_VARIANT_COOLDOWN_DAYS = 7
 
-# Multiple query variations per trade — each produces different Brave results.
+# Multiple query variations per trade - each produces different Brave results.
 # Rotated across scrape cycles so we always discover new businesses.
 TRADE_QUERY_VARIANTS = {
     "hvac": [
@@ -155,7 +155,7 @@ async def _get_poll_interval() -> int:
 
 
 async def run_scraper():
-    """Main loop — scrape for new prospects on configurable interval with jitter."""
+    """Main loop - scrape for new prospects on configurable interval with jitter."""
     interval = await _get_poll_interval()
     logger.info("Lead scraper started (poll every %ds)", interval)
 
@@ -299,7 +299,7 @@ async def scrape_location_trade(
     dupe_count = 0
 
     try:
-        # Search via Brave — fetches ALL location IDs in batches of 20
+        # Search via Brave - fetches ALL location IDs in batches of 20
         search_results = await search_local_businesses(
             query, location_str, settings.brave_api_key,
         )
@@ -349,7 +349,7 @@ async def scrape_location_trade(
                     email_source = enrichment["source"]
                     email_verified = enrichment.get("verified", False)
             elif extract_domain(website):
-                # No website but have domain somehow — pattern guess only
+                # No website but have domain somehow - pattern guess only
                 from src.services.enrichment import guess_email_patterns
                 domain = extract_domain(website)
                 patterns = guess_email_patterns(domain)
@@ -402,7 +402,7 @@ async def scrape_location_trade(
         job.completed_at = datetime.now(timezone.utc)
 
         logger.info(
-            "Scrape completed: %s in %s (variant=%d query='%s') — "
+            "Scrape completed: %s in %s (variant=%d query='%s') - "
             "found=%d new=%d dupes=%d cost=$%.3f",
             trade, location_str, query_variant, query,
             len(all_results), new_count, dupe_count, total_cost,

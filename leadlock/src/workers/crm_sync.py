@@ -1,5 +1,5 @@
 """
-CRM sync worker — asynchronously creates records in the client's CRM.
+CRM sync worker - asynchronously creates records in the client's CRM.
 CRITICAL: This runs AFTER the SMS response. Never in the critical path.
 
 Retry logic:
@@ -44,7 +44,7 @@ async def _heartbeat():
 
 
 async def run_crm_sync():
-    """Main loop — poll for bookings that need CRM sync."""
+    """Main loop - poll for bookings that need CRM sync."""
     logger.info("CRM sync worker started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:

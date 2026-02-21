@@ -5,7 +5,7 @@ Maps ZIP codes and state codes to timezones.
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-# State to timezone mapping (simplified — uses most populous timezone per state)
+# State to timezone mapping (simplified - uses most populous timezone per state)
 STATE_TIMEZONE_MAP = {
     "AL": "America/Chicago",
     "AK": "America/Anchorage",

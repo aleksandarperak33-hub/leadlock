@@ -1,5 +1,5 @@
 """
-Book Agent — appointment scheduling with CRM availability.
+Book Agent - appointment scheduling with CRM availability.
 Uses Claude Haiku for speed. Confirms appointments and records bookings.
 """
 import json
@@ -32,11 +32,11 @@ AVAILABLE SLOTS:
 RULES:
 - Offer the closest available slot to their preferred time.
 - If their preferred time isn't available, suggest 2-3 alternatives.
-- Keep messages SHORT — this is SMS.
+- Keep messages SHORT - this is SMS.
 - Once they confirm, set booking_confirmed to true.
 - If they need a time we don't have, set needs_human_handoff to true.
 - Include the technician name if assigned.
-- Use context from the conversation history — don't re-ask things the customer already told you.
+- Use context from the conversation history - don't re-ask things the customer already told you.
 
 Respond with JSON:
 {{
@@ -101,7 +101,7 @@ async def process_booking(
         direction = "Customer" if msg.get("direction") == "inbound" else _escape_braces(rep_name)
         history_text += f"{direction}: {_escape_braces(msg.get('content', ''))}\n"
 
-    # Build prompt — escape all user-controlled fields
+    # Build prompt - escape all user-controlled fields
     system = BOOK_SYSTEM_PROMPT.format(
         rep_name=_escape_braces(rep_name),
         business_name=_escape_braces(business_name),
@@ -130,7 +130,7 @@ async def process_booking(
     ai_cost = result.get("cost_usd", 0.0)
     ai_latency = result.get("latency_ms", 0)
 
-    # Parse response — strip markdown fences if present
+    # Parse response - strip markdown fences if present
     raw = result["content"].strip()
     if raw.startswith("```"):
         lines = raw.split("\n")
@@ -164,7 +164,7 @@ async def process_booking(
 
 
 def _fallback_booking(slots: list) -> BookResponse:
-    """Fallback when AI fails — offer the first available slot."""
+    """Fallback when AI fails - offer the first available slot."""
     if slots:
         slot = slots[0]
         tech_text = f" with {slot.tech_name}" if slot.tech_name else ""
@@ -179,11 +179,11 @@ def _fallback_booking(slots: list) -> BookResponse:
             time_window_start=slot.start.strftime("%H:%M"),
             time_window_end=slot.end.strftime("%H:%M"),
             tech_name=slot.tech_name,
-            internal_notes="AI fallback — offered first available slot",
+            internal_notes="AI fallback - offered first available slot",
         )
 
     return BookResponse(
         message="Let me check our schedule and get back to you with available times. One moment!",
         needs_human_handoff=True,
-        internal_notes="AI fallback — no slots available",
+        internal_notes="AI fallback - no slots available",
     )

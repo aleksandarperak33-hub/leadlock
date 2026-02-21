@@ -1,5 +1,5 @@
 """
-Admin reporting service — generates system-wide metrics for the admin dashboard.
+Admin reporting service - generates system-wide metrics for the admin dashboard.
 """
 import logging
 from datetime import datetime, timedelta, timezone

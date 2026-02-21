@@ -1,5 +1,5 @@
 """
-Follow-Up Agent — generates nurture and reminder messages.
+Follow-Up Agent - generates nurture and reminder messages.
 Max 3 cold outreach messages per lead, ever. Compliance checked before every send.
 """
 import logging
@@ -51,7 +51,7 @@ async def process_followup(
             message=message,
             followup_type="cold_nurture",
             sequence_number=sequence_number,
-            internal_notes=f"Cold nurture #{sequence_number}" + (" — FINAL" if should_stop else ""),
+            internal_notes=f"Cold nurture #{sequence_number}" + (" - FINAL" if should_stop else ""),
             should_stop_sequence=should_stop,
         )
 

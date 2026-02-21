@@ -1,5 +1,5 @@
 """
-Extended tests for src/workers/health_monitor.py — covers _heartbeat (lines 13-18)
+Extended tests for src/workers/health_monitor.py - covers _heartbeat (lines 13-18)
 and run_health_monitor loop (lines 23-31).
 """
 import asyncio
@@ -11,7 +11,7 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
-# _heartbeat — Redis heartbeat storage (lines 13-18)
+# _heartbeat - Redis heartbeat storage (lines 13-18)
 # ---------------------------------------------------------------------------
 
 class TestHeartbeat:
@@ -51,7 +51,7 @@ class TestHeartbeat:
 
 
 # ---------------------------------------------------------------------------
-# run_health_monitor — loop behavior (lines 23-31)
+# run_health_monitor - loop behavior (lines 23-31)
 # ---------------------------------------------------------------------------
 
 class TestRunHealthMonitor:

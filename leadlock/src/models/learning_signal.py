@@ -1,5 +1,5 @@
 """
-LearningSignal model — tracks what-works feedback loop.
+LearningSignal model - tracks what-works feedback loop.
 Records positive/negative signals from email engagement, replies,
 and bookings to feed back into email generation.
 """

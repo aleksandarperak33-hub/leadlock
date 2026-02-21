@@ -1,5 +1,5 @@
 """
-Task dispatch service — enqueue tasks for event-driven processing.
+Task dispatch service - enqueue tasks for event-driven processing.
 Central helper for creating tasks in the task queue.
 """
 import logging

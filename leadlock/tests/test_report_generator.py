@@ -1,5 +1,5 @@
 """
-Tests for src/workers/report_generator.py — weekly report generation worker.
+Tests for src/workers/report_generator.py - weekly report generation worker.
 
 Covers:
 - run_report_generator loop (start, error handling, sleep)

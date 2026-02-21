@@ -1,13 +1,13 @@
 """
-Qualify Agent — conversational AI that extracts 4 qualification fields.
+Qualify Agent - conversational AI that extracts 4 qualification fields.
 Uses Claude Sonnet for intelligence, structured JSON output.
 Must qualify lead in ≤4 messages.
 
 Target fields:
-1. service_type — What service do they need?
-2. urgency — How urgent? (emergency, today, this_week, flexible, just_quote)
-3. property_type — Residential or commercial?
-4. preferred_date — When do they want service?
+1. service_type - What service do they need?
+2. urgency - How urgent? (emergency, today, this_week, flexible, just_quote)
+3. property_type - Residential or commercial?
+4. preferred_date - When do they want service?
 """
 import json
 import logging
@@ -25,10 +25,10 @@ def _escape_braces(text: str) -> str:
 QUALIFY_SYSTEM_PROMPT = """You are {rep_name}, a friendly and professional customer service representative for {business_name}, a {trade_type} company.
 
 Your job is to qualify this lead by collecting 4 pieces of information through natural conversation:
-1. Service type — What specific service do they need?
-2. Urgency — How urgent? (emergency, today, this_week, flexible, just_quote)
-3. Property type — Residential or commercial?
-4. Preferred date/time — When do they want service?
+1. Service type - What specific service do they need?
+2. Urgency - How urgent? (emergency, today, this_week, flexible, just_quote)
+3. Property type - Residential or commercial?
+4. Preferred date/time - When do they want service?
 
 RULES:
 - Be warm, conversational, and helpful. You're texting, not writing an essay.
@@ -39,7 +39,7 @@ RULES:
 - After collecting all 4 fields, set is_qualified to true and next_action to "ready_to_book".
 - If they seem unresponsive or uninterested after 2+ exchanges, set next_action to "mark_cold".
 - NEVER mention that you're an AI unless directly asked.
-- NEVER discuss pricing — say "our team will provide a detailed estimate on-site."
+- NEVER discuss pricing - say "our team will provide a detailed estimate on-site."
 
 SERVICES OFFERED:
 Primary: {primary_services}
@@ -94,7 +94,7 @@ async def process_qualify(
         json.dumps(current_qualification, indent=2) if current_qualification else "{}"
     )
 
-    # Build the system prompt — escape all user-controlled fields
+    # Build the system prompt - escape all user-controlled fields
     system = QUALIFY_SYSTEM_PROMPT.format(
         rep_name=_escape_braces(rep_name),
         business_name=_escape_braces(business_name),
@@ -121,7 +121,7 @@ async def process_qualify(
         fallback.ai_latency_ms = 0
         return fallback
 
-    # Parse JSON response — strip markdown fences if present
+    # Parse JSON response - strip markdown fences if present
     raw = result["content"].strip()
     if raw.startswith("```"):
         # Remove ```json ... ``` wrapper
@@ -160,7 +160,7 @@ async def process_qualify(
 
 
 def _fallback_response(turn: int) -> QualifyResponse:
-    """Fallback when AI fails — ask a generic qualifying question."""
+    """Fallback when AI fails - ask a generic qualifying question."""
     fallbacks = [
         "Could you tell me more about what you need help with?",
         "How urgent is this for you? Do you need someone out today?",

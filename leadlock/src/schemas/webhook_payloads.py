@@ -1,5 +1,5 @@
 """
-Webhook payload schemas — raw input from each lead source.
+Webhook payload schemas - raw input from each lead source.
 Each webhook normalizes its payload into a LeadEnvelope before processing.
 """
 from typing import Optional
@@ -84,7 +84,7 @@ class FacebookLeadPayload(BaseModel):
 
 
 class MissedCallPayload(BaseModel):
-    """Missed call notification — typically from the phone system."""
+    """Missed call notification - typically from the phone system."""
     caller_phone: str
     called_phone: str
     call_duration: int = 0

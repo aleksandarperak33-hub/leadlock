@@ -1,5 +1,5 @@
 """
-Emergency detection tests — every keyword must be tested.
+Emergency detection tests - every keyword must be tested.
 Missing an emergency can put lives at risk.
 """
 import pytest
@@ -7,7 +7,7 @@ from src.utils.emergency import detect_emergency
 
 
 class TestCriticalEmergencies:
-    """Test critical severity keywords — immediate danger to life."""
+    """Test critical severity keywords - immediate danger to life."""
 
     def test_gas_leak(self):
         result = detect_emergency("I think we have a gas leak in the basement")
@@ -74,7 +74,7 @@ class TestCriticalEmergencies:
 
 
 class TestUrgentEmergencies:
-    """Test urgent severity keywords — significant but not immediately life-threatening."""
+    """Test urgent severity keywords - significant but not immediately life-threatening."""
 
     def test_no_heat(self):
         result = detect_emergency("We have no heat and it's freezing")

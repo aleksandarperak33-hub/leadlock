@@ -1,5 +1,5 @@
 """
-Tests for src/services/plan_limits.py — plan-based access controls for billing tiers.
+Tests for src/services/plan_limits.py - plan-based access controls for billing tiers.
 """
 import pytest
 
@@ -105,7 +105,7 @@ class TestIsColdFollowupEnabled:
 
 
 # ---------------------------------------------------------------------------
-# Immutability — returned dict should not share references with PLAN_LIMITS
+# Immutability - returned dict should not share references with PLAN_LIMITS
 # ---------------------------------------------------------------------------
 
 class TestImmutability:

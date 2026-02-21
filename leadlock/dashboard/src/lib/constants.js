@@ -1,5 +1,5 @@
 /**
- * Shared constants — single source of truth for auth keys,
+ * Shared constants - single source of truth for auth keys,
  * thresholds, poll intervals, tab definitions, and pagination defaults.
  */
 

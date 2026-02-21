@@ -38,7 +38,7 @@ const CRM_OPTIONS = [
   { id: 'housecallpro', name: 'Housecall Pro', desc: 'Great for small to mid-size teams' },
   { id: 'jobber', name: 'Jobber', desc: 'Simple scheduling and invoicing' },
   { id: 'gohighlevel', name: 'GoHighLevel', desc: 'All-in-one marketing + CRM' },
-  { id: 'google_sheets', name: 'Google Sheets', desc: 'Free fallback — no integration needed' },
+  { id: 'google_sheets', name: 'Google Sheets', desc: 'Free fallback - no integration needed' },
   { id: 'none', name: 'No CRM yet', desc: "We'll use Google Sheets until you're ready" },
 ];
 
@@ -693,7 +693,7 @@ export default function Onboarding() {
           onClick={() => navigate('/dashboard')}
           className="block mx-auto mt-6 text-xs text-[#52526B] hover:text-[#A1A1BC] transition-colors cursor-pointer"
         >
-          Skip for now — I'll set this up later
+          Skip for now - I'll set this up later
         </button>
       </div>
     </div>

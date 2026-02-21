@@ -37,7 +37,7 @@ const COLOR_MAP = {
 };
 
 /**
- * StatCard — Metric display card with optional delta indicator and icon badge.
+ * StatCard - Metric display card with optional delta indicator and icon badge.
  *
  * @param {string} label - Uppercase label above the metric value
  * @param {string} value - The primary metric value to display
@@ -86,7 +86,7 @@ export default function StatCard({
       {delta !== undefined && (
         <div className="flex items-center gap-1 mt-3">
           <DeltaArrow className={`w-3 h-3 ${deltaColor}`} />
-          <span className={`text-xs font-semibold ${deltaColor}`}>
+          <span className={`text-xs font-semibold font-mono ${deltaColor}`}>
             {Math.abs(delta)}%
           </span>
           {deltaLabel && (

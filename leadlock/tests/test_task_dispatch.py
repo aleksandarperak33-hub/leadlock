@@ -1,5 +1,5 @@
 """
-Tests for src/services/task_dispatch.py — background task enqueuing.
+Tests for src/services/task_dispatch.py - background task enqueuing.
 """
 import pytest
 import uuid

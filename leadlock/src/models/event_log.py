@@ -1,5 +1,5 @@
 """
-Event log model — complete audit trail for every significant action.
+Event log model - complete audit trail for every significant action.
 Used for debugging, compliance audits, and performance analysis.
 """
 import uuid

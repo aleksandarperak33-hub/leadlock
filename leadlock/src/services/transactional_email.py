@@ -1,5 +1,5 @@
 """
-Transactional email service — SendGrid-based emails for auth flows and billing notifications.
+Transactional email service - SendGrid-based emails for auth flows and billing notifications.
 
 Separate from cold_email.py: uses a different sender identity (noreply@) and
 does NOT include CAN-SPAM footer or tracking (transactional emails are exempt).

@@ -28,7 +28,7 @@ function isEditable(target) {
 }
 
 /**
- * useKeyboardShortcuts — Registers global keyboard shortcuts.
+ * useKeyboardShortcuts - Registers global keyboard shortcuts.
  *
  * @param {Function} navigate - react-router navigate function
  * @returns {{ showHelp: boolean, setShowHelp: Function, shortcuts: Array }}

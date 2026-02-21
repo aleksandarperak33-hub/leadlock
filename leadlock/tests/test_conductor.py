@@ -1,5 +1,5 @@
 """
-Conductor tests — the central orchestrator for the entire lead pipeline.
+Conductor tests - the central orchestrator for the entire lead pipeline.
 Tests handle_new_lead, handle_inbound_reply, and _handle_opt_out flows.
 All external services (SMS, AI, Redis, DB) are mocked.
 """
@@ -177,7 +177,7 @@ class TestHandleNewLead:
 
         mock_sms.return_value = _sms_result()
 
-        # Mock DB — db.add is sync, so use MagicMock
+        # Mock DB - db.add is sync, so use MagicMock
         client = _make_client()
         db = AsyncMock()
         db.add = MagicMock()

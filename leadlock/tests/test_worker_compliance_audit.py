@@ -1,5 +1,5 @@
 """
-Tests for src/workers/compliance_audit.py — periodic compliance checks.
+Tests for src/workers/compliance_audit.py - periodic compliance checks.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -24,7 +24,7 @@ async def mock_session():
 
 
 # ---------------------------------------------------------------------------
-# audit_compliance — consent checks
+# audit_compliance - consent checks
 # ---------------------------------------------------------------------------
 
 class TestAuditCompliance:

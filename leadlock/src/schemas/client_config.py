@@ -1,5 +1,5 @@
 """
-Client configuration schema — the full business configuration stored as JSONB.
+Client configuration schema - the full business configuration stored as JSONB.
 """
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -76,7 +76,7 @@ class SchedulingConfig(BaseModel):
 
 
 class ClientConfig(BaseModel):
-    """Complete client configuration — stored as JSONB on the Client model."""
+    """Complete client configuration - stored as JSONB on the Client model."""
     service_area: ServiceArea = Field(default_factory=ServiceArea)
     hours: Hours = Field(default_factory=Hours)
     team: list[TeamMember] = Field(default_factory=list)

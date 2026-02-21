@@ -1,5 +1,5 @@
 """
-Follow-up task model — scheduled outbound messages.
+Follow-up task model - scheduled outbound messages.
 Types: cold_nurture (max 3 per lead), day_before_reminder, review_request.
 """
 import uuid

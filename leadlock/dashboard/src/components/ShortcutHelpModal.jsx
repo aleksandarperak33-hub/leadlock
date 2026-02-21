@@ -1,7 +1,7 @@
 import { X, Keyboard } from 'lucide-react';
 
 /**
- * ShortcutHelpModal — Displays available keyboard shortcuts.
+ * ShortcutHelpModal - Displays available keyboard shortcuts.
  */
 export default function ShortcutHelpModal({ shortcuts, onClose }) {
   return (

@@ -1,5 +1,5 @@
 """
-SMS template engine — all message templates with A/B variants.
+SMS template engine - all message templates with A/B variants.
 CRITICAL: First messages MUST include "Reply STOP to opt out" and business name.
 Templates use {variable} substitution. Never use URL shorteners.
 """
@@ -20,7 +20,7 @@ INTAKE_TEMPLATES = {
         "B": (
             "Hey {first_name}, {rep_name} here from {business_name}! "
             "Thanks for reaching out about {service_type}. "
-            "I'd love to get you taken care of — what's happening? "
+            "I'd love to get you taken care of - what's happening? "
             "Reply STOP to opt out."
         ),
     },
@@ -32,7 +32,7 @@ INTAKE_TEMPLATES = {
         ),
         "B": (
             "Hey {first_name}, {rep_name} at {business_name} here. "
-            "I see we missed your call — what can we do for you? "
+            "I see we missed your call - what can we do for you? "
             "Reply STOP to opt out."
         ),
     },
@@ -44,7 +44,7 @@ INTAKE_TEMPLATES = {
         ),
         "B": (
             "Hey there! {rep_name} from {business_name} here. "
-            "Got your message — what do you need help with? "
+            "Got your message - what do you need help with? "
             "Reply STOP to opt out."
         ),
     },
@@ -58,7 +58,7 @@ INTAKE_TEMPLATES = {
         ),
         "B": (
             "{first_name}, {rep_name} from {business_name} here. "
-            "We see this is an emergency {service_type} situation — "
+            "We see this is an emergency {service_type} situation - "
             "we're on it! Please confirm your address and we'll dispatch help immediately. "
             "Reply STOP to opt out."
         ),
@@ -145,7 +145,7 @@ FOLLOWUP_TEMPLATES = {
     "cold_nurture_3": {
         "A": (
             "Last check-in, {first_name}! {business_name} is here whenever you're ready "
-            "for {service_type}. No pressure — just reply anytime."
+            "for {service_type}. No pressure - just reply anytime."
         ),
         "B": (
             "Hi {first_name}, final follow-up from {business_name}. "
@@ -159,7 +159,7 @@ FOLLOWUP_TEMPLATES = {
             "Reply to confirm or reschedule!"
         ),
         "B": (
-            "Hi {first_name}! Just a friendly reminder — "
+            "Hi {first_name}! Just a friendly reminder - "
             "{tech_name} from {business_name} will be there tomorrow "
             "({date}) between {time_window} for your {service_type}. See you then!"
         ),

@@ -1,9 +1,9 @@
 """
-Critical alerting system — sends alerts on important system events.
+Critical alerting system - sends alerts on important system events.
 
 Alert channels:
-1. Structured log (always) — at ERROR level
-2. Webhook (configurable) — Discord/Slack URL via ALERT_WEBHOOK_URL env var
+1. Structured log (always) - at ERROR level
+2. Webhook (configurable) - Discord/Slack URL via ALERT_WEBHOOK_URL env var
 
 Rate limiting: Max 1 alert per type per 5 minutes to prevent alert storms.
 """

@@ -1,5 +1,5 @@
 """
-Extended tests for src/services/learning.py — covers get_best_send_time,
+Extended tests for src/services/learning.py - covers get_best_send_time,
 get_open_rate_by_dimension, and get_insights_summary using mock sessions.
 """
 import pytest

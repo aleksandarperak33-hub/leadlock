@@ -1,5 +1,5 @@
 """
-Enrichment service — find business emails via website scraping and pattern guessing.
+Enrichment service - find business emails via website scraping and pattern guessing.
 Zero external API cost. Scrapes contact pages for mailto: links and text emails,
 falls back to common pattern guessing (info@, contact@, etc).
 """
@@ -53,11 +53,11 @@ async def _is_safe_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
 
-        # Allowlist schemes — reject file://, gopher://, etc.
+        # Allowlist schemes - reject file://, gopher://, etc.
         if parsed.scheme not in _ALLOWED_SCHEMES:
             return False
 
-        # Allowlist ports — reject non-standard ports used for service probing
+        # Allowlist ports - reject non-standard ports used for service probing
         if parsed.port not in _ALLOWED_PORTS:
             return False
 

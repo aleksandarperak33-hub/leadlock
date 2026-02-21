@@ -24,7 +24,7 @@ import pytest
 
 
 class TestDeliverabilityMonitorHeartbeat:
-    """_heartbeat() — Redis health check storage and error handling."""
+    """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         """Heartbeat sets key with 600s TTL in Redis."""
@@ -56,7 +56,7 @@ class TestDeliverabilityMonitorHeartbeat:
 
 
 class TestRunDeliverabilityMonitor:
-    """run_deliverability_monitor() — main loop behaviour."""
+    """run_deliverability_monitor() - main loop behaviour."""
 
     async def test_loop_calls_check_then_heartbeat_then_sleeps(self):
         """One iteration: _check_deliverability -> _heartbeat -> sleep."""
@@ -186,7 +186,7 @@ class TestRunDeliverabilityMonitor:
 
 
 class TestStuckLeadSweeperHeartbeat:
-    """_heartbeat() — Redis health check storage and error handling."""
+    """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         """Heartbeat sets key with 600s TTL in Redis."""
@@ -218,7 +218,7 @@ class TestStuckLeadSweeperHeartbeat:
 
 
 class TestRunStuckLeadSweeper:
-    """run_stuck_lead_sweeper() — main loop behaviour."""
+    """run_stuck_lead_sweeper() - main loop behaviour."""
 
     async def test_loop_calls_sweep_then_heartbeat_then_sleeps(self):
         """One iteration: _sweep_stuck_leads -> _heartbeat -> sleep."""
@@ -392,7 +392,7 @@ class TestRunStuckLeadSweeper:
 
 
 class TestRetryWorkerHeartbeat:
-    """_heartbeat() — Redis health check storage and error handling."""
+    """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         """Heartbeat sets key with 300s TTL in Redis."""
@@ -424,7 +424,7 @@ class TestRetryWorkerHeartbeat:
 
 
 class TestRunRetryWorker:
-    """run_retry_worker() — main loop behaviour."""
+    """run_retry_worker() - main loop behaviour."""
 
     async def test_loop_calls_process_then_heartbeat_then_sleeps(self):
         """One iteration: _process_pending_retries -> _heartbeat -> sleep."""
@@ -598,7 +598,7 @@ class TestRunRetryWorker:
 
 
 class TestLeadLifecycleHeartbeat:
-    """_heartbeat() — Redis health check storage and error handling."""
+    """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         """Heartbeat sets key with 3600s TTL in Redis."""
@@ -630,7 +630,7 @@ class TestLeadLifecycleHeartbeat:
 
 
 class TestRunLeadLifecycle:
-    """run_lead_lifecycle() — main loop behaviour."""
+    """run_lead_lifecycle() - main loop behaviour."""
 
     async def test_loop_calls_subroutines_then_heartbeat_then_sleeps(self):
         """One iteration: archive + dead + recycle -> _heartbeat -> sleep."""
@@ -889,7 +889,7 @@ class TestRunLeadLifecycle:
 
 
 class TestCrmSyncHeartbeat:
-    """_heartbeat() — Redis health check storage and error handling."""
+    """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         """Heartbeat sets key with 300s TTL in Redis."""
@@ -921,7 +921,7 @@ class TestCrmSyncHeartbeat:
 
 
 class TestRunCrmSync:
-    """run_crm_sync() — main loop behaviour."""
+    """run_crm_sync() - main loop behaviour."""
 
     async def test_loop_calls_sync_then_heartbeat_then_sleeps(self):
         """One iteration: sync_pending_bookings -> _heartbeat -> sleep."""
@@ -1046,7 +1046,7 @@ class TestRunCrmSync:
 
 
 # ============================================================================
-# Deliverability Monitor — line 76 (overall_rate is None early return)
+# Deliverability Monitor - line 76 (overall_rate is None early return)
 # ============================================================================
 
 
@@ -1081,7 +1081,7 @@ class TestDeliverabilityMonitorNoneRate:
 
 
 # ============================================================================
-# Retry Worker — line 127 (qualify stage: client not found)
+# Retry Worker - line 127 (qualify stage: client not found)
 # ============================================================================
 
 

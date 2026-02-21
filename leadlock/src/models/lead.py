@@ -1,5 +1,5 @@
 """
-Lead model — every inbound lead from any source.
+Lead model - every inbound lead from any source.
 Tracks full lifecycle: new → intake_sent → qualifying → qualified → booking → booked → completed.
 Terminal states: cold → dead, opted_out.
 """

@@ -1,5 +1,5 @@
 """
-Conductor — THE BRAIN. State machine orchestrator for the lead pipeline.
+Conductor - THE BRAIN. State machine orchestrator for the lead pipeline.
 Routes leads through agents, enforces compliance, manages state transitions.
 
 CRITICAL PRINCIPLE: RESPOND FIRST, SYNC LATER.
@@ -55,7 +55,7 @@ VALID_TRANSITIONS = {
     "cold": ["qualifying", "dead", "opted_out"],  # Can re-engage
     "completed": ["opted_out"],
     "dead": ["opted_out"],
-    "opted_out": [],  # Terminal — no transitions out
+    "opted_out": [],  # Terminal - no transitions out
 }
 
 
@@ -250,7 +250,7 @@ async def handle_new_lead(
         sms_body = disclosure + sms_body
         logger.info("CA SB 1001: AI disclosure prepended for lead %s", str(lead.id)[:8])
 
-    # SEND THE SMS — this is the critical path
+    # SEND THE SMS - this is the critical path
     sms_result = await send_sms(
         to=phone,
         body=sms_body,
@@ -329,7 +329,7 @@ async def handle_inbound_reply(
     timer = Timer().start()
     config = ClientConfig(**client.config) if client.config else ClientConfig()
 
-    # Check for opt-out FIRST — this overrides everything (no lock needed)
+    # Check for opt-out FIRST - this overrides everything (no lock needed)
     if is_stop_keyword(message_text):
         return await _handle_opt_out(db, lead, client, message_text, timer)
 
@@ -339,7 +339,7 @@ async def handle_inbound_reply(
             return await _process_reply_locked(db, lead, client, config, message_text, timer)
     except LockTimeoutError:
         logger.warning(
-            "Lead %s lock timeout — another webhook is processing this lead",
+            "Lead %s lock timeout - another webhook is processing this lead",
             str(lead.id)[:8],
         )
         return {"lead_id": str(lead.id), "status": "lock_timeout", "response_ms": timer.elapsed_ms}
@@ -397,7 +397,7 @@ async def _process_reply_locked(
             lead_id=lead.id,
             client_id=client.id,
             action="turn_limit_reached",
-            message=f"Conversation hit {max_turns} turn limit — needs human follow-up",
+            message=f"Conversation hit {max_turns} turn limit - needs human follow-up",
             data={"turns": lead.conversation_turn, "limit": max_turns},
         ))
         response = {

@@ -1,5 +1,5 @@
 """
-Extended tests for src/utils/alerting.py — covers webhook with extra/correlation,
+Extended tests for src/utils/alerting.py - covers webhook with extra/correlation,
 and the full _send_email_alert function.
 """
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
-# _send_webhook_alert — extra and correlation_id formatting (lines 112-116)
+# _send_webhook_alert - extra and correlation_id formatting (lines 112-116)
 # ---------------------------------------------------------------------------
 
 class TestSendWebhookAlertFormatting:
@@ -49,7 +49,7 @@ class TestSendWebhookAlertFormatting:
 
 
 # ---------------------------------------------------------------------------
-# _send_email_alert — full function (lines 134-163)
+# _send_email_alert - full function (lines 134-163)
 # ---------------------------------------------------------------------------
 
 class TestSendEmailAlert:

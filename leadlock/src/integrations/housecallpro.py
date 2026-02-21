@@ -1,5 +1,5 @@
 """
-Housecall Pro CRM integration — REST API v1.
+Housecall Pro CRM integration - REST API v1.
 
 Auth: Bearer token via API key.
 Docs: https://docs.housecallpro.com

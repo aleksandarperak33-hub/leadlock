@@ -1,5 +1,5 @@
 """
-Twilio A2P registration service — handles 10DLC and toll-free verification.
+Twilio A2P registration service - handles 10DLC and toll-free verification.
 
 Registration state machine:
   collecting_info -> profile_pending -> profile_approved -> brand_pending -> brand_approved
@@ -42,7 +42,7 @@ TWILIO_API_TIMEOUT = 10
 def is_tollfree(phone_number: str) -> bool:
     """Check if a phone number is toll-free based on area code."""
     digits = phone_number.lstrip("+")
-    # US numbers: +1NXXNXXXXXX — area code starts at index 1
+    # US numbers: +1NXXNXXXXXX - area code starts at index 1
     if digits.startswith("1") and len(digits) >= 4:
         area_code = digits[1:4]
         return area_code in TOLLFREE_PREFIXES

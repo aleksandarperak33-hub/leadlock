@@ -1,5 +1,5 @@
 """
-Email validation — format check + DNS MX record verification.
+Email validation - format check + DNS MX record verification.
 Prevents sending to invalid emails (saves SendGrid credits, protects sender reputation).
 """
 import logging
@@ -8,7 +8,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# RFC 5322 simplified — covers 99%+ of valid emails
+# RFC 5322 simplified - covers 99%+ of valid emails
 EMAIL_REGEX = re.compile(
     r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]"
     r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]"
@@ -65,12 +65,12 @@ async def has_mx_record(domain: str) -> bool:
         return await loop.run_in_executor(None, _resolve_mx)
 
     except ImportError:
-        # dnspython not installed — skip MX check, just validate format
-        logger.warning("dnspython not installed — skipping MX record check")
+        # dnspython not installed - skip MX check, just validate format
+        logger.warning("dnspython not installed - skipping MX record check")
         return True
     except Exception as e:
         logger.warning("MX record check failed for %s: %s", domain, str(e))
-        # On error, assume valid — don't block sends on DNS hiccups
+        # On error, assume valid - don't block sends on DNS hiccups
         return True
 
 

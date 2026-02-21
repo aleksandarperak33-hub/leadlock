@@ -1,5 +1,5 @@
 """
-Tests for outreach cleanup worker — marks exhausted sequences as lost.
+Tests for outreach cleanup worker - marks exhausted sequences as lost.
 Covers _heartbeat, run_outreach_cleanup, and cleanup_cycle.
 """
 import uuid
@@ -162,7 +162,7 @@ class TestCleanupCycle:
         ):
             await cleanup_cycle()
 
-        # No outreach records — just verify it didn't crash
+        # No outreach records - just verify it didn't crash
         result = await db.execute(select(Outreach))
         assert result.scalars().all() == []
 
@@ -569,7 +569,7 @@ class TestCleanupCycle:
         )
         await db.flush()
 
-        # Campaign-bound — should be marked lost (step >= 1)
+        # Campaign-bound - should be marked lost (step >= 1)
         o_campaign = _make_outreach(
             db,
             campaign_id=campaign.id,
@@ -577,7 +577,7 @@ class TestCleanupCycle:
             outreach_sequence_step=1,
             last_email_sent_at=_past_cutoff(),
         )
-        # Unbound — should be marked lost (step >= 2)
+        # Unbound - should be marked lost (step >= 2)
         o_unbound = _make_outreach(
             db,
             campaign_id=None,
@@ -599,7 +599,7 @@ class TestCleanupCycle:
         assert o_unbound.status == "lost"
 
     async def test_no_prospects_to_mark_no_error(self, db):
-        """Active config but no eligible prospects is fine — 0 marked."""
+        """Active config but no eligible prospects is fine - 0 marked."""
         _make_config(db, max_sequence_steps=3)
         await db.flush()
 
@@ -782,7 +782,7 @@ class TestRunOutreachCleanup:
         ):
             with pytest.raises(_StopLoop):
                 await run_outreach_cleanup()
-        # No crash — error was caught and logged
+        # No crash - error was caught and logged
 
     async def test_loop_runs_without_config(self, db):
         """When no config exists, cleanup_cycle is still called (config=None branch)."""
@@ -798,7 +798,7 @@ class TestRunOutreachCleanup:
         class _StopLoop(Exception):
             pass
 
-        # Empty db — no config at all
+        # Empty db - no config at all
         with (
             patch(
                 "src.workers.outreach_cleanup.async_session_factory",

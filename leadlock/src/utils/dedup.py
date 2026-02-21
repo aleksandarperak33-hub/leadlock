@@ -1,5 +1,5 @@
 """
-Lead deduplication — Redis-based with 30-minute window.
+Lead deduplication - Redis-based with 30-minute window.
 Prevents duplicate lead processing from webhook retries or multiple form submissions.
 """
 import hashlib
@@ -63,6 +63,6 @@ async def is_duplicate(
             )
             return True  # Duplicate
     except Exception as e:
-        # Redis failure should NOT block lead processing — assume not duplicate
+        # Redis failure should NOT block lead processing - assume not duplicate
         logger.warning("Redis dedup check failed: %s. Assuming not duplicate.", str(e))
         return False

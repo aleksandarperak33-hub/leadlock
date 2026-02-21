@@ -1,5 +1,5 @@
 """
-Tests for src/services/learning.py — engagement signal recording and time bucketing.
+Tests for src/services/learning.py - engagement signal recording and time bucketing.
 """
 import pytest
 import uuid

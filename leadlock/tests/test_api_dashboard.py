@@ -1,5 +1,5 @@
 """
-Tests for src/api/dashboard.py — Dashboard API endpoints.
+Tests for src/api/dashboard.py - Dashboard API endpoints.
 Covers auth flows (login, signup, password reset, email verification),
 JWT auth dependencies, phone provisioning, settings, leads, bookings,
 activity, reports, compliance, and lead action endpoints.
@@ -959,7 +959,7 @@ class TestResendVerification:
 
 
 # ---------------------------------------------------------------------------
-# Phone Provisioning — search_available_numbers
+# Phone Provisioning - search_available_numbers
 # ---------------------------------------------------------------------------
 
 class TestSearchAvailableNumbers:
@@ -1014,7 +1014,7 @@ class TestSearchAvailableNumbers:
 
 
 # ---------------------------------------------------------------------------
-# Phone Provisioning — provision_number
+# Phone Provisioning - provision_number
 # ---------------------------------------------------------------------------
 
 class TestProvisionNumber:

@@ -1,5 +1,5 @@
 """
-Notification service — owner alerts for emergencies and important events.
+Notification service - owner alerts for emergencies and important events.
 """
 import logging
 from typing import Optional
@@ -21,7 +21,7 @@ async def notify_owner_emergency(
     """
     masked_lead = mask_phone(lead_phone)
     alert_text = (
-        f"EMERGENCY ALERT — {business_name}\n"
+        f"EMERGENCY ALERT - {business_name}\n"
         f"Type: {emergency_type}\n"
         f"Lead: {masked_lead}\n"
         f"Message: {message_preview[:100]}\n"
@@ -50,7 +50,7 @@ async def notify_owner_booking(
 ) -> bool:
     """Send booking confirmation notification to business owner."""
     text = (
-        f"New Booking — {business_name}\n"
+        f"New Booking - {business_name}\n"
         f"Customer: {lead_name}\n"
         f"Service: {service_type}\n"
         f"Date: {appointment_date}\n"

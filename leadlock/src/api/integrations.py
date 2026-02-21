@@ -1,5 +1,5 @@
 """
-CRM integrations API — test connections, check status, and manage CRM settings.
+CRM integrations API - test connections, check status, and manage CRM settings.
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -64,7 +64,7 @@ async def test_integration(
         raise HTTPException(status_code=400, detail="CRM type not supported for testing")
 
     try:
-        # Test by fetching technicians — lightweight call supported by all CRMs
+        # Test by fetching technicians - lightweight call supported by all CRMs
         techs = await crm.get_technicians()
         return {
             "connected": True,

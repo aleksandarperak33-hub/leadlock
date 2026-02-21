@@ -1,5 +1,5 @@
 """
-Redis distributed locks — prevents race conditions on lead processing.
+Redis distributed locks - prevents race conditions on lead processing.
 Uses Redis SET NX with TTL for automatic expiration.
 """
 import asyncio

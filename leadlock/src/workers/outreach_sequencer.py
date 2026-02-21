@@ -1,5 +1,5 @@
 """
-Outreach sequencer worker — sends personalized cold email sequences.
+Outreach sequencer worker - sends personalized cold email sequences.
 Runs every 30 minutes. Respects daily email limits, sequence delays,
 and business hours gating (configurable timezone + weekdays).
 Email first, SMS only after a prospect replies (TCPA compliance).
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
-# Email warmup schedule — ramps daily send volume over 60 days to protect
+# Email warmup schedule - ramps daily send volume over 60 days to protect
 # domain reputation with new sending domains.
 # Format: (day_range_start, day_range_end, max_daily_emails)
 # day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
@@ -52,7 +52,7 @@ def sanitize_dashes(text: str) -> str:
         return text
     return (
         text
-        .replace("\u2014", "-")   # em dash —
+        .replace("\u2014", "-")   # em dash -
         .replace("\u2013", "-")   # en dash –
         .replace("\u2012", "-")   # figure dash ‒
         .replace("\u2015", "-")   # horizontal bar ―
@@ -117,7 +117,7 @@ async def _check_smart_timing(prospect, config) -> bool:
 
         best_bucket = await get_best_send_time(trade, state)
         if not best_bucket:
-            # Not enough data to make a recommendation — send now
+            # Not enough data to make a recommendation - send now
             return False
 
         # Check if we're already in the best time bucket
@@ -131,7 +131,7 @@ async def _check_smart_timing(prospect, config) -> bool:
         current_bucket = _time_bucket(now_local.hour)
 
         if current_bucket == best_bucket:
-            return False  # Already optimal — send now
+            return False  # Already optimal - send now
 
         # Calculate delay to the start of the optimal bucket
         bucket_start_hours = {
@@ -209,10 +209,10 @@ async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
         started_at_raw = await redis.get(warmup_key)
 
         if started_at_raw is None:
-            # First email send ever — record the start timestamp
+            # First email send ever - record the start timestamp
             now_iso = datetime.now(timezone.utc).isoformat()
             await redis.set(warmup_key, now_iso)
-            logger.info("Email warmup started — day 0, limit=5")
+            logger.info("Email warmup started - day 0, limit=5")
             return min(5, configured_limit)
 
         started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
@@ -231,7 +231,7 @@ async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
         return configured_limit
 
     except Exception as e:
-        logger.warning("Warmup limit check failed: %s — using configured limit", str(e))
+        logger.warning("Warmup limit check failed: %s - using configured limit", str(e))
         return configured_limit
 
 
@@ -252,7 +252,7 @@ async def _check_email_health() -> tuple[bool, str]:
 
         if reputation["throttle"] == "paused":
             logger.warning(
-                "EMAIL SENDING PAUSED — reputation score %.1f (critical). "
+                "EMAIL SENDING PAUSED - reputation score %.1f (critical). "
                 "Bounce rate: %.2f%%, Complaint rate: %.4f%%",
                 reputation["score"],
                 reputation["metrics"].get("bounce_rate", 0) * 100,
@@ -262,19 +262,19 @@ async def _check_email_health() -> tuple[bool, str]:
 
         if reputation["throttle"] == "critical":
             logger.warning(
-                "Email reputation POOR (%.1f) — sending at 25%% capacity",
+                "Email reputation POOR (%.1f) - sending at 25%% capacity",
                 reputation["score"],
             )
         elif reputation["throttle"] == "reduced":
             logger.warning(
-                "Email reputation WARNING (%.1f) — sending at 50%% capacity",
+                "Email reputation WARNING (%.1f) - sending at 50%% capacity",
                 reputation["score"],
             )
 
         return True, reputation["throttle"]
 
     except Exception as e:
-        logger.warning("Email health check failed: %s — continuing with caution", str(e))
+        logger.warning("Email health check failed: %s - continuing with caution", str(e))
         return True, "reduced"  # Redis outage: apply 50% throttle as conservative fallback
 
 
@@ -319,7 +319,7 @@ def _calculate_cycle_cap(
 
 
 async def run_outreach_sequencer():
-    """Main loop — process outreach sequences every 30 minutes."""
+    """Main loop - process outreach sequences every 30 minutes."""
     logger.info("Outreach sequencer started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:
@@ -352,7 +352,7 @@ async def sequence_cycle():
         if not config or not config.is_active:
             return
 
-        # Business hours gating — only send during configured window
+        # Business hours gating - only send during configured window
         if not is_within_send_window(config):
             logger.info("Outside send window, deferring outreach to next cycle")
             return
@@ -361,10 +361,10 @@ async def sequence_cycle():
             logger.warning("Sales engine email sender not configured")
             return
 
-        # Email reputation circuit breaker — pause if reputation is critical
+        # Email reputation circuit breaker - pause if reputation is critical
         email_healthy, throttle_level = await _check_email_health()
         if not email_healthy:
-            logger.warning("Email sending paused due to poor reputation — skipping cycle")
+            logger.warning("Email sending paused due to poor reputation - skipping cycle")
             return
 
         settings = get_settings()
@@ -400,7 +400,7 @@ async def sequence_cycle():
         )
         sent_today = sent_today_result.scalar() or 0
 
-        # Apply warmup limit — ramp up daily sends for new domains
+        # Apply warmup limit - ramp up daily sends for new domains
         warmup_limit = await _get_warmup_limit(config.daily_email_limit, config.from_email or "")
 
         # Apply reputation throttle factor
@@ -700,7 +700,7 @@ async def send_sequence_email(
     email_check = await validate_email(prospect.prospect_email)
     if not email_check["valid"]:
         logger.info(
-            "Skipping prospect %s — invalid email (%s)",
+            "Skipping prospect %s - invalid email (%s)",
             str(prospect.id)[:8], email_check["reason"],
         )
         return
@@ -727,7 +727,7 @@ async def send_sequence_email(
         except Exception:
             pass
 
-    # Generate personalized email — template-aware
+    # Generate personalized email - template-aware
     email_result = await _generate_email_with_template(
         prospect=prospect,
         next_step=next_step,
@@ -834,10 +834,6 @@ async def send_sequence_email(
 
     if prospect.status == "cold":
         prospect.status = "contacted"
-
-    # Increment campaign counters
-    if campaign:
-        campaign.total_sent = (campaign.total_sent or 0) + 1
 
     logger.info(
         "Outreach email sent: prospect=%s step=%d to=%s campaign=%s",

@@ -1,5 +1,5 @@
 """
-Compliance tests — EVERY TCPA rule must have a test.
+Compliance tests - EVERY TCPA rule must have a test.
 TCPA penalties: $500/violation minimum, $1,500 willful, NO CAP.
 """
 import pytest

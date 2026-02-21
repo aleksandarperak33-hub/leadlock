@@ -1,5 +1,5 @@
 """
-Extended SMS service tests — covers async functions, Twilio/Telnyx integration,
+Extended SMS service tests - covers async functions, Twilio/Telnyx integration,
 retry logic, failover, error extraction, and phone provisioning/release.
 
 Complements test_sms_service.py which covers pure utility functions.
@@ -97,7 +97,7 @@ class TestRunSync:
 
 
 # ---------------------------------------------------------------------------
-# classify_error — cover the "permanent" branch (line 163)
+# classify_error - cover the "permanent" branch (line 163)
 # ---------------------------------------------------------------------------
 
 class TestClassifyErrorPermanent:
@@ -475,7 +475,7 @@ class TestSendTelnyx:
 
 
 # ---------------------------------------------------------------------------
-# send_sms — the main orchestration function
+# send_sms - the main orchestration function
 # ---------------------------------------------------------------------------
 
 def _patch_deliverability(send_allowed=True, throttle_reason=""):
@@ -504,7 +504,7 @@ class TestSendSmsThrottle:
 
 class TestSendSmsTwilioSuccess:
     async def test_first_attempt_success(self):
-        """Twilio succeeds on first try — no retries, no failover."""
+        """Twilio succeeds on first try - no retries, no failover."""
         from src.services.sms import send_sms
 
         with _patch_deliverability(), \

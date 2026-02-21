@@ -1,5 +1,5 @@
 """
-Extended deliverability tests — covers async Redis-backed functions and edge cases.
+Extended deliverability tests - covers async Redis-backed functions and edge cases.
 Targets lines 53-88, 122-158, 202, 211, 243-272, 366, 393-429.
 """
 import pytest
@@ -350,7 +350,7 @@ class TestComputeScoreEdgeCases:
 
     def test_mid_delivery_rate_linear_scale(self):
         """Delivery rate between 70-95% uses linear interpolation."""
-        # 82.5% delivery rate — midpoint
+        # 82.5% delivery rate - midpoint
         score = _compute_score(0.825, 0, 0, 100)
         # delivery_score = int(60 * (0.825 - 0.70) / 0.25) = int(60 * 0.5) = 30
         assert score == 30 + 25 + 15  # 70
@@ -493,7 +493,7 @@ class TestCheckSendAllowed:
         assert throttle_expire_calls[0][0][1] == THROTTLE_WINDOW_SECONDS * 2
 
     async def test_redis_failure_allows_send(self):
-        """Redis failure is fail-open — allow sending."""
+        """Redis failure is fail-open - allow sending."""
         with patch(
             "src.utils.dedup.get_redis",
             side_effect=Exception("connection refused"),

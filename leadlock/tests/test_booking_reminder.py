@@ -1,5 +1,5 @@
 """
-Tests for src/workers/booking_reminder.py — booking reminder worker.
+Tests for src/workers/booking_reminder.py - booking reminder worker.
 
 Covers:
 - _heartbeat: Redis heartbeat storage + error swallowing
@@ -707,7 +707,7 @@ class TestSendDueReminders:
 
 
 class TestRunBookingReminder:
-    """Tests for run_booking_reminder — the infinite loop."""
+    """Tests for run_booking_reminder - the infinite loop."""
 
     async def test_logs_sent_count_when_positive(self):
         """When reminders are sent, logs the count."""

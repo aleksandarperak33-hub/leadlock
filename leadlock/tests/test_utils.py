@@ -14,7 +14,7 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
-# 1. src/utils/metrics.py — Timer + response_time_bucket
+# 1. src/utils/metrics.py - Timer + response_time_bucket
 # ---------------------------------------------------------------------------
 
 
@@ -107,7 +107,7 @@ class TestResponseTimeBucket:
 
 
 # ---------------------------------------------------------------------------
-# 2. src/utils/timezone.py — get_timezone_for_state + get_zoneinfo
+# 2. src/utils/timezone.py - get_timezone_for_state + get_zoneinfo
 # ---------------------------------------------------------------------------
 
 
@@ -195,7 +195,7 @@ class TestGetZoneinfo:
 
 
 # ---------------------------------------------------------------------------
-# 3. src/utils/encryption.py — encrypt_value + decrypt_value
+# 3. src/utils/encryption.py - encrypt_value + decrypt_value
 # ---------------------------------------------------------------------------
 
 
@@ -274,7 +274,7 @@ class TestEncryption:
 
 
 # ---------------------------------------------------------------------------
-# 4. src/utils/rate_limiter.py — check_rate_limit + check_webhook_rate_limits
+# 4. src/utils/rate_limiter.py - check_rate_limit + check_webhook_rate_limits
 # ---------------------------------------------------------------------------
 
 
@@ -432,7 +432,7 @@ class TestCheckWebhookRateLimits:
 
 
 # ---------------------------------------------------------------------------
-# 5. src/utils/dead_letter.py — retry scheduling + capture/mark/resolve
+# 5. src/utils/dead_letter.py - retry scheduling + capture/mark/resolve
 # ---------------------------------------------------------------------------
 
 
@@ -647,7 +647,7 @@ class TestResolveFailedLead:
 
 
 # ---------------------------------------------------------------------------
-# 6. src/utils/locks.py — lead_lock, _acquire_lock, _release_lock
+# 6. src/utils/locks.py - lead_lock, _acquire_lock, _release_lock
 # ---------------------------------------------------------------------------
 
 
@@ -781,7 +781,7 @@ class TestReleaseLock:
 
 
 # ---------------------------------------------------------------------------
-# 7. src/utils/alerting.py — send_alert + _should_send
+# 7. src/utils/alerting.py - send_alert + _should_send
 # ---------------------------------------------------------------------------
 
 

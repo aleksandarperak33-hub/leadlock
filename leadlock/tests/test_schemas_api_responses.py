@@ -1,5 +1,5 @@
 """
-Tests for src/schemas/api_responses.py — Pydantic response schemas.
+Tests for src/schemas/api_responses.py - Pydantic response schemas.
 Tests instantiation, validation, defaults, and edge cases.
 """
 import pytest

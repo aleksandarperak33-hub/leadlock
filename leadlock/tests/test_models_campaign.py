@@ -1,5 +1,5 @@
 """
-Tests for src/models/campaign.py and src/models/email_template.py —
+Tests for src/models/campaign.py and src/models/email_template.py -
 SQLAlchemy model definitions, defaults, and repr.
 All database calls are mocked to avoid SQLite/JSONB incompatibility.
 """

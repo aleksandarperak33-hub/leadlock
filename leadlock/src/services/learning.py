@@ -1,5 +1,5 @@
 """
-Learning service — records and queries engagement signals to feed back
+Learning service - records and queries engagement signals to feed back
 into email generation. Tracks what works by trade, location, time, and step.
 """
 import logging

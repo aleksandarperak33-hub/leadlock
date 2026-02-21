@@ -1,5 +1,5 @@
 """
-Tests for src/api/health.py — health check endpoints (liveness, readiness, deep).
+Tests for src/api/health.py - health check endpoints (liveness, readiness, deep).
 """
 import pytest
 from datetime import datetime, timezone, timedelta
@@ -20,7 +20,7 @@ from src.api.health import (
 
 
 # ---------------------------------------------------------------------------
-# GET /health — basic liveness
+# GET /health - basic liveness
 # ---------------------------------------------------------------------------
 
 
@@ -44,7 +44,7 @@ class TestHealthCheck:
 
 
 # ---------------------------------------------------------------------------
-# GET /health/ready — readiness check (DB + Redis)
+# GET /health/ready - readiness check (DB + Redis)
 # ---------------------------------------------------------------------------
 
 
@@ -391,7 +391,7 @@ class TestCheckWorkers:
 
 
 # ---------------------------------------------------------------------------
-# GET /health/deep — deep health check (orchestration)
+# GET /health/deep - deep health check (orchestration)
 # ---------------------------------------------------------------------------
 
 

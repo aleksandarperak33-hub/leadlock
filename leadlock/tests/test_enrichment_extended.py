@@ -1,5 +1,5 @@
 """
-Extended tests for src/services/enrichment.py — covers invalid IP parsing,
+Extended tests for src/services/enrichment.py - covers invalid IP parsing,
 general exceptions in _is_safe_url, extract_domain exception, do-not-reply
 filtering, auto-prefix in scrape, redirect handling, non-HTML content-type,
 HTTP exceptions during scraping, and full enrich_prospect_email paths.
@@ -19,7 +19,7 @@ from src.services.enrichment import (
 
 
 # ---------------------------------------------------------------------------
-# _is_safe_url — invalid IP address (lines 86-87)
+# _is_safe_url - invalid IP address (lines 86-87)
 # ---------------------------------------------------------------------------
 
 
@@ -33,7 +33,7 @@ class TestIsSafeUrlInvalidIp:
 
 
 # ---------------------------------------------------------------------------
-# _is_safe_url — general exception (lines 98-99)
+# _is_safe_url - general exception (lines 98-99)
 # ---------------------------------------------------------------------------
 
 
@@ -46,7 +46,7 @@ class TestIsSafeUrlGeneralException:
 
 
 # ---------------------------------------------------------------------------
-# extract_domain — exception path (lines 123-124)
+# extract_domain - exception path (lines 123-124)
 # ---------------------------------------------------------------------------
 
 
@@ -58,7 +58,7 @@ class TestExtractDomainException:
 
 
 # ---------------------------------------------------------------------------
-# _is_valid_business_email — do-not-reply (line 173)
+# _is_valid_business_email - do-not-reply (line 173)
 # ---------------------------------------------------------------------------
 
 
@@ -69,7 +69,7 @@ class TestDoNotReplyFiltering:
 
 
 # ---------------------------------------------------------------------------
-# scrape_contact_emails — auto-prefix without scheme (line 198)
+# scrape_contact_emails - auto-prefix without scheme (line 198)
 # ---------------------------------------------------------------------------
 
 
@@ -99,7 +99,7 @@ class TestScrapeAutoPrefix:
 
 
 # ---------------------------------------------------------------------------
-# scrape_contact_emails — redirect handling (lines 232-245)
+# scrape_contact_emails - redirect handling (lines 232-245)
 # ---------------------------------------------------------------------------
 
 
@@ -226,7 +226,7 @@ class TestScrapeRedirects:
 
 
 # ---------------------------------------------------------------------------
-# scrape_contact_emails — non-HTML content type (lines 248, 252)
+# scrape_contact_emails - non-HTML content type (lines 248, 252)
 # ---------------------------------------------------------------------------
 
 
@@ -275,7 +275,7 @@ class TestScrapeNonHtmlContentType:
 
 
 # ---------------------------------------------------------------------------
-# scrape_contact_emails — HTTP exception (lines 272-274)
+# scrape_contact_emails - HTTP exception (lines 272-274)
 # ---------------------------------------------------------------------------
 
 
@@ -334,7 +334,7 @@ class TestScrapeHttpException:
 
 
 # ---------------------------------------------------------------------------
-# scrape_contact_emails — deduplication
+# scrape_contact_emails - deduplication
 # ---------------------------------------------------------------------------
 
 
@@ -364,7 +364,7 @@ class TestScrapeDeduplication:
 
 
 # ---------------------------------------------------------------------------
-# enrich_prospect_email — all branches (lines 304-331)
+# enrich_prospect_email - all branches (lines 304-331)
 # ---------------------------------------------------------------------------
 
 

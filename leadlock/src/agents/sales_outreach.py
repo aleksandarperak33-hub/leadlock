@@ -1,5 +1,5 @@
 """
-Sales outreach agent — generates personalized cold emails for prospects.
+Sales outreach agent - generates personalized cold emails for prospects.
 Uses Claude Haiku for fast, cost-effective email generation.
 3-step sequence: pain-point → follow-up → break-up.
 Also classifies inbound replies (interested, rejection, auto_reply, etc).
@@ -15,13 +15,13 @@ SYSTEM_PROMPT = """You are a sales copywriter for LeadLock, an AI speed-to-lead 
 Your job is to write cold outreach emails to contractors (HVAC, plumbing, roofing, electrical, solar).
 
 RULES:
-- Write in a casual, peer-to-peer tone — NOT salesy or corporate
+- Write in a casual, peer-to-peer tone - NOT salesy or corporate
 - Reference specific details about their business (trade, city, reviews)
 - Focus on ONE pain point: slow lead response = lost revenue
 - No exclamation marks. No "game-changer" or "revolutionary"
 - No emojis
 - NEVER use em dashes or en dashes. Use regular hyphens (-) or rewrite the sentence instead
-- Keep it SHORT — contractors are busy
+- Keep it SHORT - contractors are busy
 - End with a soft CTA (reply or link to learn more)
 - Output valid JSON only
 
@@ -192,7 +192,7 @@ Respond with ONLY one of these labels:
 - out_of_office: Specifically out of office / on vacation
 - unsubscribe: They want to stop receiving emails (stop, unsubscribe, remove me)
 
-Respond with a single word — the label only."""
+Respond with a single word - the label only."""
 
 VALID_CLASSIFICATIONS = {"interested", "rejection", "auto_reply", "out_of_office", "unsubscribe"}
 

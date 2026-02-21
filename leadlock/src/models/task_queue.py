@@ -1,5 +1,5 @@
 """
-TaskQueue model — event-driven task processing queue.
+TaskQueue model - event-driven task processing queue.
 Supports delayed/scheduled tasks, retries with exponential backoff,
 and priority-based processing.
 """

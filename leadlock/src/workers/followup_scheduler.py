@@ -1,5 +1,5 @@
 """
-Follow-up scheduler worker — processes pending followup tasks.
+Follow-up scheduler worker - processes pending followup tasks.
 Runs every 60 seconds. Compliance check before every send.
 """
 import asyncio
@@ -42,7 +42,7 @@ async def _heartbeat():
 
 
 async def run_followup_scheduler():
-    """Main loop — poll for due followup tasks and execute them."""
+    """Main loop - poll for due followup tasks and execute them."""
     logger.info("Follow-up scheduler started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:

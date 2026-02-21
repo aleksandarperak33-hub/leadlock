@@ -1,5 +1,5 @@
 """
-Tests for src/workers/stuck_lead_sweeper.py — stuck lead detection and remediation.
+Tests for src/workers/stuck_lead_sweeper.py - stuck lead detection and remediation.
 """
 import uuid
 from contextlib import asynccontextmanager
@@ -41,7 +41,7 @@ async def mock_session():
 
 
 # ---------------------------------------------------------------------------
-# _sweep_stuck_leads — finding leads
+# _sweep_stuck_leads - finding leads
 # ---------------------------------------------------------------------------
 
 class TestSweepStuckLeads:
@@ -104,7 +104,7 @@ class TestSweepStuckLeads:
 
 
 # ---------------------------------------------------------------------------
-# _handle_stuck_lead — state transitions
+# _handle_stuck_lead - state transitions
 # ---------------------------------------------------------------------------
 
 class TestHandleStuckLead:

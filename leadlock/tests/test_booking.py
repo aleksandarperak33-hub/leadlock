@@ -28,7 +28,7 @@ class TestScheduling:
             assert slot.end <= time(17, 0)
 
     def test_skips_sunday(self):
-        """No slots should be on Sunday — should return 0 slots for a Sunday-only range."""
+        """No slots should be on Sunday - should return 0 slots for a Sunday-only range."""
         # Feb 15, 2026 is a Sunday
         slots = generate_available_slots(
             start_date=date(2026, 2, 15),

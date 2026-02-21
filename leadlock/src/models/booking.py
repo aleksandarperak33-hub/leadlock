@@ -1,5 +1,5 @@
 """
-Booking model — confirmed appointments with CRM sync tracking.
+Booking model - confirmed appointments with CRM sync tracking.
 """
 import uuid
 from datetime import datetime, timezone, date, time

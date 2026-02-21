@@ -1,11 +1,11 @@
 """
-Lead lifecycle worker — manages long-term lead state transitions.
+Lead lifecycle worker - manages long-term lead state transitions.
 Runs every 30 minutes.
 
 Actions:
-1. Archive old completed/dead leads (>90 days) — set archived=True
-2. Recycle cold leads — auto-schedule re-engagement after 7 days of cold
-3. Mark dead leads — cold leads with 3+ cold outreach messages exhausted
+1. Archive old completed/dead leads (>90 days) - set archived=True
+2. Recycle cold leads - auto-schedule re-engagement after 7 days of cold
+3. Mark dead leads - cold leads with 3+ cold outreach messages exhausted
 4. Clean up stale consent records (>5 years per FTC TSR 2024 requirement)
 """
 import asyncio

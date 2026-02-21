@@ -1,5 +1,5 @@
 """
-Tests for src/api/campaign_detail.py — campaign detail, prospect management,
+Tests for src/api/campaign_detail.py - campaign detail, prospect management,
 inbox, and email thread viewer endpoints.
 All database calls are mocked to avoid SQLite/JSONB incompatibility.
 """

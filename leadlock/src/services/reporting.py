@@ -1,5 +1,5 @@
 """
-Reporting service — generates metrics and reports for dashboard and email.
+Reporting service - generates metrics and reports for dashboard and email.
 """
 import logging
 from datetime import datetime, timedelta, timezone

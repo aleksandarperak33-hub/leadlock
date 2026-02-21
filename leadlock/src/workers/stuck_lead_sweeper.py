@@ -1,5 +1,5 @@
 """
-Stuck lead sweeper — finds and acts on leads stuck in non-terminal states.
+Stuck lead sweeper - finds and acts on leads stuck in non-terminal states.
 Runs every 5 minutes. Prevents leads from being silently lost.
 
 Actions by state:
@@ -100,7 +100,7 @@ async def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:
     )
 
     if state == "intake_sent":
-        # No reply received within 30min — transition to qualifying anyway
+        # No reply received within 30min - transition to qualifying anyway
         # The next inbound message will be routed to qualify agent
         lead.state = "qualifying"
         lead.current_agent = "qualify"
@@ -112,7 +112,7 @@ async def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:
         ))
 
     elif state in ("qualifying", "qualified"):
-        # No activity for >1hr — mark as cold
+        # No activity for >1hr - mark as cold
         lead.state = "cold"
         lead.current_agent = "followup"
         db.add(EventLog(
@@ -123,11 +123,11 @@ async def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:
         ))
 
     elif state == "booking":
-        # Booking stuck for >2hr — log alert for admin
+        # Booking stuck for >2hr - log alert for admin
         db.add(EventLog(
             lead_id=lead.id,
             client_id=lead.client_id,
             action="stuck_lead_alert",
-            message=f"ALERT: Lead stuck in booking for {age_minutes}min — needs admin attention",
+            message=f"ALERT: Lead stuck in booking for {age_minutes}min - needs admin attention",
             data={"alert_type": "stuck_booking", "age_minutes": age_minutes},
         ))

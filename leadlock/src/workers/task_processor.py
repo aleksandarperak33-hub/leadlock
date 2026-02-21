@@ -1,5 +1,5 @@
 """
-Task processor worker — polls the task_queue table and dispatches tasks.
+Task processor worker - polls the task_queue table and dispatches tasks.
 Handles retries with exponential backoff. Runs every 10 seconds.
 """
 import asyncio
@@ -28,7 +28,7 @@ async def _heartbeat():
 
 
 async def run_task_processor():
-    """Main loop — process pending tasks every 10 seconds."""
+    """Main loop - process pending tasks every 10 seconds."""
     logger.info("Task processor started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:
@@ -289,7 +289,7 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
                 delay_seconds=delay_seconds,
             )
             logger.info(
-                "Daily email limit (%d) reached — deferring task for prospect %s to tomorrow",
+                "Daily email limit (%d) reached - deferring task for prospect %s to tomorrow",
                 daily_limit, outreach_id[:8],
             )
             return {"status": "re-queued", "reason": "daily limit reached"}

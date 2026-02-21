@@ -1,5 +1,5 @@
 """
-Tests for src/services/billing.py — Stripe billing: customer creation, checkout,
+Tests for src/services/billing.py - Stripe billing: customer creation, checkout,
 webhook processing, and subscription lifecycle.
 """
 import pytest
@@ -343,7 +343,7 @@ class TestHandleCheckoutCompleted:
         """Missing client_id in metadata should log warning and return."""
         session_data = {"metadata": {}, "subscription": "sub_x", "customer": "cus_x"}
 
-        # Should not raise — just returns early
+        # Should not raise - just returns early
         await _handle_checkout_completed(session_data)
 
 

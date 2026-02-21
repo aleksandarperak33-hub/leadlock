@@ -1,5 +1,5 @@
 """
-Conversation model — every SMS message sent or received.
+Conversation model - every SMS message sent or received.
 Complete audit trail with agent attribution, delivery status, and cost tracking.
 """
 import uuid
@@ -32,7 +32,7 @@ class Conversation(Base):
     from_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     to_phone: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    # Agent attribution — which AI agent generated this message
+    # Agent attribution - which AI agent generated this message
     agent_id: Mapped[Optional[str]] = mapped_column(
         String(30)
     )  # intake, qualify, book, followup

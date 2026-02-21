@@ -1,5 +1,5 @@
 """
-Tests for src/services/scraping.py — Brave Search API local business discovery.
+Tests for src/services/scraping.py - Brave Search API local business discovery.
 Covers: normalize_biz_name, search_local_businesses, parse_address_components.
 All external HTTP calls are mocked via httpx.
 """
@@ -665,7 +665,7 @@ class TestParseAddressComponents:
         assert result["city"] == "San Antonio"
 
     def test_single_part_no_comma(self):
-        """Address with no commas — only 1 part, no city extracted."""
+        """Address with no commas - only 1 part, no city extracted."""
         result = parse_address_components("78701")
         assert result["zip"] == "78701"
         assert result["city"] == ""

@@ -1,5 +1,5 @@
 """
-Outreach cleanup worker — marks exhausted sequences as lost.
+Outreach cleanup worker - marks exhausted sequences as lost.
 Runs every 4 hours. Prospects with max steps reached and no reply → status "lost".
 """
 import asyncio
@@ -28,7 +28,7 @@ async def _heartbeat():
 
 
 async def run_outreach_cleanup():
-    """Main loop — clean up exhausted outreach sequences every 4 hours."""
+    """Main loop - clean up exhausted outreach sequences every 4 hours."""
     logger.info("Outreach cleanup worker started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:
@@ -54,8 +54,8 @@ async def cleanup_cycle():
     Mark exhausted outreach sequences as lost.
 
     Two passes:
-    1. Campaign-bound prospects — use each campaign's sequence_steps length.
-    2. Unbound prospects — use global config.max_sequence_steps.
+    1. Campaign-bound prospects - use each campaign's sequence_steps length.
+    2. Unbound prospects - use global config.max_sequence_steps.
     """
     async with async_session_factory() as db:
         # Load config

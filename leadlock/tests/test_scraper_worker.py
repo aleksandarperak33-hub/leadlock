@@ -1,5 +1,5 @@
 """
-Scraper worker tests — comprehensive coverage for lead discovery pipeline.
+Scraper worker tests - comprehensive coverage for lead discovery pipeline.
 Tests query rotation, dedup, enrichment, round-robin, heartbeat, and the
 main scrape_cycle / scrape_location_trade flows.
 
@@ -266,7 +266,7 @@ class TestGetNextVariantAndOffset:
     async def test_unknown_trade_with_zero_variants(self, db):
         """Edge case: a trade whose fallback returns one variant."""
         # "landscaping" is not in TRADE_QUERY_VARIANTS so get_query_variants
-        # returns ["landscaping contractors"] — 1 variant
+        # returns ["landscaping contractors"] - 1 variant
         idx, offset = await get_next_variant_and_offset(db, "Austin", "TX", "landscaping")
         assert idx == 0
         assert offset == 0
@@ -280,7 +280,7 @@ class TestGetNextVariantAndOffset:
 
     async def test_custom_cooldown_days(self, db):
         """Custom cooldown should be respected."""
-        # completed 3 days ago — default 7-day cooldown: should be blocked
+        # completed 3 days ago - default 7-day cooldown: should be blocked
         completed_at = datetime.now(timezone.utc) - timedelta(days=3)
         job = ScrapeJob(
             platform="brave",
@@ -831,7 +831,7 @@ class TestScrapeLocationTrade:
         db.add(config)
         await db.flush()
 
-        # No phone at all — should skip if also no place_id
+        # No phone at all - should skip if also no place_id
         biz = _make_biz(place_id="place_abc", phone="")
 
         with (

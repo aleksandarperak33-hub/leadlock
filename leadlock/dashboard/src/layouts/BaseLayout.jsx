@@ -5,7 +5,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import ShortcutHelpModal from '../components/ShortcutHelpModal';
 
 /**
- * BaseLayout — Shared sidebar layout for both dashboard and admin.
+ * BaseLayout - Shared sidebar layout for both dashboard and admin.
  *
  * @param {Object} props
  * @param {Array<{to: string, icon: Component, label: string}>} props.navItems - Navigation items

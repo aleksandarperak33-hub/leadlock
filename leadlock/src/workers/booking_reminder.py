@@ -1,5 +1,5 @@
 """
-Booking reminder worker — sends day-before appointment reminders.
+Booking reminder worker - sends day-before appointment reminders.
 Runs every 30 minutes. Auto-schedules reminders for confirmed bookings.
 
 Process:
@@ -44,7 +44,7 @@ async def _heartbeat():
 
 
 async def run_booking_reminder():
-    """Main loop — check for bookings needing reminders."""
+    """Main loop - check for bookings needing reminders."""
     logger.info("Booking reminder worker started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:

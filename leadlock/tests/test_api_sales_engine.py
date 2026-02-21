@@ -1,5 +1,5 @@
 """
-Sales Engine API tests — comprehensive coverage for all endpoints in src/api/sales_engine.py.
+Sales Engine API tests - comprehensive coverage for all endpoints in src/api/sales_engine.py.
 Tests webhooks, unsubscribe, config, metrics, prospects, campaigns, templates,
 worker status/controls, bulk operations, command center, and helper functions.
 All external services (Redis, AI, SMS, scraping) are mocked.
@@ -589,10 +589,10 @@ class TestInboundEmailWebhook:
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
     @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
     @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
-    async def test_increments_campaign_reply_counter(
+    async def test_does_not_mutate_campaign_counter_on_reply(
         self, mock_verify, mock_signal, mock_classify, db
     ):
-        """Should increment campaign reply counter when prospect has campaign_id."""
+        """Replies should NOT increment denormalized campaign counter (calculated metrics used instead)."""
         from src.api.sales_engine import inbound_email_webhook
 
         campaign = _make_campaign(db, total_replied=5)
@@ -616,7 +616,7 @@ class TestInboundEmailWebhook:
             result = await inbound_email_webhook(request, db)
 
         assert result["status"] == "processed"
-        assert campaign.total_replied == 6
+        assert campaign.total_replied == 5  # unchanged - calculated metrics used instead
 
 
 # ── Email Events Webhook ─────────────────────────────────────────────────
@@ -874,8 +874,8 @@ class TestEmailEventsWebhook:
 
     @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
     @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
-    async def test_open_event_increments_campaign_counter(self, mock_verify, mock_signal, db):
-        """Should increment campaign total_opened on open event."""
+    async def test_open_event_does_not_mutate_campaign_counter(self, mock_verify, mock_signal, db):
+        """Opens should NOT increment denormalized campaign counter (calculated metrics used instead)."""
         from src.api.sales_engine import email_events_webhook
 
         campaign = _make_campaign(db, total_opened=3)
@@ -897,7 +897,7 @@ class TestEmailEventsWebhook:
             result = await email_events_webhook(request, db)
 
         assert result["status"] == "processed"
-        assert campaign.total_opened == 4
+        assert campaign.total_opened == 3  # unchanged - calculated metrics used instead
 
     @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_does_not_update_already_set_delivered_at(self, mock_verify, db):

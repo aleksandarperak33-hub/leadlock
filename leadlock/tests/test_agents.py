@@ -1,5 +1,5 @@
 """
-Agent tests — test agent responses and fallback behavior.
+Agent tests - test agent responses and fallback behavior.
 """
 import pytest
 from unittest.mock import patch, AsyncMock

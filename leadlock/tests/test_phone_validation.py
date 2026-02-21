@@ -1,5 +1,5 @@
 """
-Tests for src/services/phone_validation.py — phone normalization, validation, lookup, masking.
+Tests for src/services/phone_validation.py - phone normalization, validation, lookup, masking.
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch

@@ -1,5 +1,5 @@
 """
-Tests for src/workers/followup_scheduler.py — follow-up scheduler worker.
+Tests for src/workers/followup_scheduler.py - follow-up scheduler worker.
 
 Covers:
 - _heartbeat(): Redis heartbeat storage and error handling
@@ -119,7 +119,7 @@ def _make_task(
 
 
 class TestHeartbeat:
-    """Tests for _heartbeat() — Redis health check storage."""
+    """Tests for _heartbeat() - Redis health check storage."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
         redis_mock = AsyncMock()
@@ -146,7 +146,7 @@ class TestHeartbeat:
 
 
 class TestRunFollowupScheduler:
-    """Tests for run_followup_scheduler() — main loop."""
+    """Tests for run_followup_scheduler() - main loop."""
 
     async def test_loop_calls_process_then_heartbeat_then_sleeps(self):
         """Verify the loop calls process_due_tasks, _heartbeat, and sleeps."""
@@ -204,7 +204,7 @@ class TestRunFollowupScheduler:
 
 
 class TestProcessDueTasks:
-    """Tests for process_due_tasks() — finds and dispatches tasks."""
+    """Tests for process_due_tasks() - finds and dispatches tasks."""
 
     async def test_no_tasks_returns_early(self, db):
         """When there are no pending tasks, process_due_tasks returns early."""
@@ -324,7 +324,7 @@ class TestProcessDueTasks:
 
 
 class TestExecuteFollowupTask:
-    """Tests for execute_followup_task() — the main execution logic."""
+    """Tests for execute_followup_task() - the main execution logic."""
 
     # ---- Skip paths ----
 
@@ -602,7 +602,7 @@ class TestExecuteFollowupTask:
         db.add_all([client, consent, lead, task])
         await db.commit()
 
-        msg_text = "Hi Jane, just following up on AC Repair — Cool HVAC Co"
+        msg_text = "Hi Jane, just following up on AC Repair - Cool HVAC Co"
         followup_resp = FollowupResponse(
             message=msg_text,
             followup_type="cold_nurture",
@@ -664,7 +664,7 @@ class TestExecuteFollowupTask:
         assert lead.cold_outreach_count == 0  # not incremented
 
     async def test_send_sms_result_without_optional_keys(self, db):
-        """SMS result dict may be missing optional keys — defaults apply."""
+        """SMS result dict may be missing optional keys - defaults apply."""
         lead_id, client_id, consent_id = _make_ids()
         client = _make_client(client_id, tier="pro")
         consent = _make_consent(consent_id, client_id)
@@ -679,7 +679,7 @@ class TestExecuteFollowupTask:
             followup_type="cold_nurture",
             sequence_number=1,
         )
-        # Minimal SMS result — missing optional keys
+        # Minimal SMS result - missing optional keys
         sms_result = {}
 
         with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \

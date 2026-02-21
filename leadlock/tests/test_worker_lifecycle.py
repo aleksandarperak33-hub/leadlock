@@ -1,5 +1,5 @@
 """
-Tests for src/workers/lead_lifecycle.py — long-term lead state management.
+Tests for src/workers/lead_lifecycle.py - long-term lead state management.
 """
 import uuid
 from contextlib import asynccontextmanager

@@ -1,5 +1,5 @@
 """
-Sales Engine API — endpoints for scraping, outreach, email webhooks, and config.
+Sales Engine API - endpoints for scraping, outreach, email webhooks, and config.
 Public endpoints: inbound email webhook, email event webhook, unsubscribe.
 Admin endpoints: config, metrics, scrape jobs, prospects, email threads, blacklist.
 """
@@ -89,7 +89,7 @@ async def _trigger_sms_followup(
         generate_followup_sms_body,
     )
 
-    # Check quiet hours — if outside, queue for later via task queue
+    # Check quiet hours - if outside, queue for later via task queue
     if not is_within_sms_quiet_hours(prospect.state_code):
         try:
             from src.services.task_dispatch import enqueue_task
@@ -144,12 +144,12 @@ async def _verify_sendgrid_webhook(request: Request) -> bool:
     if not verification_key:
         if settings.environment == "production":
             logger.error(
-                "SENDGRID_WEBHOOK_VERIFICATION_KEY not set in production — "
+                "SENDGRID_WEBHOOK_VERIFICATION_KEY not set in production - "
                 "rejecting unauthenticated webhook traffic."
             )
             return False
         logger.warning(
-            "SENDGRID_WEBHOOK_VERIFICATION_KEY not set — accepting webhook without "
+            "SENDGRID_WEBHOOK_VERIFICATION_KEY not set - accepting webhook without "
             "verification. Set this key and add ?token=<key> to your SendGrid webhook URLs."
         )
         return True
@@ -174,7 +174,7 @@ async def inbound_email_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    SendGrid Inbound Parse webhook — handles email replies from prospects.
+    SendGrid Inbound Parse webhook - handles email replies from prospects.
     When a prospect replies, update their outreach record and record the email.
     """
     try:
@@ -251,16 +251,6 @@ async def inbound_email_webhook(
                 "email_replied", prospect, email_record, signal_value,
             )
 
-        # Increment campaign reply counter
-        if prospect.campaign_id:
-            try:
-                from src.models.campaign import Campaign
-                campaign_obj = await db.get(Campaign, prospect.campaign_id)
-                if campaign_obj:
-                    campaign_obj.total_replied = (campaign_obj.total_replied or 0) + 1
-            except Exception as camp_err:
-                logger.warning("Campaign counter update failed: %s", str(camp_err))
-
         # Persist reply classification and prospect updates before attempting SMS
         await db.commit()
 
@@ -299,7 +289,7 @@ async def email_events_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    SendGrid Event Webhook — tracks opens, clicks, bounces, etc.
+    SendGrid Event Webhook - tracks opens, clicks, bounces, etc.
     Events are matched by sendgrid_message_id or custom args.
     """
     try:
@@ -381,15 +371,6 @@ async def email_events_webhook(
                             await _record_email_signal(
                                 "email_opened", prospect, email_record, 1.0,
                             )
-                            # Increment campaign open counter
-                            if prospect.campaign_id:
-                                try:
-                                    from src.models.campaign import Campaign
-                                    camp = await db.get(Campaign, prospect.campaign_id)
-                                    if camp:
-                                        camp.total_opened = (camp.total_opened or 0) + 1
-                                except Exception:
-                                    pass
                 elif event_type == "click" and not email_record.clicked_at:
                     email_record.clicked_at = timestamp
                     # Record reputation event
@@ -406,7 +387,7 @@ async def email_events_webhook(
                                 "email_clicked", prospect, email_record, 1.0,
                             )
                 elif event_type in ("bounce", "blocked"):
-                    # Hard bounce or block — count as real bounce
+                    # Hard bounce or block - count as real bounce
                     email_record.bounced_at = timestamp
                     email_record.bounce_type = event.get("type", event_type)
                     email_record.bounce_reason = event.get("reason", "")
@@ -490,7 +471,7 @@ async def email_events_webhook(
                                         "Failed to auto-blacklist email/domain: %s", str(bl_err)
                                     )
                 elif event_type == "deferred":
-                    # Deferred is temporary — do NOT count as bounce
+                    # Deferred is temporary - do NOT count as bounce
                     email_record.bounce_type = "deferred"
                     email_record.bounce_reason = event.get("reason", "")
                     logger.info(
@@ -499,7 +480,7 @@ async def email_events_webhook(
                         event.get("reason", "unknown"),
                     )
                 elif event_type == "spamreport":
-                    # Record reputation event — spam complaints are CRITICAL
+                    # Record reputation event - spam complaints are CRITICAL
                     if redis:
                         try:
                             await record_email_event(redis, "complained")
@@ -810,7 +791,7 @@ async def trigger_scrape_job(
     if not city or not state:
         raise HTTPException(status_code=400, detail="city and state are required")
 
-    # Generate job ID upfront — background task creates the DB record
+    # Generate job ID upfront - background task creates the DB record
     # in its own session to avoid race condition with handler's uncommitted tx
     job_id = str(uuid.uuid4())
 
@@ -847,7 +828,7 @@ async def _run_scrape_background(
         variant_idx, offset = await get_next_variant_and_offset(db, city, state, trade)
 
         if variant_idx == -1:
-            # All slots exhausted — fall back to variant 0, offset 0
+            # All slots exhausted - fall back to variant 0, offset 0
             variant_idx, offset = 0, 0
             logger.info("All query variants exhausted for %s in %s, restarting from beginning", trade, location_str)
 
@@ -953,7 +934,7 @@ async def _run_scrape_background(
             job.completed_at = datetime.now(timezone.utc)
 
             logger.info(
-                "Manual scrape completed: %s in %s (variant=%d query='%s') — "
+                "Manual scrape completed: %s in %s (variant=%d query='%s') - "
                 "found=%d new=%d dupes=%d",
                 trade, location_str, variant_idx, query,
                 len(all_results), new_count, dupe_count,
@@ -1388,13 +1369,60 @@ async def list_campaigns(
     count_result = await db.execute(select(func.count()).select_from(Campaign))
     total = count_result.scalar() or 0
 
+    # Subquery: per-campaign outbound email stats (sent, opened)
+    from src.models.outreach_email import OutreachEmail
+
+    outbound_stats = (
+        select(
+            Outreach.campaign_id.label("campaign_id"),
+            func.count().label("sent"),
+            func.count(OutreachEmail.opened_at).label("opened"),
+        )
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(OutreachEmail.direction == "outbound")
+        .group_by(Outreach.campaign_id)
+    ).subquery("outbound_stats")
+
+    # Subquery: per-campaign inbound reply count
+    inbound_stats = (
+        select(
+            Outreach.campaign_id.label("campaign_id"),
+            func.count().label("replied"),
+        )
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(OutreachEmail.direction == "inbound")
+        .group_by(Outreach.campaign_id)
+    ).subquery("inbound_stats")
+
+    # Subquery: per-campaign prospect count
+    prospect_stats = (
+        select(
+            Outreach.campaign_id.label("campaign_id"),
+            func.count().label("prospect_count"),
+        )
+        .select_from(Outreach)
+        .where(Outreach.campaign_id.isnot(None))
+        .group_by(Outreach.campaign_id)
+    ).subquery("prospect_stats")
+
     result = await db.execute(
-        select(Campaign)
+        select(
+            Campaign,
+            func.coalesce(outbound_stats.c.sent, 0).label("calc_sent"),
+            func.coalesce(outbound_stats.c.opened, 0).label("calc_opened"),
+            func.coalesce(inbound_stats.c.replied, 0).label("calc_replied"),
+            func.coalesce(prospect_stats.c.prospect_count, 0).label("calc_prospects"),
+        )
+        .outerjoin(outbound_stats, Campaign.id == outbound_stats.c.campaign_id)
+        .outerjoin(inbound_stats, Campaign.id == inbound_stats.c.campaign_id)
+        .outerjoin(prospect_stats, Campaign.id == prospect_stats.c.campaign_id)
         .order_by(desc(Campaign.created_at))
         .offset((page - 1) * per_page)
         .limit(per_page)
     )
-    campaigns = result.scalars().all()
+    rows = result.all()
 
     return {
         "campaigns": [
@@ -1407,12 +1435,13 @@ async def list_campaigns(
                 "target_locations": c.target_locations or [],
                 "sequence_steps": c.sequence_steps or [],
                 "daily_limit": c.daily_limit,
-                "total_sent": c.total_sent,
-                "total_opened": c.total_opened,
-                "total_replied": c.total_replied,
+                "total_sent": calc_sent,
+                "total_opened": calc_opened,
+                "total_replied": calc_replied,
+                "prospect_count": calc_prospects,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
             }
-            for c in campaigns
+            for c, calc_sent, calc_opened, calc_replied, calc_prospects in rows
         ],
         "total": total,
         "page": page,
@@ -1847,7 +1876,7 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             "type": "scrape_completed",
             "timestamp": j.completed_at.isoformat() if j.completed_at else None,
             "prospect_name": None,
-            "detail": f"{j.trade_type} in {j.city}, {j.state_code} — {j.new_prospects_created} new",
+            "detail": f"{j.trade_type} in {j.city}, {j.state_code} - {j.new_prospects_created} new",
         })
 
     # Recent unsubscribes
@@ -1888,14 +1917,14 @@ def _compute_alerts(data: dict) -> list:
             alerts.append({
                 "severity": "critical",
                 "type": "bounce_rate",
-                "message": f"Bounce rate is {bounce_rate:.1f}% — above 10% threshold",
+                "message": f"Bounce rate is {bounce_rate:.1f}% - above 10% threshold",
                 "value": round(bounce_rate, 1),
             })
         elif bounce_rate > 5:
             alerts.append({
                 "severity": "warning",
                 "type": "bounce_rate",
-                "message": f"Bounce rate is {bounce_rate:.1f}% — approaching 10% limit",
+                "message": f"Bounce rate is {bounce_rate:.1f}% - approaching 10% limit",
                 "value": round(bounce_rate, 1),
             })
 
@@ -1907,7 +1936,7 @@ def _compute_alerts(data: dict) -> list:
             alerts.append({
                 "severity": "critical",
                 "type": "worker_down",
-                "message": f"Worker '{name}' is unhealthy — no heartbeat",
+                "message": f"Worker '{name}' is unhealthy - no heartbeat",
                 "value": name,
             })
         elif health == "warning":
@@ -1942,7 +1971,7 @@ def _compute_alerts(data: dict) -> list:
         alerts.append({
             "severity": "info",
             "type": "send_window_closed",
-            "message": "Send window is closed — emails paused",
+            "message": "Send window is closed - emails paused",
             "value": send_window.get("next_open"),
         })
 
@@ -1955,7 +1984,7 @@ async def get_command_center(
     admin=Depends(get_current_admin),
 ):
     """
-    Aggregated command center data — single endpoint for the ops dashboard.
+    Aggregated command center data - single endpoint for the ops dashboard.
     Returns system status, email pipeline, funnel, scraper stats,
     sequence performance, geo performance, recent emails, activity feed, and alerts.
     """
@@ -2046,7 +2075,7 @@ async def get_command_center(
             "lost": funnel_raw.get("lost", 0),
         }
 
-        # 6. Email metrics — today
+        # 6. Email metrics - today
         today_email = await db.execute(
             select(
                 func.count().label("sent"),
@@ -2084,7 +2113,7 @@ async def get_command_center(
 
         daily_limit = config.daily_email_limit if config else 50
 
-        # 7. Email metrics — 30d
+        # 7. Email metrics - 30d
         email_30d = await db.execute(
             select(
                 func.count().label("sent"),
@@ -2111,7 +2140,7 @@ async def get_command_center(
         )
         period_replies = reply_30d_result.scalar() or 0
 
-        # 8. Email metrics — prev 30d (for trends)
+        # 8. Email metrics - prev 30d (for trends)
         email_prev = await db.execute(
             select(
                 func.count().label("sent"),
@@ -2187,7 +2216,7 @@ async def get_command_center(
                 "reply_rate": _rate(step_replied, step_sent),
             })
 
-        # 10. Scraper stats — today
+        # 10. Scraper stats - today
         scraper_today = await db.execute(
             select(
                 func.coalesce(func.sum(ScrapeJob.new_prospects_created), 0).label("new_today"),

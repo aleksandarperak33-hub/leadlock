@@ -1,5 +1,5 @@
 """
-Cold email service — SendGrid outbound with CAN-SPAM compliance.
+Cold email service - SendGrid outbound with CAN-SPAM compliance.
 Every email gets a CAN-SPAM footer, List-Unsubscribe header, and custom_args for webhook tracking.
 Includes retry logic with exponential backoff for transient SendGrid errors.
 """
@@ -100,7 +100,7 @@ async def send_cold_email(
         plain_body = re.sub(r"\s+", " ", plain_body).strip()
         full_text = plain_body + footer_text
 
-        # Build Mail — text/plain MUST be added before text/html per SendGrid
+        # Build Mail - text/plain MUST be added before text/html per SendGrid
         message = Mail(
             from_email=Email(from_email, from_name),
             to_emails=To(to_email, to_name),
@@ -112,7 +112,7 @@ async def send_cold_email(
         ]
         message.reply_to = ReplyTo(reply_to)
 
-        # Headers (add individually — Mail.headers has no setter)
+        # Headers (add individually - Mail.headers has no setter)
         message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
         message.header = Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
         if in_reply_to:

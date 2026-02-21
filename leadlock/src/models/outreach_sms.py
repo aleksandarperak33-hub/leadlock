@@ -1,5 +1,5 @@
 """
-OutreachSMS model — tracks SMS messages in the outreach pipeline.
+OutreachSMS model - tracks SMS messages in the outreach pipeline.
 SMS only triggers after email reply expressing interest (TCPA compliance).
 Cold SMS to prospects without prior consent is illegal.
 """

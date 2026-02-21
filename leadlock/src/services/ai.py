@@ -1,5 +1,5 @@
 """
-AI service — Anthropic primary, OpenAI fallback.
+AI service - Anthropic primary, OpenAI fallback.
 Hard 10-second timeout on ALL AI calls. Never block the SMS response path.
 Tracks cost, latency, and token usage for every call.
 """
@@ -77,7 +77,7 @@ async def generate_response(
         except Exception as e:
             logger.error("OpenAI fallback also failed: %s", str(e))
 
-    # Both failed — return error
+    # Both failed - return error
     return {
         "content": "",
         "provider": "none",

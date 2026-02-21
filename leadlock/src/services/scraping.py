@@ -1,5 +1,5 @@
 """
-Scraping service — local business discovery via Brave Search API.
+Scraping service - local business discovery via Brave Search API.
 Two-step process: web search for location IDs → POI details for business data.
 Fetches ALL location IDs (not just first 20) by batching POI requests.
 """
@@ -80,7 +80,7 @@ async def search_local_businesses(
             search_data = response.json()
             total_cost += BRAVE_COST_PER_SEARCH
 
-            # Extract location IDs — Brave returns ALL matching IDs (often 50-100+)
+            # Extract location IDs - Brave returns ALL matching IDs (often 50-100+)
             locations_obj = search_data.get("locations") or {}
             locations = locations_obj.get("results") or []
             if not locations:
@@ -123,23 +123,23 @@ async def search_local_businesses(
         for poi in all_poi_data:
             if not poi:
                 continue
-            # Name — Brave uses "title" not "name"
+            # Name - Brave uses "title" not "name"
             name = poi.get("title") or poi.get("name") or ""
 
-            # Address — Brave uses postal_address.displayAddress
+            # Address - Brave uses postal_address.displayAddress
             postal_addr = poi.get("postal_address") or {}
             full_address = postal_addr.get("displayAddress") or ""
 
-            # Phone — in contact.telephone
+            # Phone - in contact.telephone
             phone = ""
             contact = poi.get("contact") or {}
             if contact.get("telephone"):
                 phone = contact["telephone"]
 
-            # Website — Brave uses "url"
+            # Website - Brave uses "url"
             website = poi.get("url") or ""
 
-            # Rating — check nested "results" array for aggregateRating
+            # Rating - check nested "results" array for aggregateRating
             rating = None
             review_count = None
             nested_results = poi.get("results") or []
@@ -153,7 +153,7 @@ async def search_local_businesses(
                             review_count = rating_obj["ratingCount"]
                         break
 
-            # Place ID — deterministic hash with normalized name for stable dedup
+            # Place ID - deterministic hash with normalized name for stable dedup
             normalized_name = normalize_biz_name(name)
             hash_input = f"{normalized_name}|{phone}|{full_address}".lower()
             place_id = f"brave_{hashlib.sha256(hash_input.encode()).hexdigest()[:12]}"
@@ -209,7 +209,7 @@ def parse_address_components(address: str) -> dict:
     if zip_match:
         result["zip"] = zip_match.group(1)
 
-    # Try to extract state code — anchor after comma and before ZIP to avoid
+    # Try to extract state code - anchor after comma and before ZIP to avoid
     # matching directional prefixes (NW, SE, etc.) or other 2-letter words
     state_match = re.search(r",\s*([A-Z]{2})\s+\d{5}", address)
     if state_match:

@@ -1,5 +1,5 @@
 """
-Failed lead dead letter queue — captures leads that failed at any pipeline stage.
+Failed lead dead letter queue - captures leads that failed at any pipeline stage.
 Supports retry with exponential backoff and manual resolution.
 """
 import uuid

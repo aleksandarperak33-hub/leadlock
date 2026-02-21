@@ -1,5 +1,5 @@
 """
-Tests for src/services/ai.py — AI response generation with Anthropic primary + OpenAI fallback.
+Tests for src/services/ai.py - AI response generation with Anthropic primary + OpenAI fallback.
 Covers: cost calculation, model tier selection, provider failover, error dict on total failure.
 """
 import pytest
@@ -48,7 +48,7 @@ class TestCalculateCost:
 
 
 # ---------------------------------------------------------------------------
-# generate_response — model tier selection and failover
+# generate_response - model tier selection and failover
 # ---------------------------------------------------------------------------
 
 def _make_mock_settings(**overrides):

@@ -1,5 +1,5 @@
 """
-Tests for src/workers/crm_sync.py — CRM synchronization worker.
+Tests for src/workers/crm_sync.py - CRM synchronization worker.
 """
 import uuid
 from contextlib import asynccontextmanager
@@ -86,7 +86,7 @@ async def mock_session():
 
 
 # ---------------------------------------------------------------------------
-# sync_booking — success path
+# sync_booking - success path
 # ---------------------------------------------------------------------------
 
 class TestSyncBookingSuccess:
@@ -136,7 +136,7 @@ class TestSyncBookingSuccess:
 
 
 # ---------------------------------------------------------------------------
-# sync_booking — CRM error / retry
+# sync_booking - CRM error / retry
 # ---------------------------------------------------------------------------
 
 class TestSyncBookingCRMError:
@@ -209,7 +209,7 @@ class TestSyncBookingCRMError:
 
 
 # ---------------------------------------------------------------------------
-# sync_booking — missing lead/client
+# sync_booking - missing lead/client
 # ---------------------------------------------------------------------------
 
 class TestSyncBookingMissingEntities:
@@ -275,7 +275,7 @@ class TestSyncBookingMissingEntities:
 
 
 # ---------------------------------------------------------------------------
-# sync_pending_bookings — retry and max retries
+# sync_pending_bookings - retry and max retries
 # ---------------------------------------------------------------------------
 
 class TestSyncPendingBookingsRetry:

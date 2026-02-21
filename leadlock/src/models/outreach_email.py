@@ -1,5 +1,5 @@
 """
-OutreachEmail model — tracks individual emails in outreach sequences.
+OutreachEmail model - tracks individual emails in outreach sequences.
 Records both outbound (sent by sales engine) and inbound (replies from prospects).
 """
 import uuid

@@ -1,5 +1,5 @@
 """
-Extended tests for src/services/scheduling.py — covers TimeSlot repr,
+Extended tests for src/services/scheduling.py - covers TimeSlot repr,
 Saturday hours, existing bookings deduction, and overflow break.
 """
 import pytest
@@ -54,7 +54,7 @@ class TestSaturdayHours:
 
     def test_saturday_with_partial_saturday_hours(self):
         """Saturday hours uses .get defaults when keys are missing (line 62 defaults)."""
-        # Only provide "start" — "end" should default to "14:00"
+        # Only provide "start" - "end" should default to "14:00"
         slots = generate_available_slots(
             start_date=date(2026, 2, 21),
             days_ahead=1,

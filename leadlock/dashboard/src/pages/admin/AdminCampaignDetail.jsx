@@ -247,7 +247,7 @@ function ProspectsTab({ prospects, total, page, search, showAssign, assignFilter
 
       {total > 25 && (
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
-          <span className="text-xs text-gray-400">Page {page} of {Math.ceil(total / 25)}</span>
+          <span className="text-xs text-gray-400 font-mono">Page {page} of {Math.ceil(total / 25)}</span>
           <div className="flex gap-1.5">
             <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1} className="px-3 py-1.5 rounded-lg text-xs text-gray-500 bg-white border border-gray-200 disabled:opacity-40 cursor-pointer">Prev</button>
             <button onClick={() => onPage(page + 1)} disabled={page >= Math.ceil(total / 25)} className="px-3 py-1.5 rounded-lg text-xs text-gray-500 bg-white border border-gray-200 disabled:opacity-40 cursor-pointer">Next</button>
@@ -521,9 +521,9 @@ export default function AdminCampaignDetail() {
     );
   }
 
-  const totalSent = campaign.emails?.sent || campaign.total_sent || 0;
-  const openRate = campaign.emails?.open_rate ?? (totalSent ? ((campaign.total_opened || 0) / totalSent * 100).toFixed(1) : '0');
-  const replyRate = campaign.emails?.reply_rate ?? (totalSent ? ((campaign.total_replied || 0) / totalSent * 100).toFixed(1) : '0');
+  const totalSent = campaign.total_sent ?? campaign.emails?.sent ?? 0;
+  const openRate = campaign.emails?.open_rate ?? (totalSent ? ((campaign.total_opened ?? 0) / totalSent * 100).toFixed(1) : '0');
+  const replyRate = campaign.emails?.reply_rate ?? (totalSent ? ((campaign.total_replied ?? 0) / totalSent * 100).toFixed(1) : '0');
   const bounceRate = campaign.emails?.bounce_rate ?? '0';
 
   return (

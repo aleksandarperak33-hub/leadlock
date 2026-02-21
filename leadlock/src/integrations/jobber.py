@@ -1,5 +1,5 @@
 """
-Jobber CRM integration — GraphQL API.
+Jobber CRM integration - GraphQL API.
 
 Auth: Bearer token via API key.
 Docs: https://developer.getjobber.com/docs

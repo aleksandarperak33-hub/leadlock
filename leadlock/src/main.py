@@ -1,5 +1,5 @@
 """
-LeadLock — AI Speed-to-Lead Platform for Home Services.
+LeadLock - AI Speed-to-Lead Platform for Home Services.
 Main FastAPI application entry point.
 """
 import asyncio
@@ -40,12 +40,12 @@ async def lifespan(app: FastAPI):
     # Security warnings
     if not settings.dashboard_jwt_secret:
         logger.warning(
-            "DASHBOARD_JWT_SECRET not set — falling back to APP_SECRET_KEY. "
+            "DASHBOARD_JWT_SECRET not set - falling back to APP_SECRET_KEY. "
             "Set a dedicated JWT secret for production."
         )
     if not settings.encryption_key:
         logger.warning(
-            "ENCRYPTION_KEY not set — CRM API keys will be stored unencrypted. "
+            "ENCRYPTION_KEY not set - CRM API keys will be stored unencrypted. "
             "Generate a Fernet key for production."
         )
 
@@ -105,12 +105,12 @@ async def lifespan(app: FastAPI):
     worker_tasks.append(asyncio.create_task(run_lead_lifecycle()))
     logger.info("Lead lifecycle worker started")
 
-    # Registration poller — monitors A2P / toll-free registration status
+    # Registration poller - monitors A2P / toll-free registration status
     from src.workers.registration_poller import run_registration_poller
     worker_tasks.append(asyncio.create_task(run_registration_poller()))
     logger.info("Registration poller started")
 
-    # Sales engine workers — gated behind config flag
+    # Sales engine workers - gated behind config flag
     if settings.sales_engine_enabled:
         if not settings.brave_api_key:
             logger.error(
@@ -165,8 +165,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Graceful shutdown — give workers time to finish current work
-    logger.info("LeadLock shutting down — stopping %d workers...", len(worker_tasks))
+    # Graceful shutdown - give workers time to finish current work
+    logger.info("LeadLock shutting down - stopping %d workers...", len(worker_tasks))
     for task in worker_tasks:
         task.cancel()
     if worker_tasks:
@@ -176,7 +176,7 @@ async def lifespan(app: FastAPI):
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-    logger.info("LeadLock shutdown complete — all %d workers stopped", len(worker_tasks))
+    logger.info("LeadLock shutdown complete - all %d workers stopped", len(worker_tasks))
 
 
 def create_app() -> FastAPI:
@@ -193,7 +193,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — allow dashboard origin
+    # CORS - allow dashboard origin
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

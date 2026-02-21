@@ -1,5 +1,5 @@
 """
-Tests for src/workers/health_monitor.py — system health checks.
+Tests for src/workers/health_monitor.py - system health checks.
 """
 import logging
 from contextlib import asynccontextmanager
@@ -24,14 +24,14 @@ async def mock_session():
 
 
 # ---------------------------------------------------------------------------
-# check_health — database checks
+# check_health - database checks
 # ---------------------------------------------------------------------------
 
 class TestCheckHealthDatabase:
     """Database connectivity checks inside check_health."""
 
     async def test_db_select_1_success(self):
-        """DB SELECT 1 succeeds — no error logged."""
+        """DB SELECT 1 succeeds - no error logged."""
         mock_db_session = mock_session()
 
         with patch(
@@ -69,7 +69,7 @@ class TestCheckHealthDatabase:
         @asynccontextmanager
         async def failing_session():
             raise ConnectionError("DB unreachable")
-            yield  # noqa: unreachable — required for generator
+            yield  # noqa: unreachable - required for generator
 
         with (
             patch("src.database.async_session_factory", side_effect=failing_session),
@@ -88,14 +88,14 @@ class TestCheckHealthDatabase:
 
 
 # ---------------------------------------------------------------------------
-# check_health — Redis checks
+# check_health - Redis checks
 # ---------------------------------------------------------------------------
 
 class TestCheckHealthRedis:
     """Redis connectivity checks inside check_health."""
 
     async def test_redis_ping_success(self):
-        """Redis ping succeeds — no warning logged."""
+        """Redis ping succeeds - no warning logged."""
         mock_db_ctx = mock_session()
 
         with (

@@ -1,5 +1,5 @@
 """
-Metrics API — lead funnel, deliverability, cost tracking, response times.
+Metrics API - lead funnel, deliverability, cost tracking, response times.
 Used by the admin dashboard for real-time monitoring.
 """
 import logging
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 @router.get("/deliverability")
 async def get_deliverability_metrics(admin: Client = Depends(get_current_admin)):
     """
-    Get SMS deliverability metrics — delivery rates, reputation scores, per-number stats.
+    Get SMS deliverability metrics - delivery rates, reputation scores, per-number stats.
     This is the key endpoint for diagnosing reputation issues.
     """
     from src.services.deliverability import get_deliverability_summary
@@ -43,7 +43,7 @@ async def get_lead_funnel(
     admin: Client = Depends(get_current_admin),
 ):
     """
-    Lead funnel metrics — count of leads in each state over a time period.
+    Lead funnel metrics - count of leads in each state over a time period.
     Shows conversion rates through the pipeline.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -118,7 +118,7 @@ async def get_response_times(
     admin: Client = Depends(get_current_admin),
 ):
     """
-    Response time metrics — how fast we're responding to leads.
+    Response time metrics - how fast we're responding to leads.
     Target: <10 seconds for first response.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -188,7 +188,7 @@ async def get_cost_metrics(
     admin: Client = Depends(get_current_admin),
 ):
     """
-    Cost tracking — SMS and AI costs aggregated by period.
+    Cost tracking - SMS and AI costs aggregated by period.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 

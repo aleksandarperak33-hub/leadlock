@@ -18,7 +18,7 @@ const SIZE_CLASSES = {
 };
 
 /**
- * Badge — Small inline status indicator with color variants.
+ * Badge - Small inline status indicator with color variants.
  *
  * @param {string} [variant='neutral'] - Color variant: success | warning | danger | info | neutral
  * @param {string} [size='sm'] - Size variant: sm | md

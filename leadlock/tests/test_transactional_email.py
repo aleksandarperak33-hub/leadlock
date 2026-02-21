@@ -1,5 +1,5 @@
 """
-Transactional email tests — password reset, verification, welcome, billing.
+Transactional email tests - password reset, verification, welcome, billing.
 All SendGrid calls are mocked.
 """
 import pytest

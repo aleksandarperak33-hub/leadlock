@@ -1,5 +1,5 @@
 """
-Extended tests for src/services/outreach_sms.py — covers generate_followup_sms_body
+Extended tests for src/services/outreach_sms.py - covers generate_followup_sms_body
 (lines 221-249): AI success path and fallback template.
 """
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
-# generate_followup_sms_body — AI success (lines 221-244)
+# generate_followup_sms_body - AI success (lines 221-244)
 # ---------------------------------------------------------------------------
 
 class TestGenerateFollowupSmsBody:
@@ -35,7 +35,7 @@ class TestGenerateFollowupSmsBody:
         mock_settings.anthropic_model_fast = "claude-haiku"
 
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="  Saw your reply — want to hop on a quick call this week?  ")]
+        mock_response.content = [MagicMock(text="  Saw your reply - want to hop on a quick call this week?  ")]
 
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -49,7 +49,7 @@ class TestGenerateFollowupSmsBody:
             prospect = self._make_prospect()
             result = await generate_followup_sms_body(prospect)
 
-            assert result == "Saw your reply — want to hop on a quick call this week?"
+            assert result == "Saw your reply - want to hop on a quick call this week?"
             mock_client.messages.create.assert_called_once()
 
             # Verify model used

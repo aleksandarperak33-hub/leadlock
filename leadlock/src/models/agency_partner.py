@@ -1,5 +1,5 @@
 """
-Agency partner model — referral partners who bring clients to LeadLock.
+Agency partner model - referral partners who bring clients to LeadLock.
 Revenue share: 25% of monthly fee for referred clients.
 """
 import uuid

@@ -1,5 +1,5 @@
 """
-Database models — import all models here so Alembic can discover them.
+Database models - import all models here so Alembic can discover them.
 """
 from src.models.client import Client
 from src.models.lead import Lead

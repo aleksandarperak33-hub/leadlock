@@ -1,5 +1,5 @@
 """
-EmailBlacklist model — prevents sending to specific emails or domains.
+EmailBlacklist model - prevents sending to specific emails or domains.
 Used for manual blocks, competitor domains, and known-bad addresses.
 """
 import uuid

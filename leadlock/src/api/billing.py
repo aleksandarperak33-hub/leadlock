@@ -1,5 +1,5 @@
 """
-Billing API — Stripe checkout, billing portal, subscription status, and webhook.
+Billing API - Stripe checkout, billing portal, subscription status, and webhook.
 
 The webhook endpoint has NO auth (Stripe signature verification only).
 All other endpoints require JWT authentication.
@@ -211,7 +211,7 @@ async def plan_limits(
 @router.post("/api/v1/billing/webhook")
 async def stripe_webhook(request: Request):
     """
-    Stripe webhook endpoint. No JWT auth — uses Stripe signature verification.
+    Stripe webhook endpoint. No JWT auth - uses Stripe signature verification.
     """
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")

@@ -1,5 +1,5 @@
 """
-Admin Dashboard API — endpoints for the LeadLock operator dashboard.
+Admin Dashboard API - endpoints for the LeadLock operator dashboard.
 All endpoints require admin-level JWT authentication.
 """
 import logging
@@ -269,7 +269,7 @@ async def admin_health(
     db: AsyncSession = Depends(get_db),
     admin: Client = Depends(get_current_admin),
 ):
-    """System health — recent errors, integration status."""
+    """System health - recent errors, integration status."""
     from datetime import timedelta
     since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
 
@@ -501,7 +501,7 @@ async def convert_outreach(
             temp_password.encode(), bcrypt.gensalt()
         ).decode()
         logger.info(
-            "Created client from prospect %s — temporary password generated",
+            "Created client from prospect %s - temporary password generated",
             str(prospect.id)[:8],
         )
 

@@ -1,5 +1,5 @@
 """
-Phone number normalization — E.164 format using the phonenumbers library.
+Phone number normalization - E.164 format using the phonenumbers library.
 Handles all edge cases: parentheses, dashes, dots, spaces, missing country code.
 
 This module provides the canonical normalize function. The legacy
@@ -19,7 +19,7 @@ try:
     _HAS_PHONENUMBERS = True
 except ImportError:
     _HAS_PHONENUMBERS = False
-    logger.warning("phonenumbers library not installed — using regex fallback")
+    logger.warning("phonenumbers library not installed - using regex fallback")
 
 
 def normalize_phone_e164(phone: str, default_region: str = "US") -> Optional[str]:

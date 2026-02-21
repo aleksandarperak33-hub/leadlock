@@ -1,5 +1,5 @@
 """
-Extended tests for src/services/billing.py — covers all lines missing from
+Extended tests for src/services/billing.py - covers all lines missing from
 test_billing.py: _get_stripe, _run_sync, create_billing_portal_session,
 webhook signature/parsing errors, _handle_invoice_paid,
 _handle_subscription_updated, _handle_subscription_deleted, and additional
@@ -179,7 +179,7 @@ class TestCreateBillingPortalSession:
 
 
 # ---------------------------------------------------------------------------
-# handle_webhook — additional branches
+# handle_webhook - additional branches
 # ---------------------------------------------------------------------------
 
 class TestHandleWebhookExtended:
@@ -321,7 +321,7 @@ class TestHandleWebhookExtended:
 
 
 # ---------------------------------------------------------------------------
-# _handle_checkout_completed — additional branches
+# _handle_checkout_completed - additional branches
 # ---------------------------------------------------------------------------
 
 class TestHandleCheckoutCompletedExtended:
@@ -589,7 +589,7 @@ class TestHandleInvoicePaid:
 
 
 # ---------------------------------------------------------------------------
-# _handle_payment_failed — extended
+# _handle_payment_failed - extended
 # ---------------------------------------------------------------------------
 
 class TestHandlePaymentFailedExtended:

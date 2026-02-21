@@ -1,5 +1,5 @@
 """
-Tests for src/workers/task_processor.py — task processing, dispatch, and handlers.
+Tests for src/workers/task_processor.py - task processing, dispatch, and handlers.
 Covers: _heartbeat, run_task_processor, process_cycle, _execute_task,
 _dispatch_task, and all five handler functions.
 """

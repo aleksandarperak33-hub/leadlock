@@ -1,6 +1,6 @@
 """
 Holiday computation tests.
-Florida FTSA restricts messaging on state holidays — $500-$1,500/violation.
+Florida FTSA restricts messaging on state holidays - $500-$1,500/violation.
 """
 from datetime import date
 
@@ -30,15 +30,15 @@ class TestNthWeekday:
 
 class TestObservedDate:
     def test_saturday_observed_friday(self):
-        # July 4, 2026 is Saturday — observed on Friday July 3
+        # July 4, 2026 is Saturday - observed on Friday July 3
         assert _observed_date(date(2026, 7, 4)) == date(2026, 7, 3)
 
     def test_sunday_observed_monday(self):
-        # Jan 1, 2023 is Sunday — observed Monday Jan 2
+        # Jan 1, 2023 is Sunday - observed Monday Jan 2
         assert _observed_date(date(2023, 1, 1)) == date(2023, 1, 2)
 
     def test_weekday_unchanged(self):
-        # Jan 1, 2026 is Thursday — no adjustment
+        # Jan 1, 2026 is Thursday - no adjustment
         assert _observed_date(date(2026, 1, 1)) == date(2026, 1, 1)
 
 
@@ -56,7 +56,7 @@ class TestFederalHolidays:
         assert date(2026, 12, 25) in holidays
 
     def test_independence_day_2026_observed(self):
-        # July 4, 2026 is Saturday — observed Friday July 3
+        # July 4, 2026 is Saturday - observed Friday July 3
         holidays = get_federal_holidays(2026)
         assert date(2026, 7, 3) in holidays
 

@@ -1,6 +1,6 @@
 """
 Application configuration using pydantic-settings.
-All config is validated at startup — fail fast if anything is missing.
+All config is validated at startup - fail fast if anything is missing.
 """
 from pydantic_settings import BaseSettings
 from pydantic import Field

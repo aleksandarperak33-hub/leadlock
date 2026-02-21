@@ -1,5 +1,5 @@
 /**
- * PageHeader — Standard page header with title, optional subtitle, and action slot.
+ * PageHeader - Standard page header with title, optional subtitle, and action slot.
  *
  * @param {string} title - Page title text
  * @param {string} [subtitle] - Optional subtitle text

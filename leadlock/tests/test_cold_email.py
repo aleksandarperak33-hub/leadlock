@@ -1,5 +1,5 @@
 """
-Cold email service tests — SendGrid sending with CAN-SPAM compliance.
+Cold email service tests - SendGrid sending with CAN-SPAM compliance.
 All SendGrid calls are mocked.
 """
 import pytest

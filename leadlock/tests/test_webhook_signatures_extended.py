@@ -1,5 +1,5 @@
 """
-Extended tests for src/utils/webhook_signatures.py — covers HMAC exception path,
+Extended tests for src/utils/webhook_signatures.py - covers HMAC exception path,
 webhook source validation with secrets configured, and generic signing key path.
 """
 import hashlib
@@ -15,7 +15,7 @@ from src.utils.webhook_signatures import (
 
 
 # ---------------------------------------------------------------------------
-# validate_hmac_sha256 — exception path (lines 65-67)
+# validate_hmac_sha256 - exception path (lines 65-67)
 # ---------------------------------------------------------------------------
 
 class TestValidateHmacSha256Exception:
@@ -29,7 +29,7 @@ class TestValidateHmacSha256Exception:
 
 
 # ---------------------------------------------------------------------------
-# validate_webhook_source — with secrets configured (lines 111-112, 127-128, 138-139, 149-150, 154-156)
+# validate_webhook_source - with secrets configured (lines 111-112, 127-128, 138-139, 149-150, 154-156)
 # ---------------------------------------------------------------------------
 
 def _make_valid_signature(secret: str, body: bytes) -> str:

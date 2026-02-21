@@ -1,5 +1,5 @@
 """
-Outreach model — tracks LeadLock's own sales pipeline.
+Outreach model - tracks LeadLock's own sales pipeline.
 Each record is a prospective client being pursued.
 Extended with sales engine automation columns for scraping and email sequences.
 """

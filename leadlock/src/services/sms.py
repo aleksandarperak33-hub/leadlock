@@ -1,5 +1,5 @@
 """
-SMS service — Twilio primary, Telnyx failover.
+SMS service - Twilio primary, Telnyx failover.
 Every message goes through compliance check before sending.
 Tracks delivery status, segment count, and cost.
 
@@ -139,7 +139,7 @@ def enforce_message_length(message: str) -> tuple[str, int, str]:
 
 
 def mask_phone(phone: str) -> str:
-    """Mask phone number for logging — show first 6 digits only."""
+    """Mask phone number for logging - show first 6 digits only."""
     if len(phone) > 6:
         return phone[:6] + "***"
     return phone
@@ -356,7 +356,7 @@ async def send_sms(
             last_error = str(e)
             last_error_code = error_code
 
-            # Permanent errors — don't retry
+            # Permanent errors - don't retry
             if error_class in ("permanent", "opt_out", "landline", "invalid"):
                 logger.warning(
                     "Twilio permanent error for %s: code=%s class=%s",
@@ -375,7 +375,7 @@ async def send_sms(
                     "is_landline": error_class == "landline",
                 }
 
-            # Transient error — retry with backoff
+            # Transient error - retry with backoff
             if attempt < MAX_RETRIES:
                 delay = RETRY_DELAYS_SECONDS[min(attempt, len(RETRY_DELAYS_SECONDS) - 1)]
                 logger.warning(

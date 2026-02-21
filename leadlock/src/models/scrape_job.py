@@ -1,5 +1,5 @@
 """
-ScrapeJob model — tracks what areas have been scraped and when.
+ScrapeJob model - tracks what areas have been scraped and when.
 Prevents re-scraping the same location too frequently.
 """
 import uuid
@@ -31,7 +31,7 @@ class ScrapeJob(Base):
         String(20), default="pending", nullable=False
     )  # pending, running, completed, failed
 
-    # Query rotation tracking — enables "never repeat" scraping
+    # Query rotation tracking - enables "never repeat" scraping
     query_variant: Mapped[int] = mapped_column(Integer, default=0)
     search_offset: Mapped[int] = mapped_column(Integer, default=0)
 

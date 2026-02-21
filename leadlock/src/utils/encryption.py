@@ -16,7 +16,7 @@ def _get_fernet():
 
     key = settings.encryption_key
     if not key:
-        logger.warning("ENCRYPTION_KEY not configured — storing values as-is")
+        logger.warning("ENCRYPTION_KEY not configured - storing values as-is")
         return None
 
     return Fernet(key.encode() if isinstance(key, str) else key)
@@ -57,5 +57,5 @@ def decrypt_value(encrypted: str) -> Optional[str]:
     try:
         return fernet.decrypt(encrypted.encode()).decode()
     except Exception:
-        # Value may be legacy plaintext — return as-is
+        # Value may be legacy plaintext - return as-is
         return encrypted

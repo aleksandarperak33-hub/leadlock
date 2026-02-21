@@ -1,5 +1,5 @@
 """
-GoHighLevel CRM integration — REST API v2.
+GoHighLevel CRM integration - REST API v2.
 
 Auth: Bearer token via API key.
 Docs: https://highlevel.stoplight.io/docs/integrations

@@ -1,5 +1,5 @@
 """
-Tests for src/services/admin_reporting.py — system-wide admin dashboard metrics.
+Tests for src/services/admin_reporting.py - system-wide admin dashboard metrics.
 
 Uses the shared db fixture (SQLite in-memory) with real model inserts.
 """

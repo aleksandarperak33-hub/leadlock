@@ -29,9 +29,9 @@ const INITIAL_FORM = {
 };
 
 function CampaignCard({ campaign, onToggle, onClick }) {
-  const totalSent = campaign.total_sent || 0;
-  const totalOpened = campaign.total_opened || 0;
-  const totalReplied = campaign.total_replied || 0;
+  const totalSent = campaign.total_sent ?? 0;
+  const totalOpened = campaign.total_opened ?? 0;
+  const totalReplied = campaign.total_replied ?? 0;
   const openRate = totalSent > 0 ? ((totalOpened / totalSent) * 100).toFixed(1) : '0.0';
   const replyRate = totalSent > 0 ? ((totalReplied / totalSent) * 100).toFixed(1) : '0.0';
 

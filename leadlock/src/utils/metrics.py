@@ -1,5 +1,5 @@
 """
-Metrics utilities — helpers for calculating dashboard KPIs.
+Metrics utilities - helpers for calculating dashboard KPIs.
 """
 import time
 from datetime import datetime

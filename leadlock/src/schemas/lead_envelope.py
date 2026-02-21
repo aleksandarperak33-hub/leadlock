@@ -1,5 +1,5 @@
 """
-Normalized lead envelope — the universal input format for leads from ANY source.
+Normalized lead envelope - the universal input format for leads from ANY source.
 Every webhook normalizes its payload into this format before processing.
 """
 from datetime import datetime

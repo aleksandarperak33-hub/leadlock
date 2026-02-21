@@ -1,5 +1,5 @@
 """
-Email validation tests — format checking and MX record verification.
+Email validation tests - format checking and MX record verification.
 Prevents sending to invalid emails, protects sender reputation.
 """
 import sys

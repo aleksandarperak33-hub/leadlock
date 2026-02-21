@@ -1,5 +1,5 @@
 """
-Tests for src/services/twilio_registration.py — Twilio A2P registration service.
+Tests for src/services/twilio_registration.py - Twilio A2P registration service.
 
 Covers:
   - is_tollfree() helper
@@ -102,7 +102,7 @@ class TestIsTollfree:
         assert is_tollfree("+") is False
 
     def test_exact_four_digits_tollfree(self):
-        # Exactly 4 digits (1 + 3-digit area code) — minimum valid length
+        # Exactly 4 digits (1 + 3-digit area code) - minimum valid length
         assert is_tollfree("+1800") is True
 
     def test_exact_four_digits_not_tollfree(self):
@@ -353,7 +353,7 @@ class TestCreateCustomerProfile:
             result = await create_customer_profile(
                 business_name="Acme HVAC",
                 email="admin@acme.com",
-                business_info={},  # empty — all defaults
+                business_info={},  # empty - all defaults
             )
 
         assert result["error"] is None
@@ -685,7 +685,7 @@ class TestSubmitTollfreeVerification:
                 phone_sid="PN_phone_sid",
                 business_name="Acme HVAC",
                 email="admin@acme.com",
-                # website omitted — defaults to None
+                # website omitted - defaults to None
             )
 
         assert result["error"] is None

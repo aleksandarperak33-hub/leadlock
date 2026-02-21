@@ -1,5 +1,5 @@
 """
-Tests for src/services/outreach_sms.py — TCPA-compliant outreach SMS.
+Tests for src/services/outreach_sms.py - TCPA-compliant outreach SMS.
 Covers: quiet hours by state, send flow, prerequisite validation, timezone mapping.
 """
 import pytest
@@ -47,7 +47,7 @@ class TestGetProspectTimezone:
 # ---------------------------------------------------------------------------
 
 class TestIsWithinSmsQuietHours:
-    """Tests for TCPA quiet hours — returns True when sending IS allowed."""
+    """Tests for TCPA quiet hours - returns True when sending IS allowed."""
 
     def _patch_now(self, hour, minute=0, weekday=0, tz_name="America/Chicago"):
         """Create a patch that makes datetime.now(tz) return a specific time.
@@ -66,14 +66,14 @@ class TestIsWithinSmsQuietHours:
         assert result is True
 
     def test_general_blocked_7am(self):
-        """7 AM local time is before 8am — quiet hours."""
+        """7 AM local time is before 8am - quiet hours."""
         with patch("src.services.outreach_sms.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 18, 7, 30, tzinfo=ZoneInfo("America/Chicago"))
             result = is_within_sms_quiet_hours("TX")
         assert result is False
 
     def test_general_blocked_10pm(self):
-        """10 PM (22:00) is after 9pm — quiet hours."""
+        """10 PM (22:00) is after 9pm - quiet hours."""
         with patch("src.services.outreach_sms.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 18, 22, 0, tzinfo=ZoneInfo("America/Chicago"))
             result = is_within_sms_quiet_hours("TX")

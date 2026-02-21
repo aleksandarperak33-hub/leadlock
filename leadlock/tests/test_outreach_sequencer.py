@@ -1,5 +1,5 @@
 """
-Tests for src/workers/outreach_sequencer.py — outreach email sequence worker.
+Tests for src/workers/outreach_sequencer.py - outreach email sequence worker.
 Covers sanitize_dashes, is_within_send_window, _check_smart_timing,
 _heartbeat, _get_warmup_limit, _check_email_health, _calculate_cycle_cap,
 run_outreach_sequencer, sequence_cycle, _process_campaign_prospects,
@@ -1501,10 +1501,10 @@ class TestSendSequenceEmail:
         new_callable=AsyncMock,
     )
     @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
-    async def test_campaign_counter_incremented(
+    async def test_campaign_counter_not_mutated(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
-        """Campaign total_sent is incremented on successful send."""
+        """Campaign counters should NOT be mutated (calculated metrics used instead)."""
         mock_validate.return_value = {"valid": True, "reason": None}
 
         blacklist_result = MagicMock()
@@ -1538,7 +1538,7 @@ class TestSendSequenceEmail:
 
         await send_sequence_email(db, config, settings, prospect, campaign=campaign)
 
-        assert campaign.total_sent == 6
+        assert campaign.total_sent == 5  # unchanged - calculated metrics used instead
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)

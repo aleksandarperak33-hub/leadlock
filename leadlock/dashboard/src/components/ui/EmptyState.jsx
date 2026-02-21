@@ -1,5 +1,5 @@
 /**
- * EmptyState — Centered placeholder for empty data sections.
+ * EmptyState - Centered placeholder for empty data sections.
  *
  * @param {import('lucide-react').LucideIcon} icon - Lucide icon component
  * @param {string} title - Empty state title

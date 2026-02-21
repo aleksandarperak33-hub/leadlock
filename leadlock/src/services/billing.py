@@ -1,5 +1,5 @@
 """
-Stripe billing service — subscription management for LeadLock clients.
+Stripe billing service - subscription management for LeadLock clients.
 
 Handles: customer creation, checkout sessions, billing portal, webhook processing.
 All Stripe calls are synchronous and run via run_in_executor to avoid blocking
@@ -193,7 +193,7 @@ async def handle_webhook(payload: bytes, sig_header: str) -> dict:
 
 
 async def _handle_checkout_completed(session: dict) -> None:
-    """Handle successful checkout — activate subscription."""
+    """Handle successful checkout - activate subscription."""
     client_id = session.get("metadata", {}).get("leadlock_client_id")
     subscription_id = session.get("subscription")
     customer_id = session.get("customer")
@@ -284,7 +284,7 @@ async def _handle_invoice_paid(invoice: dict) -> None:
 
 
 async def _handle_payment_failed(invoice: dict) -> None:
-    """Handle failed payment — notify client."""
+    """Handle failed payment - notify client."""
     customer_id = invoice.get("customer")
     if not customer_id:
         return

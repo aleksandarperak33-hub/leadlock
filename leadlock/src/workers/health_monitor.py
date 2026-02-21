@@ -1,5 +1,5 @@
 """
-Health monitor worker — tracks system health metrics.
+Health monitor worker - tracks system health metrics.
 """
 import asyncio
 import logging

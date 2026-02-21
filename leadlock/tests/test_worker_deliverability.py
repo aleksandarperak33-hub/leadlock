@@ -1,5 +1,5 @@
 """
-Tests for src/workers/deliverability_monitor.py — SMS and email deliverability checks.
+Tests for src/workers/deliverability_monitor.py - SMS and email deliverability checks.
 """
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -8,7 +8,7 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
-# _check_deliverability — no sends
+# _check_deliverability - no sends
 # ---------------------------------------------------------------------------
 
 class TestCheckDeliverabilityNoSends:
@@ -42,7 +42,7 @@ class TestCheckDeliverabilityNoSends:
 
 
 # ---------------------------------------------------------------------------
-# _check_deliverability — delivery rate alerts
+# _check_deliverability - delivery rate alerts
 # ---------------------------------------------------------------------------
 
 class TestCheckDeliverabilityRateAlerts:
@@ -167,7 +167,7 @@ class TestCheckDeliverabilityRateAlerts:
 
 
 # ---------------------------------------------------------------------------
-# _check_deliverability — email reputation
+# _check_deliverability - email reputation
 # ---------------------------------------------------------------------------
 
 class TestCheckDeliverabilityEmailReputation:
@@ -352,7 +352,7 @@ class TestCheckDeliverabilityEmailReputation:
 
 
 # ---------------------------------------------------------------------------
-# _check_deliverability — number-level warnings
+# _check_deliverability - number-level warnings
 # ---------------------------------------------------------------------------
 
 class TestCheckDeliverabilityNumberStats:

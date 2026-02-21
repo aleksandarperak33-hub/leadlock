@@ -1,5 +1,5 @@
 """
-Tests for src/services/notifications.py — owner emergency and booking SMS alerts.
+Tests for src/services/notifications.py - owner emergency and booking SMS alerts.
 """
 import pytest
 from unittest.mock import AsyncMock, patch

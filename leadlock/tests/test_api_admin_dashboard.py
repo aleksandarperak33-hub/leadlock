@@ -1,5 +1,5 @@
 """
-Tests for src/api/admin_dashboard.py — admin overview, client CRUD, lead listing,
+Tests for src/api/admin_dashboard.py - admin overview, client CRUD, lead listing,
 revenue, health, and outreach pipeline endpoints.
 All database calls are mocked to avoid SQLite/JSONB incompatibility.
 """

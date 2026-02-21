@@ -1,12 +1,12 @@
 """
-Agent response schemas — structured output from each AI agent.
+Agent response schemas - structured output from each AI agent.
 """
 from typing import Optional
 from pydantic import BaseModel, Field
 
 
 class IntakeResponse(BaseModel):
-    """Response from the intake agent — always template-based, never free-form AI."""
+    """Response from the intake agent - always template-based, never free-form AI."""
     message: str = Field(..., description="The SMS message to send")
     template_id: str = Field(..., description="Which template was used")
     is_emergency: bool = Field(default=False)
@@ -28,7 +28,7 @@ class QualificationData(BaseModel):
 
 
 class QualifyResponse(BaseModel):
-    """Response from the qualify agent — conversational AI with structured output."""
+    """Response from the qualify agent - conversational AI with structured output."""
     message: str = Field(..., description="The SMS message to send")
     qualification: QualificationData = Field(default_factory=QualificationData)
     internal_notes: str = Field(default="")
@@ -43,7 +43,7 @@ class QualifyResponse(BaseModel):
 
 
 class BookResponse(BaseModel):
-    """Response from the book agent — appointment confirmation."""
+    """Response from the book agent - appointment confirmation."""
     message: str = Field(..., description="The SMS message to send")
     appointment_date: Optional[str] = None
     time_window_start: Optional[str] = None

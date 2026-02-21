@@ -1,5 +1,5 @@
 """
-Scheduling service — appointment slot management.
+Scheduling service - appointment slot management.
 Works with CRM availability data to find open slots.
 """
 import logging

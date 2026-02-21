@@ -1,5 +1,5 @@
 """
-Dashboard API — all endpoints for the React client dashboard.
+Dashboard API - all endpoints for the React client dashboard.
 All endpoints require JWT authentication via Bearer token.
 Includes lead actions, bookings, compliance, CSV export, auth flows, and phone provisioning.
 """
@@ -70,7 +70,7 @@ async def _check_auth_rate_limit(
     except HTTPException:
         raise
     except Exception as e:
-        # Fail open — don't block auth if Redis is down, but log it
+        # Fail open - don't block auth if Redis is down, but log it
         logger.warning("Rate limiting unavailable (Redis error): %s", str(e))
 
 
@@ -620,7 +620,7 @@ async def submit_business_registration(
     if not client.twilio_phone:
         raise HTTPException(status_code=400, detail="Provision a phone number first")
 
-    # Idempotency guard — don't re-create profile if already submitted
+    # Idempotency guard - don't re-create profile if already submitted
     if (
         client.ten_dlc_profile_sid
         and client.ten_dlc_status not in ("collecting_info", "profile_rejected")
@@ -672,7 +672,7 @@ async def submit_business_registration(
     )
     if submit_result["error"]:
         logger.warning("Profile submission failed: %s", submit_result["error"])
-        # Profile created but not submitted — poller can retry
+        # Profile created but not submitted - poller can retry
         client.ten_dlc_status = "collecting_info"
     else:
         client.ten_dlc_status = "profile_pending"
@@ -713,7 +713,7 @@ async def get_registration_status(
 
 
 def _mask_ein(ein: str | None) -> str | None:
-    """Mask EIN for display — show only last 4 digits."""
+    """Mask EIN for display - show only last 4 digits."""
     if not ein:
         return ein
     cleaned = ein.replace("-", "").replace(" ", "")
@@ -1280,7 +1280,7 @@ async def update_lead_status(
         raise HTTPException(status_code=404, detail="Lead not found")
 
     new_status = payload.get("status", "").strip()
-    # opted_out excluded — must go through SMS pipeline for compliance
+    # opted_out excluded - must go through SMS pipeline for compliance
     valid_statuses = {"new", "qualifying", "qualified", "booking", "booked", "completed", "cold", "dead"}
     if new_status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")

@@ -1,5 +1,5 @@
 """
-Dynamic holiday computation — replaces hardcoded holiday lists.
+Dynamic holiday computation - replaces hardcoded holiday lists.
 Computes federal and Florida state holidays for any year.
 
 Uses dateutil for Easter-dependent holidays.
@@ -65,7 +65,7 @@ def get_federal_holidays(year: int) -> Set[date]:
     holidays.add(_observed_date(date(year, 11, 11)))   # Veterans Day
     holidays.add(_observed_date(date(year, 12, 25)))   # Christmas Day
 
-    # Floating holidays (always on specific weekday — no observed adjustment needed)
+    # Floating holidays (always on specific weekday - no observed adjustment needed)
     holidays.add(_nth_weekday(year, 1, 0, 3))    # MLK Day: 3rd Monday Jan
     holidays.add(_nth_weekday(year, 2, 0, 3))    # Presidents' Day: 3rd Monday Feb
     holidays.add(_last_weekday(year, 5, 0))       # Memorial Day: Last Monday May

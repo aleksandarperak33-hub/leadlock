@@ -1,5 +1,5 @@
 """
-Compliance audit worker — periodic check for violations.
+Compliance audit worker - periodic check for violations.
 """
 import asyncio
 import logging

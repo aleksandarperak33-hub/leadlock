@@ -1,5 +1,5 @@
 """
-Tests for src/workers/retry_worker.py — dead letter queue processing.
+Tests for src/workers/retry_worker.py - dead letter queue processing.
 """
 import uuid
 from contextlib import asynccontextmanager
@@ -58,7 +58,7 @@ async def mock_session():
 
 
 # ---------------------------------------------------------------------------
-# _retry_lead — webhook / intake stage
+# _retry_lead - webhook / intake stage
 # ---------------------------------------------------------------------------
 
 class TestRetryLeadWebhook:
@@ -145,7 +145,7 @@ class TestRetryLeadWebhook:
 
 
 # ---------------------------------------------------------------------------
-# _retry_lead — qualify / book stage
+# _retry_lead - qualify / book stage
 # ---------------------------------------------------------------------------
 
 class TestRetryLeadQualify:
@@ -257,7 +257,7 @@ class TestRetryLeadQualify:
 
 
 # ---------------------------------------------------------------------------
-# _retry_lead — error cases
+# _retry_lead - error cases
 # ---------------------------------------------------------------------------
 
 class TestRetryLeadErrors:

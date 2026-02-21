@@ -1,5 +1,5 @@
 """
-EmailTemplate model — reusable email templates for outreach campaigns.
+EmailTemplate model - reusable email templates for outreach campaigns.
 Can be static templates or AI-generation guidance.
 """
 import uuid

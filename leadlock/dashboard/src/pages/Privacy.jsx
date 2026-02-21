@@ -87,10 +87,10 @@ export default function Privacy() {
               communications comply with:
             </p>
             <ul className="list-disc list-inside space-y-2 ml-2">
-              <li><strong className="text-[#F8F8FC]">TCPA</strong> — Telephone Consumer Protection Act. Consent is tracked and recorded for every message.</li>
-              <li><strong className="text-[#F8F8FC]">FTSA</strong> — Florida Telephone Solicitation Act. State-specific quiet hours and holiday restrictions enforced.</li>
-              <li><strong className="text-[#F8F8FC]">Texas SB 140</strong> — Sunday texting restricted to noon-9 PM.</li>
-              <li><strong className="text-[#F8F8FC]">California SB 1001</strong> — AI disclosure requirements met in all conversations.</li>
+              <li><strong className="text-[#F8F8FC]">TCPA</strong> - Telephone Consumer Protection Act. Consent is tracked and recorded for every message.</li>
+              <li><strong className="text-[#F8F8FC]">FTSA</strong> - Florida Telephone Solicitation Act. State-specific quiet hours and holiday restrictions enforced.</li>
+              <li><strong className="text-[#F8F8FC]">Texas SB 140</strong> - Sunday texting restricted to noon-9 PM.</li>
+              <li><strong className="text-[#F8F8FC]">California SB 1001</strong> - AI disclosure requirements met in all conversations.</li>
             </ul>
             <p className="mt-3">
               Every first message includes the business name and opt-out instructions ("Reply STOP to opt out").
@@ -102,10 +102,10 @@ export default function Privacy() {
             <h2 className="text-lg font-bold text-[#F8F8FC] mb-3">5. Data Sharing & Disclosure</h2>
             <p className="mb-3">We do not sell your personal information. We may share data with:</p>
             <ul className="list-disc list-inside space-y-2 ml-2">
-              <li><strong className="text-[#F8F8FC]">Service Providers</strong> — Twilio (SMS), Anthropic/OpenAI (AI processing), SendGrid (email), and your connected CRM provider</li>
-              <li><strong className="text-[#F8F8FC]">CRM Integrations</strong> — Lead data is synced to your chosen CRM (ServiceTitan, Housecall Pro, Jobber, GoHighLevel) as configured by you</li>
-              <li><strong className="text-[#F8F8FC]">Legal Requirements</strong> — When required by law, regulation, or legal process</li>
-              <li><strong className="text-[#F8F8FC]">Business Transfers</strong> — In connection with a merger, acquisition, or sale of assets</li>
+              <li><strong className="text-[#F8F8FC]">Service Providers</strong> - Twilio (SMS), Anthropic/OpenAI (AI processing), SendGrid (email), and your connected CRM provider</li>
+              <li><strong className="text-[#F8F8FC]">CRM Integrations</strong> - Lead data is synced to your chosen CRM (ServiceTitan, Housecall Pro, Jobber, GoHighLevel) as configured by you</li>
+              <li><strong className="text-[#F8F8FC]">Legal Requirements</strong> - When required by law, regulation, or legal process</li>
+              <li><strong className="text-[#F8F8FC]">Business Transfers</strong> - In connection with a merger, acquisition, or sale of assets</li>
             </ul>
           </section>
 
@@ -123,10 +123,10 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg font-bold text-[#F8F8FC] mb-3">7. Data Retention</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
-              <li><strong className="text-[#F8F8FC]">Account data</strong> — Retained while your account is active and for 30 days after deletion</li>
-              <li><strong className="text-[#F8F8FC]">Lead & conversation data</strong> — Retained for the duration of your subscription plus 90 days</li>
-              <li><strong className="text-[#F8F8FC]">Consent records</strong> — Retained for 5 years per FTC TSR requirements, regardless of account status</li>
-              <li><strong className="text-[#F8F8FC]">Usage logs</strong> — Retained for 12 months</li>
+              <li><strong className="text-[#F8F8FC]">Account data</strong> - Retained while your account is active and for 30 days after deletion</li>
+              <li><strong className="text-[#F8F8FC]">Lead & conversation data</strong> - Retained for the duration of your subscription plus 90 days</li>
+              <li><strong className="text-[#F8F8FC]">Consent records</strong> - Retained for 5 years per FTC TSR requirements, regardless of account status</li>
+              <li><strong className="text-[#F8F8FC]">Usage logs</strong> - Retained for 12 months</li>
             </ul>
           </section>
 

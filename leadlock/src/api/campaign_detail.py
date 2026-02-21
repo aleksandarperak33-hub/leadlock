@@ -1,5 +1,5 @@
 """
-Campaign detail API — enriched campaign views, prospect assignment,
+Campaign detail API - enriched campaign views, prospect assignment,
 per-campaign metrics, unified inbox, and email thread viewer.
 Separated from sales_engine.py to keep files focused.
 """
@@ -146,9 +146,9 @@ async def get_campaign_detail(
         "target_locations": campaign.target_locations or [],
         "sequence_steps": campaign.sequence_steps or [],
         "daily_limit": campaign.daily_limit,
-        "total_sent": campaign.total_sent,
-        "total_opened": campaign.total_opened,
-        "total_replied": campaign.total_replied,
+        "total_sent": total_sent,
+        "total_opened": e.opened or 0,
+        "total_replied": total_replies,
         "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
         "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
         "prospects": {
@@ -528,7 +528,7 @@ async def get_inbox(
     admin=Depends(get_current_admin),
 ):
     """
-    Unified inbox — prospects with email activity, ordered by most recent.
+    Unified inbox - prospects with email activity, ordered by most recent.
 
     Filters:
       - all: All prospects that have ANY email (outbound or inbound)
@@ -579,7 +579,7 @@ async def get_inbox(
         conditions.append(outbound_stats.c.last_outbound_at.isnot(None))
         conditions.append(inbound_stats.c.last_inbound_at.is_(None))
     else:
-        # "all" — any prospect that has at least one email (outbound or inbound)
+        # "all" - any prospect that has at least one email (outbound or inbound)
         conditions.append(
             or_(
                 outbound_stats.c.last_outbound_at.isnot(None),
@@ -757,7 +757,7 @@ async def get_inbox_thread(
     admin=Depends(get_current_admin),
 ):
     """
-    Full email thread for a prospect — all outbound + inbound in chronological order.
+    Full email thread for a prospect - all outbound + inbound in chronological order.
     Includes prospect details and campaign name.
     """
     try:

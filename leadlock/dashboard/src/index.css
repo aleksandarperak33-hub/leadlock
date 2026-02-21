@@ -17,6 +17,11 @@
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.011em;
   }
+
+  /* Fixed-width digits for all monospace elements (stats, tables, rates) */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* ========== SCROLLBAR ========== */

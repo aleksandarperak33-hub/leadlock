@@ -1,5 +1,5 @@
 """
-Tests for src/services/reporting.py — dashboard metrics generation.
+Tests for src/services/reporting.py - dashboard metrics generation.
 
 Uses AsyncMock for the DB session to avoid SQLite/PostgreSQL date_trunc
 incompatibility while achieving full coverage of all code paths.
@@ -82,7 +82,7 @@ def _make_mock_db(
 
 
 # ---------------------------------------------------------------------------
-# Tests: get_dashboard_metrics — empty dataset
+# Tests: get_dashboard_metrics - empty dataset
 # ---------------------------------------------------------------------------
 
 class TestDashboardMetricsEmpty:
@@ -114,7 +114,7 @@ class TestDashboardMetricsEmpty:
 
 
 # ---------------------------------------------------------------------------
-# Tests: get_dashboard_metrics — with data
+# Tests: get_dashboard_metrics - with data
 # ---------------------------------------------------------------------------
 
 class TestDashboardMetricsWithData:

@@ -1,5 +1,5 @@
 """
-Deliverability monitor worker — aggregates SMS delivery stats and alerts on issues.
+Deliverability monitor worker - aggregates SMS delivery stats and alerts on issues.
 Runs every 5 minutes. This is the CORE worker for fixing reputation degradation.
 
 Actions:
@@ -94,7 +94,7 @@ async def _check_deliverability():
             AlertType.SMS_DELIVERY_FAILED,
             f"WARNING: SMS delivery rate dropped to {overall_rate*100:.1f}% "
             f"({summary['total_delivered_24h']}/{total_sent} in 24h). "
-            f"Monitor closely — may need content or number review.",
+            f"Monitor closely - may need content or number review.",
             severity="warning",
             extra={
                 "delivery_rate": f"{overall_rate*100:.1f}%",
@@ -125,7 +125,7 @@ async def _check_deliverability():
 
         if email_rep["status"] in ("poor", "critical"):
             logger.error(
-                "EMAIL REPUTATION %s (score: %.1f) — bounce: %.2f%%, complaints: %.4f%%",
+                "EMAIL REPUTATION %s (score: %.1f) - bounce: %.2f%%, complaints: %.4f%%",
                 email_rep["status"].upper(),
                 email_rep["score"],
                 email_rep["metrics"].get("bounce_rate", 0) * 100,
@@ -133,7 +133,7 @@ async def _check_deliverability():
             )
             await send_alert(
                 AlertType.SMS_DELIVERY_FAILED,
-                f"EMAIL REPUTATION {email_rep['status'].upper()} — score {email_rep['score']:.1f}. "
+                f"EMAIL REPUTATION {email_rep['status'].upper()} - score {email_rep['score']:.1f}. "
                 f"Bounce rate: {email_rep['metrics'].get('bounce_rate', 0) * 100:.2f}%, "
                 f"Complaint rate: {email_rep['metrics'].get('complaint_rate', 0) * 100:.4f}%. "
                 f"Email sending is {'PAUSED' if email_rep['throttle'] == 'paused' else 'throttled'}.",
@@ -146,7 +146,7 @@ async def _check_deliverability():
             )
         elif email_rep["status"] == "warning":
             logger.warning(
-                "Email reputation warning (score: %.1f) — bounce: %.2f%%",
+                "Email reputation warning (score: %.1f) - bounce: %.2f%%",
                 email_rep["score"],
                 email_rep["metrics"].get("bounce_rate", 0) * 100,
             )

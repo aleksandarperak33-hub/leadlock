@@ -1,5 +1,5 @@
 """
-Deliverability service — tracks SMS delivery rates, reputation scoring, and auto-throttle.
+Deliverability service - tracks SMS delivery rates, reputation scoring, and auto-throttle.
 
 This module is the CORE fix for reputation degradation:
 1. Tracks delivery/failure rates per Twilio number (rolling 24h window)
@@ -94,12 +94,12 @@ def _classify_outcome(status: str, error_code: Optional[str]) -> str:
         return "delivered"
     if status == "sent":
         # "sent" means accepted by Twilio/carrier, NOT confirmed delivered to handset.
-        # Do not count as "delivered" — this avoids inflating delivery rate metrics.
+        # Do not count as "delivered" - this avoids inflating delivery rate metrics.
         return "pending"
     if error_code in ("30007",):
-        return "filtered"  # Carrier filtering — content issue
+        return "filtered"  # Carrier filtering - content issue
     if error_code in ("21211", "21612", "30006"):
-        return "invalid"  # Invalid/landline — list quality issue
+        return "invalid"  # Invalid/landline - list quality issue
     return "failed"
 
 
@@ -268,18 +268,18 @@ async def check_send_allowed(from_phone: str) -> tuple[bool, str]:
 
     except Exception as e:
         # On Redis failure, allow sending (fail open for delivery)
-        logger.warning("Throttle check failed: %s — allowing send", str(e))
-        return True, "Redis unavailable — fail open"
+        logger.warning("Throttle check failed: %s - allowing send", str(e))
+        return True, "Redis unavailable - fail open"
 
 
 # ─── EMAIL REPUTATION ──────────────────────────────────
 # Redis keys for email metrics (rolling 24h window)
-# email:reputation:sent — total emails sent
-# email:reputation:delivered — total delivered
-# email:reputation:bounced — total bounced (hard only)
-# email:reputation:complained — spam reports
-# email:reputation:opened — total opened
-# email:reputation:clicked — total clicked
+# email:reputation:sent - total emails sent
+# email:reputation:delivered - total delivered
+# email:reputation:bounced - total bounced (hard only)
+# email:reputation:complained - spam reports
+# email:reputation:opened - total opened
+# email:reputation:clicked - total clicked
 
 EMAIL_REPUTATION_TTL = 86400  # 24 hour rolling window
 

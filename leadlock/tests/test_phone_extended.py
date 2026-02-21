@@ -1,5 +1,5 @@
 """
-Extended tests for src/utils/phone.py — covers regex fallback paths,
+Extended tests for src/utils/phone.py - covers regex fallback paths,
 phonenumbers library branches (mocked since library is not installed),
 and is_valid_us_phone regex fallback.
 """
@@ -9,7 +9,7 @@ import importlib
 
 
 # ---------------------------------------------------------------------------
-# _normalize_with_phonenumbers (lines 48-56) — mocked phonenumbers
+# _normalize_with_phonenumbers (lines 48-56) - mocked phonenumbers
 # ---------------------------------------------------------------------------
 
 class TestNormalizeWithPhonenumbers:
@@ -113,7 +113,7 @@ class TestNormalizePhoneE164Routing:
 
 
 # ---------------------------------------------------------------------------
-# _normalize_with_regex — fallback paths (lines 65-68, 70-71)
+# _normalize_with_regex - fallback paths (lines 65-68, 70-71)
 # ---------------------------------------------------------------------------
 
 class TestNormalizeWithRegex:
@@ -134,7 +134,7 @@ class TestNormalizeWithRegex:
         assert result == "+15125551234"
 
     def test_more_than_11_digits_starting_with_1(self):
-        """More than 11 digits starting with 1 — truncates to 11 (lines 67-68)."""
+        """More than 11 digits starting with 1 - truncates to 11 (lines 67-68)."""
         from src.utils.phone import _normalize_with_regex
 
         result = _normalize_with_regex("151255512349999")
@@ -163,7 +163,7 @@ class TestNormalizeWithRegex:
 
 
 # ---------------------------------------------------------------------------
-# is_valid_us_phone — phonenumbers path (lines 81-86) and regex fallback (88-89)
+# is_valid_us_phone - phonenumbers path (lines 81-86) and regex fallback (88-89)
 # ---------------------------------------------------------------------------
 
 class TestIsValidUsPhoneWithPhonenumbers:

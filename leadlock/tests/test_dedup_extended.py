@@ -1,12 +1,12 @@
 """
-Extended tests for src/utils/dedup.py — covers get_redis initialization (lines 20-27).
+Extended tests for src/utils/dedup.py - covers get_redis initialization (lines 20-27).
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
-# get_redis — lazy initialization (lines 20-27)
+# get_redis - lazy initialization (lines 20-27)
 # ---------------------------------------------------------------------------
 
 class TestGetRedis:

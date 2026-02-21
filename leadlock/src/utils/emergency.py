@@ -1,5 +1,5 @@
 """
-Emergency detection — safety-critical module.
+Emergency detection - safety-critical module.
 Detects life-threatening situations in lead messages.
 Emergency messages bypass quiet hours (life safety exception).
 
@@ -71,7 +71,7 @@ _FALSE_POSITIVE_EXCLUSIONS: dict[str, list[re.Pattern]] = {
     "smoke": [
         # "smoke" as leisure verb: "smoke outside", "smoke cigarettes"
         re.compile(r"\bsmoke\s+(outside|cigarettes?|weed|pot|a\s+cigar|break)\b"),
-        # "to smoke", "smoker" — personal habit context
+        # "to smoke", "smoker" - personal habit context
         re.compile(r"\b(smoker|to\s+smoke)\b"),
     ],
     "flood": [

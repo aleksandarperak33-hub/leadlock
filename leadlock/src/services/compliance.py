@@ -1,5 +1,5 @@
 """
-Compliance engine — THE GATEKEEPER.
+Compliance engine - THE GATEKEEPER.
 Every outbound SMS MUST pass through this before sending.
 
 TCPA penalties: $500/violation minimum, $1,500 willful, NO CAP, 4-year statute of limitations.
@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
-# Exact STOP keywords — recognized case-insensitively after normalization
+# Exact STOP keywords - recognized case-insensitively after normalization
 STOP_KEYWORDS = {"stop", "unsubscribe", "cancel", "end", "quit", "opt-out", "optout", "remove"}
 
 # Phrase patterns that indicate opt-out intent (substring matching)
@@ -52,7 +52,7 @@ STOP_PHRASES = [
     "go away",
 ]
 
-# Florida holidays are now dynamically computed — see src/utils/holidays.py
+# Florida holidays are now dynamically computed - see src/utils/holidays.py
 
 # State timezone mapping
 STATE_TIMEZONES = {
@@ -174,9 +174,9 @@ def check_quiet_hours(
     - Texas SB 140: Sundays only noon – 9:00 PM
     - Florida FTSA: 8:00 AM – 8:00 PM, no state holidays
     """
-    # Emergency bypass — life safety exception
+    # Emergency bypass - life safety exception
     if is_emergency:
-        return ComplianceResult(True, "Emergency bypass — life safety exception")
+        return ComplianceResult(True, "Emergency bypass - life safety exception")
 
     # Determine timezone
     if timezone_str:
@@ -244,7 +244,7 @@ def check_message_limits(
     Reply messages (responding to an inbound) don't count against the limit.
     """
     if is_reply_to_inbound:
-        return ComplianceResult(True, "Reply to inbound — no limit applies")
+        return ComplianceResult(True, "Reply to inbound - no limit applies")
 
     if cold_outreach_count >= max_cold_followups:
         return ComplianceResult(
@@ -264,16 +264,16 @@ def check_content_compliance(
     """
     Check message content for compliance issues.
     - First message MUST include "Reply STOP to opt out" and business name
-    - No URL shorteners (bit.ly, tinyurl, etc. — carriers filter them)
+    - No URL shorteners (bit.ly, tinyurl, etc. - carriers filter them)
     """
-    # URL shortener check — carriers block these
+    # URL shortener check - carriers block these
     shortener_domains = ["bit.ly", "tinyurl.com", "goo.gl", "t.co", "ow.ly", "is.gd", "buff.ly"]
     message_lower = message.lower()
     for domain in shortener_domains:
         if domain in message_lower:
             return ComplianceResult(
                 False,
-                f"URL shortener detected ({domain}) — carriers will filter this",
+                f"URL shortener detected ({domain}) - carriers will filter this",
                 "content_url_shortener",
             )
 
@@ -320,7 +320,7 @@ def full_compliance_check(
 ) -> ComplianceResult:
     """
     Run ALL compliance checks. Returns the first failure, or success if all pass.
-    Order matters — check opt-out first (immediate block), then consent, then hours, etc.
+    Order matters - check opt-out first (immediate block), then consent, then hours, etc.
     """
     # 1. Consent check (includes opt-out)
     consent_result = check_consent(has_consent, consent_type, is_opted_out, is_marketing)
@@ -367,7 +367,7 @@ def is_california_number(phone: str) -> bool:
     """Check if a phone number has a California area code."""
     if not phone or len(phone) < 5:
         return False
-    # E.164 format: +1NXXNXXXXXX — area code is digits 2-4 (0-indexed)
+    # E.164 format: +1NXXNXXXXXX - area code is digits 2-4 (0-indexed)
     if phone.startswith("+1") and len(phone) >= 5:
         area_code = phone[2:5]
         return area_code in CA_AREA_CODES

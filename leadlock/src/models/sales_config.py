@@ -1,5 +1,5 @@
 """
-SalesEngineConfig model — singleton config row for the sales engine.
+SalesEngineConfig model - singleton config row for the sales engine.
 Admin-editable from the dashboard. Controls all automation behavior.
 """
 import uuid

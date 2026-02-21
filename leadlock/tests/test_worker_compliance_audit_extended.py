@@ -1,5 +1,5 @@
 """
-Extended tests for src/workers/compliance_audit.py — covers run_compliance_audit
+Extended tests for src/workers/compliance_audit.py - covers run_compliance_audit
 loop behavior (lines 18-27).
 """
 import asyncio
@@ -12,7 +12,7 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
-# run_compliance_audit — loop behavior (lines 18-27)
+# run_compliance_audit - loop behavior (lines 18-27)
 # ---------------------------------------------------------------------------
 
 class TestRunComplianceAudit:

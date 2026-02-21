@@ -257,7 +257,7 @@ const FEATURES = [
   {
     icon: BarChart3,
     title: 'Real-Time Analytics',
-    desc: 'Track response times, booking rates, lead sources, and ROI — all in one dashboard.',
+    desc: 'Track response times, booking rates, lead sources, and ROI - all in one dashboard.',
   },
   {
     icon: Clock,
@@ -272,7 +272,7 @@ const FEATURES = [
   {
     icon: Phone,
     title: 'Emergency Routing',
-    desc: 'Gas leaks, flooding, no heat — emergency keywords trigger instant priority routing to your on-call team.',
+    desc: 'Gas leaks, flooding, no heat - emergency keywords trigger instant priority routing to your on-call team.',
   },
 ];
 
@@ -436,7 +436,7 @@ export default function Landing() {
       <section className="ld-gradient-hero min-h-screen flex items-center pt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-0">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left — Copy */}
+            {/* Left - Copy */}
             <div>
               <FadeUp>
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 mb-6">
@@ -479,7 +479,7 @@ export default function Landing() {
               </FadeUp>
             </div>
 
-            {/* Right — SMS Mockup */}
+            {/* Right - SMS Mockup */}
             <FadeUp delay={0.3} className="flex justify-center lg:justify-end">
               <SMSMockup />
             </FadeUp>

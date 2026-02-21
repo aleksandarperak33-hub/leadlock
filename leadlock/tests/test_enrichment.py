@@ -1,5 +1,5 @@
 """
-Tests for src/services/enrichment.py — SSRF protection, domain extraction,
+Tests for src/services/enrichment.py - SSRF protection, domain extraction,
 email pattern guessing, business email validation, and website scraping.
 """
 import pytest
@@ -16,7 +16,7 @@ from src.services.enrichment import (
 
 
 # ---------------------------------------------------------------------------
-# _is_safe_url — SSRF protection
+# _is_safe_url - SSRF protection
 # ---------------------------------------------------------------------------
 
 class TestIsSafeUrl:

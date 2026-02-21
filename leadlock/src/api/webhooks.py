@@ -1,5 +1,5 @@
 """
-Webhook endpoints — receive leads from all sources.
+Webhook endpoints - receive leads from all sources.
 Each webhook normalizes its payload into a LeadEnvelope and passes to the conductor.
 
 Security layers (in order):
@@ -112,7 +112,7 @@ async def twilio_sms_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Twilio inbound SMS webhook — handles both new leads and replies.
+    Twilio inbound SMS webhook - handles both new leads and replies.
     Twilio sends form-encoded data, not JSON.
     """
     # Rate limit
@@ -197,7 +197,7 @@ async def twilio_status_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Twilio delivery status callback — update message delivery status."""
+    """Twilio delivery status callback - update message delivery status."""
     body = await request.body()
     form_data = await request.form()
     form_params = dict(form_data)
@@ -579,7 +579,7 @@ async def missed_call_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Missed call notification — creates a lead from the caller."""
+    """Missed call notification - creates a lead from the caller."""
     await _enforce_rate_limit(request, client_id)
 
     body = await request.body()

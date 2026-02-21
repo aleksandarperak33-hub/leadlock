@@ -1,5 +1,5 @@
 """
-Outreach SMS service — sends follow-up SMS to warm prospects via Twilio.
+Outreach SMS service - sends follow-up SMS to warm prospects via Twilio.
 TCPA compliance: SMS ONLY triggers after prospect replies to an email
 expressing interest. Cold SMS without consent is illegal.
 
@@ -130,7 +130,7 @@ async def send_outreach_sms(
 
     # Quiet hours check
     if not is_within_sms_quiet_hours(prospect.state_code):
-        return {"error": "TCPA quiet hours — SMS deferred"}
+        return {"error": "TCPA quiet hours - SMS deferred"}
 
     # Append opt-out language (TCPA required)
     full_body = f"{message_body}\n\nReply STOP to opt out. - LeadLock"
@@ -216,7 +216,7 @@ async def generate_followup_sms_body(
     Uses AI for personalization based on prospect details.
 
     Returns:
-        SMS body text (without opt-out footer — caller appends it)
+        SMS body text (without opt-out footer - caller appends it)
     """
     settings = get_settings()
 
@@ -232,7 +232,7 @@ async def generate_followup_sms_body(
             f"in {prospect.city or 'their area'}, {prospect.state_code or ''}. "
             f"They replied to our email about our lead management platform. "
             f"Keep it conversational and suggest a quick call. "
-            f"Do NOT include any greeting like 'Hi' — get straight to the point."
+            f"Do NOT include any greeting like 'Hi' - get straight to the point."
         )
 
         response = await client.messages.create(

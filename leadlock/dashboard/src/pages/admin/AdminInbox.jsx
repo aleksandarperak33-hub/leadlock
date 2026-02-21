@@ -82,12 +82,12 @@ function ConversationItem({ conv, isActive, onSelect }) {
           </span>
           <div className="flex items-center gap-2">
             {conv.sent_count > 0 && (
-              <span className="flex items-center gap-0.5 text-xs text-gray-400">
+              <span className="flex items-center gap-0.5 text-xs text-gray-400 font-mono">
                 <Send className="w-3 h-3" /> {conv.sent_count}
               </span>
             )}
             {hasReplies && (
-              <span className="flex items-center gap-0.5 text-xs text-orange-500">
+              <span className="flex items-center gap-0.5 text-xs text-orange-500 font-mono">
                 <MessageSquare className="w-3 h-3" /> {conv.reply_count}
               </span>
             )}

@@ -1,5 +1,5 @@
 """
-Consent record model — TCPA compliance requires tracking exactly how consent was obtained.
+Consent record model - TCPA compliance requires tracking exactly how consent was obtained.
 Records must be retained for 5 years (FTC TSR 2024).
 
 Consent types:
@@ -42,7 +42,7 @@ class ConsentRecord(Base):
         String(50)
     )  # sms_stop, manual, api
 
-    # Legal record — raw evidence of how consent was obtained
+    # Legal record - raw evidence of how consent was obtained
     consent_text: Mapped[Optional[str]] = mapped_column(
         Text
     )  # The actual opt-in message or form text
@@ -55,7 +55,7 @@ class ConsentRecord(Base):
     # Raw data for legal disputes
     raw_consent_data: Mapped[Optional[dict]] = mapped_column(JSONB)
 
-    # Timestamps — 5-year retention required
+    # Timestamps - 5-year retention required
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

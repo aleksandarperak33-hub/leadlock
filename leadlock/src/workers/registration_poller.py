@@ -1,5 +1,5 @@
 """
-Registration poller worker — monitors Twilio A2P registration status.
+Registration poller worker - monitors Twilio A2P registration status.
 Polls every 5 minutes for clients with non-terminal registration states.
 Automatically advances through the registration pipeline when approved.
 
@@ -51,7 +51,7 @@ async def _heartbeat():
 
 
 async def run_registration_poller():
-    """Main loop — poll for clients needing registration status checks."""
+    """Main loop - poll for clients needing registration status checks."""
     logger.info(
         "Registration poller started (poll every %ds)", POLL_INTERVAL_SECONDS,
     )
@@ -153,7 +153,7 @@ async def _handle_profile_pending(client: Client):
 
 
 async def _handle_profile_approved(client: Client):
-    """Profile approved — create brand registration."""
+    """Profile approved - create brand registration."""
     if not client.ten_dlc_profile_sid:
         logger.warning(
             "Client %s has no profile SID, can't create brand",
@@ -193,7 +193,7 @@ async def _handle_brand_pending(client: Client):
 
 
 async def _handle_brand_approved(client: Client):
-    """Brand approved — create campaign."""
+    """Brand approved - create campaign."""
     if not client.twilio_messaging_service_sid or not client.ten_dlc_brand_id:
         return
 

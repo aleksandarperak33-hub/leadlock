@@ -1,5 +1,5 @@
 """
-Dead letter queue — captures failed leads for retry.
+Dead letter queue - captures failed leads for retry.
 When any pipeline stage fails, the full context is saved for later retry.
 """
 import logging
@@ -84,7 +84,7 @@ async def mark_retry_attempted(
         failed_lead.status = "dead"
         failed_lead.next_retry_at = None
         logger.error(
-            "Failed lead %s exhausted retries (%d/%d) — marked as dead",
+            "Failed lead %s exhausted retries (%d/%d) - marked as dead",
             str(failed_lead.id)[:8], new_count, failed_lead.max_retries,
         )
     else:

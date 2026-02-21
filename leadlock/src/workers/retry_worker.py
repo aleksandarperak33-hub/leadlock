@@ -1,5 +1,5 @@
 """
-Retry worker — processes failed leads from the dead letter queue.
+Retry worker - processes failed leads from the dead letter queue.
 Runs every 60 seconds, picks oldest pending retries where next_retry_at <= now.
 """
 import asyncio

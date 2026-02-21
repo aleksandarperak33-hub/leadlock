@@ -10,7 +10,7 @@ import pytest
 
 
 # =============================================================================
-# 1. src/database.py — lines 23-32, 37-41, 46, 51-60
+# 1. src/database.py - lines 23-32, 37-41, 46, 51-60
 # =============================================================================
 
 class TestDatabase:
@@ -157,7 +157,7 @@ class TestDatabase:
 
 
 # =============================================================================
-# 2. src/services/ai.py — lines 64, 76
+# 2. src/services/ai.py - lines 64, 76
 # =============================================================================
 
 class TestAIService:
@@ -198,7 +198,7 @@ class TestAIService:
 
 
 # =============================================================================
-# 3. src/services/cold_email.py — lines 71-72, 75-76
+# 3. src/services/cold_email.py - lines 71-72, 75-76
 # =============================================================================
 
 class TestColdEmail:
@@ -298,7 +298,7 @@ class TestColdEmail:
 
 
 # =============================================================================
-# 4. src/services/compliance.py — lines 81-82, 127, 183, 191, 193, 374
+# 4. src/services/compliance.py - lines 81-82, 127, 183, 191, 193, 374
 # =============================================================================
 
 class TestComplianceGaps:
@@ -342,10 +342,10 @@ class TestComplianceGaps:
     def test_quiet_hours_default_timezone_no_state(self):
         """Line 183 (zone fallback): no state code and no timezone falls back to Eastern."""
         from src.services.compliance import check_quiet_hours
-        # 3 AM Eastern — should be blocked
+        # 3 AM Eastern - should be blocked
         now = datetime(2025, 6, 15, 3, 0, 0, tzinfo=timezone.utc)
         result = check_quiet_hours(state_code=None, timezone_str=None, now=now)
-        # 3 AM UTC = 11 PM EST (previous day) — outside quiet hours
+        # 3 AM UTC = 11 PM EST (previous day) - outside quiet hours
         assert not result.allowed
 
     def test_quiet_hours_now_is_none_uses_current_time(self):
@@ -353,13 +353,13 @@ class TestComplianceGaps:
         from src.services.compliance import check_quiet_hours
         # Just confirm it runs without error when now is not provided
         result = check_quiet_hours(state_code="NY", timezone_str=None)
-        # Result depends on current time — just assert it returns a ComplianceResult
+        # Result depends on current time - just assert it returns a ComplianceResult
         assert hasattr(result, "allowed")
 
     def test_quiet_hours_naive_datetime_gets_tz(self):
         """Line 193: naive datetime (no tzinfo) gets timezone applied."""
         from src.services.compliance import check_quiet_hours
-        # Naive datetime at 3 AM — should be blocked as quiet hours
+        # Naive datetime at 3 AM - should be blocked as quiet hours
         naive_now = datetime(2025, 6, 15, 3, 0, 0)
         result = check_quiet_hours(state_code="NY", now=naive_now)
         assert not result.allowed
@@ -378,7 +378,7 @@ class TestComplianceGaps:
 
 
 # =============================================================================
-# 5. src/utils/templates.py — lines 216, 221-222
+# 5. src/utils/templates.py - lines 216, 221-222
 # =============================================================================
 
 class TestTemplatesGaps:
@@ -424,7 +424,7 @@ class TestTemplatesGaps:
 
 
 # =============================================================================
-# 6. src/utils/encryption.py — lines 39-41
+# 6. src/utils/encryption.py - lines 39-41
 # =============================================================================
 
 class TestEncryptionGaps:
@@ -443,7 +443,7 @@ class TestEncryptionGaps:
 
 
 # =============================================================================
-# 7. src/utils/email_validation.py — lines 60-61
+# 7. src/utils/email_validation.py - lines 60-61
 # =============================================================================
 
 class TestEmailValidationGaps:
@@ -488,7 +488,7 @@ class TestEmailValidationGaps:
 
 
 # =============================================================================
-# 8. src/integrations/google_sheets.py — lines 32-34
+# 8. src/integrations/google_sheets.py - lines 32-34
 # =============================================================================
 
 class TestGoogleSheetsGaps:
@@ -511,7 +511,7 @@ class TestGoogleSheetsGaps:
 
 
 # =============================================================================
-# 9. src/integrations/jobber.py — lines 124-126
+# 9. src/integrations/jobber.py - lines 124-126
 # =============================================================================
 
 class TestJobberGaps:
@@ -536,7 +536,7 @@ class TestJobberGaps:
 
 
 # =============================================================================
-# 10. src/agents/sales_outreach.py — lines 39-57, 118, 123, 126
+# 10. src/agents/sales_outreach.py - lines 39-57, 118, 123, 126
 # =============================================================================
 
 class TestSalesOutreachGaps:
@@ -680,7 +680,7 @@ class TestModelReprMethods:
         assert "pec" in result
 
     def test_consent_record_repr_no_phone(self):
-        """consent.py:73-74 — phone is empty string."""
+        """consent.py:73-74 - phone is empty string."""
         from src.models.consent import ConsentRecord
         m = MagicMock(spec=ConsentRecord)
         m.phone = ""
@@ -743,7 +743,7 @@ class TestModelReprMethods:
         assert "qualifying" in result
 
     def test_lead_repr_no_phone(self):
-        """lead.py:136-137 — phone is empty."""
+        """lead.py:136-137 - phone is empty."""
         from src.models.lead import Lead
         m = MagicMock(spec=Lead)
         m.phone = ""
@@ -803,7 +803,7 @@ class TestModelReprMethods:
         assert "active=True" in result
 
     def test_sales_config_repr_inactive(self):
-        """sales_config.py:79 — inactive config."""
+        """sales_config.py:79 - inactive config."""
         from src.models.sales_config import SalesEngineConfig
         m = MagicMock(spec=SalesEngineConfig)
         m.is_active = False

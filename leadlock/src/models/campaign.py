@@ -1,5 +1,5 @@
 """
-Campaign model — defines outreach campaigns with targeting and sequence configuration.
+Campaign model - defines outreach campaigns with targeting and sequence configuration.
 Campaigns group prospects by trade/location and define multi-step outreach sequences.
 """
 import uuid

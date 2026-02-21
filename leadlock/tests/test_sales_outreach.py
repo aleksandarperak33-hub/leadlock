@@ -1,5 +1,5 @@
 """
-Sales outreach agent tests — AI email generation and reply classification.
+Sales outreach agent tests - AI email generation and reply classification.
 All AI calls are mocked.
 """
 import json

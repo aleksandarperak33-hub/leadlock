@@ -1,5 +1,5 @@
 """
-API router — aggregates all route modules.
+API router - aggregates all route modules.
 """
 from fastapi import APIRouter
 from src.api.webhooks import router as webhooks_router

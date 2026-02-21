@@ -1,5 +1,5 @@
 """
-Tests for src/api/webhooks.py — all webhook endpoint handlers.
+Tests for src/api/webhooks.py - all webhook endpoint handlers.
 
 Covers:
 - Twilio inbound SMS (new lead + reply)

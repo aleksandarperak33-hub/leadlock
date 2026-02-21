@@ -1,5 +1,5 @@
 """
-Tests for src/main.py — FastAPI app creation, middleware, lifespan, and CORS.
+Tests for src/main.py - FastAPI app creation, middleware, lifespan, and CORS.
 """
 import pytest
 import asyncio
@@ -39,7 +39,7 @@ def _make_mock_settings(**overrides):
 
 
 # ---------------------------------------------------------------------------
-# create_app — application factory
+# create_app - application factory
 # ---------------------------------------------------------------------------
 
 
@@ -175,7 +175,7 @@ class TestCorsMiddleware:
 
 
 # ---------------------------------------------------------------------------
-# lifespan — startup and shutdown
+# lifespan - startup and shutdown
 # ---------------------------------------------------------------------------
 
 

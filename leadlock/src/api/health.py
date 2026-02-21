@@ -1,9 +1,9 @@
 """
-Health check endpoints — used by load balancers, Docker healthcheck, and monitoring.
+Health check endpoints - used by load balancers, Docker healthcheck, and monitoring.
 
-- GET /health       — basic liveness (always 200 if app running)
-- GET /health/ready — readiness check (DB + Redis)
-- GET /health/deep  — deep check (DB + Redis + Twilio + AI + worker health)
+- GET /health       - basic liveness (always 200 if app running)
+- GET /health/ready - readiness check (DB + Redis)
+- GET /health/deep  - deep check (DB + Redis + Twilio + AI + worker health)
 """
 import logging
 from datetime import datetime, timezone
@@ -22,7 +22,7 @@ TWILIO_CACHE_TTL_SECONDS = 300
 
 @router.get("/health")
 async def health_check():
-    """Basic liveness check — returns 200 if the app is running."""
+    """Basic liveness check - returns 200 if the app is running."""
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -35,7 +35,7 @@ async def readiness_check(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Readiness check — verifies database and Redis connectivity.
+    Readiness check - verifies database and Redis connectivity.
     Used by Kubernetes/Railway to determine if the app can serve traffic.
     """
     checks = {"database": False, "redis": False}
@@ -69,7 +69,7 @@ async def deep_health_check(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Deep health check — checks ALL dependencies.
+    Deep health check - checks ALL dependencies.
     Used by external monitoring and Docker healthcheck.
 
     Checks:
@@ -181,7 +181,7 @@ async def _check_ai_service() -> dict:
         last_call = await redis.get("leadlock:ai_service:last_success")
         if last_call:
             return {"healthy": True, "last_success": last_call}
-        # No record yet — assume healthy (service hasn't been used yet)
+        # No record yet - assume healthy (service hasn't been used yet)
         return {"healthy": True, "last_success": None}
     except Exception as e:
         return {"healthy": True, "note": "Unable to check AI heartbeat"}

@@ -1,5 +1,5 @@
 """
-Abstract CRM interface — all CRM integrations implement this.
+Abstract CRM interface - all CRM integrations implement this.
 CRITICAL: CRM operations NEVER go in the SMS response path.
 They happen asynchronously via the crm_sync worker.
 """

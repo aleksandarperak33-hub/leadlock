@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react';
 
 /**
- * SearchInput — Search text field with icon and clear button.
+ * SearchInput - Search text field with icon and clear button.
  *
  * @param {string} value - Current search value
  * @param {Function} onChange - Change handler: (newValue) => void

@@ -1,5 +1,5 @@
 """
-Webhook signature validation — verify incoming webhooks are authentic.
+Webhook signature validation - verify incoming webhooks are authentic.
 
 Supported providers:
 - Twilio: HMAC-SHA1 via X-Twilio-Signature
@@ -106,7 +106,7 @@ async def validate_webhook_source(
     if source == "twilio":
         signature = request.headers.get("X-Twilio-Signature", "")
         if not settings.twilio_auth_token:
-            logger.warning("Twilio auth_token not configured — skipping signature check")
+            logger.warning("Twilio auth_token not configured - skipping signature check")
             return True
         url = await get_webhook_url(request)
         return validate_twilio_signature(
@@ -120,7 +120,7 @@ async def validate_webhook_source(
         secret = settings.webhook_secret_google
         if not secret:
             logger.warning(
-                "WEBHOOK_SECRET_GOOGLE not set — accepting %s webhook without "
+                "WEBHOOK_SECRET_GOOGLE not set - accepting %s webhook without "
                 "signature verification. Configure for production.", source,
             )
             return True
@@ -131,7 +131,7 @@ async def validate_webhook_source(
         secret = settings.webhook_secret_angi
         if not secret:
             logger.warning(
-                "WEBHOOK_SECRET_ANGI not set — accepting %s webhook without "
+                "WEBHOOK_SECRET_ANGI not set - accepting %s webhook without "
                 "signature verification. Configure for production.", source,
             )
             return True
@@ -142,7 +142,7 @@ async def validate_webhook_source(
         secret = settings.webhook_secret_facebook
         if not secret:
             logger.warning(
-                "WEBHOOK_SECRET_FACEBOOK not set — accepting %s webhook without "
+                "WEBHOOK_SECRET_FACEBOOK not set - accepting %s webhook without "
                 "signature verification. Configure for production.", source,
             )
             return True
@@ -156,7 +156,7 @@ async def validate_webhook_source(
             return validate_hmac_sha256(settings.webhook_signing_key, sig, body)
 
     logger.warning(
-        "No webhook secret configured for source '%s' — accepting without "
+        "No webhook secret configured for source '%s' - accepting without "
         "signature verification. Configure webhook_signing_key for production.", source,
     )
     return True

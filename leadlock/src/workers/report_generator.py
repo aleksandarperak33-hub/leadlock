@@ -1,5 +1,5 @@
 """
-Report generator worker — creates weekly reports and sends via email.
+Report generator worker - creates weekly reports and sends via email.
 """
 import asyncio
 import logging
@@ -63,7 +63,7 @@ async def _send_report_email(client: Client, metrics) -> bool:
     settings = get_settings()
 
     if not settings.sendgrid_api_key:
-        logger.warning("SendGrid not configured — skipping email for %s", client.business_name)
+        logger.warning("SendGrid not configured - skipping email for %s", client.business_name)
         return False
 
     try:
@@ -73,7 +73,7 @@ async def _send_report_email(client: Client, metrics) -> bool:
         message = Mail(
             from_email=(settings.sendgrid_from_email, settings.sendgrid_from_name),
             to_emails=client.owner_email,
-            subject=f"LeadLock Weekly Report — {client.business_name}",
+            subject=f"LeadLock Weekly Report - {client.business_name}",
             html_content=_render_report_html(client, metrics),
         )
 

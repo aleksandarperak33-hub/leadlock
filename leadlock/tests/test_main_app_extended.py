@@ -1,5 +1,5 @@
 """
-Extended tests for src/main.py — covers Sentry init failure, sales engine config
+Extended tests for src/main.py - covers Sentry init failure, sales engine config
 branches (auto-create, inactive, exception), brave_api_key warning, and shutdown
 with pending worker tasks.
 """
@@ -113,7 +113,7 @@ class TestSentryInitFailure:
 
 
 # ---------------------------------------------------------------------------
-# Sales engine — brave_api_key warning (line 116)
+# Sales engine - brave_api_key warning (line 116)
 # ---------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ class TestSalesEngineBraveKeyWarning:
 
 
 # ---------------------------------------------------------------------------
-# Sales engine config — auto-create (lines 131-134)
+# Sales engine config - auto-create (lines 131-134)
 # ---------------------------------------------------------------------------
 
 
@@ -199,7 +199,7 @@ class TestSalesEngineConfigAutoCreate:
 
 
 # ---------------------------------------------------------------------------
-# Sales engine config — inactive (line 139)
+# Sales engine config - inactive (line 139)
 # ---------------------------------------------------------------------------
 
 
@@ -241,7 +241,7 @@ class TestSalesEngineConfigInactive:
 
 
 # ---------------------------------------------------------------------------
-# Sales engine config — verification failure (lines 150-151)
+# Sales engine config - verification failure (lines 150-151)
 # ---------------------------------------------------------------------------
 
 

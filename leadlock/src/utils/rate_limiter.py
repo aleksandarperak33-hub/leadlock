@@ -55,7 +55,7 @@ async def check_rate_limit(
 
         return True, None
     except Exception as e:
-        # Redis failure should not block webhooks — allow through
+        # Redis failure should not block webhooks - allow through
         logger.warning("Rate limiter Redis error: %s. Allowing request.", str(e))
         return True, None
 
