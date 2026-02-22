@@ -339,6 +339,13 @@ async def get_email_reputation(redis_client) -> dict:
     if sent == 0:
         return {"score": 100, "status": "no_data", "throttle": "normal", "metrics": values}
 
+    # Require minimum sample size before penalizing. With < 20 events,
+    # a couple of bounces cause wild rate swings (2/5 = 40% bounce rate).
+    # During warmup, trust the process and don't auto-pause on noise.
+    MIN_SAMPLE_SIZE = 20
+    if sent < MIN_SAMPLE_SIZE:
+        return {"score": 100, "status": "warmup", "throttle": "normal", "metrics": values}
+
     # If "delivered" events aren't being reported by SendGrid webhook but we have
     # opens (which prove delivery), infer delivered = sent - bounced.
     # This prevents the reputation system from self-pausing on missing webhook data.

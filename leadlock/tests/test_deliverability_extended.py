@@ -664,9 +664,9 @@ class TestGetEmailReputationNonBytes:
 
         async def mock_get(key):
             return {
-                "email:reputation:sent": b"10",
+                "email:reputation:sent": b"50",
                 "email:reputation:delivered": b"0",
-                "email:reputation:bounced": b"10",
+                "email:reputation:bounced": b"50",
                 "email:reputation:complained": b"0",
                 "email:reputation:opened": b"0",
                 "email:reputation:clicked": b"0",
