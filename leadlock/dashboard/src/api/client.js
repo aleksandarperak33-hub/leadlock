@@ -57,9 +57,18 @@ function createRequest(basePath) {
   };
 }
 
+const CONTENT_BASE = '/api/v1/content';
+const CHANNEL_SCRIPTS_BASE = '/api/v1/channel-scripts';
+const ANALYTICS_BASE = '/api/v1/analytics';
+const AGENTS_BASE = '/api/v1/agents';
+
 const request = createRequest(API_BASE);
 const adminRequest = createRequest(ADMIN_BASE);
 const salesRequest = createRequest(SALES_BASE);
+const contentRequest = createRequest(CONTENT_BASE);
+const channelScriptsRequest = createRequest(CHANNEL_SCRIPTS_BASE);
+const analyticsRequest = createRequest(ANALYTICS_BASE);
+const agentsRequest = createRequest(AGENTS_BASE);
 
 export const api = {
   login: (email, password) =>
@@ -209,4 +218,40 @@ export const api = {
 
   // Bulk operations
   bulkUpdateProspects: (data) => salesRequest('/prospects/bulk', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Content Factory
+  getContentPieces: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return contentRequest(`/pieces?${qs}`);
+  },
+  updateContentStatus: (id, status, publishedUrl) => {
+    const qs = new URLSearchParams({ status, ...(publishedUrl ? { published_url: publishedUrl } : {}) }).toString();
+    return contentRequest(`/pieces/${id}/status?${qs}`, { method: 'PUT' });
+  },
+  deleteContentPiece: (id) => contentRequest(`/pieces/${id}`, { method: 'DELETE' }),
+
+  // Channel Scripts
+  getChannelScripts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return channelScriptsRequest(`/?${qs}`);
+  },
+  markScriptSent: (id) => channelScriptsRequest(`/${id}/sent`, { method: 'PUT' }),
+  skipScript: (id) => channelScriptsRequest(`/${id}/skip`, { method: 'PUT' }),
+
+  // Analytics
+  getAnalyticsFunnel: (trade) => analyticsRequest(`/funnel${trade ? `?trade=${trade}` : ''}`),
+  getAnalyticsCostPerLead: (trade) => analyticsRequest(`/cost-per-lead${trade ? `?trade=${trade}` : ''}`),
+  getAnalyticsEmailPerf: () => analyticsRequest('/email-performance'),
+  getAnalyticsAbTests: () => analyticsRequest('/ab-tests'),
+  getAnalyticsPipeline: () => analyticsRequest('/pipeline'),
+  getAnalyticsAgentCosts: (days = 7) => analyticsRequest(`/agent-costs?days=${days}`),
+
+  // Agent Fleet
+  getAgentFleet: () => agentsRequest('/fleet'),
+  getAgentActivity: (name, limit = 20) => agentsRequest(`/${name}/activity?limit=${limit}`),
+  getAgentTasks: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return agentsRequest(`/tasks?${qs}`);
+  },
+  getAgentCosts: (period = '7d') => agentsRequest(`/costs?period=${period}`),
 };

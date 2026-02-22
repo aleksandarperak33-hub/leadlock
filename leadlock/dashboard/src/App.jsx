@@ -58,6 +58,10 @@ const AdminCampaignDetail = lazy(() => import('./pages/admin/AdminCampaignDetail
 const AdminInbox = lazy(() => import('./pages/admin/AdminInbox'));
 const AdminInsights = lazy(() => import('./pages/admin/AdminInsights'));
 const AdminTemplates = lazy(() => import('./pages/admin/AdminTemplates'));
+const AdminContentFactory = lazy(() => import('./pages/admin/AdminContentFactory'));
+const AdminChannelScripts = lazy(() => import('./pages/admin/AdminChannelScripts'));
+const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics'));
+const AdminAgents = lazy(() => import('./pages/admin/AdminAgents'));
 
 function App() {
   const { token, isAdmin } = useAuth();
@@ -98,6 +102,10 @@ function App() {
             <Route path="/inbox" element={<Page component={AdminInbox} />} />
             <Route path="/insights" element={<Page component={AdminInsights} />} />
             <Route path="/templates" element={<Page component={AdminTemplates} />} />
+            <Route path="/content-factory" element={<Page component={AdminContentFactory} />} />
+            <Route path="/channel-scripts" element={<Page component={AdminChannelScripts} />} />
+            <Route path="/analytics" element={<Page component={AdminAnalytics} />} />
+            <Route path="/agents" element={<Page component={AdminAgents} />} />
           </Route>
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />

@@ -115,11 +115,27 @@
 .stagger-in > *:nth-child(11) { animation-delay: 600ms; }
 .stagger-in > *:nth-child(12) { animation-delay: 660ms; }
 
+/* Agent status pulse */
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+.animate-agent-pulse { animation: agent-pulse 2s ease-in-out infinite; }
+
+/* Slide in from right (detail panel) */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+
 /* ========== REDUCED MOTION ========== */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-page-in,
   .animate-live-pulse,
+  .animate-agent-pulse,
+  .animate-slide-in-right,
   .animate-spin,
   .animate-pulse {
     animation: none !important;
