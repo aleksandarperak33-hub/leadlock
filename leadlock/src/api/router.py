@@ -11,8 +11,6 @@ from src.api.campaign_detail import router as campaign_detail_router
 from src.api.metrics import router as metrics_router
 from src.api.billing import router as billing_router
 from src.api.integrations import router as integrations_router
-from src.api.content import router as content_router
-from src.api.channel_scripts import router as channel_scripts_router
 from src.api.analytics import router as analytics_router
 from src.api.agents import router as agents_router
 
@@ -26,7 +24,5 @@ api_router.include_router(campaign_detail_router)
 api_router.include_router(metrics_router)
 api_router.include_router(billing_router)
 api_router.include_router(integrations_router)
-api_router.include_router(content_router)
-api_router.include_router(channel_scripts_router)
 api_router.include_router(analytics_router)
 api_router.include_router(agents_router)

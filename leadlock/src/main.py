@@ -168,9 +168,6 @@ async def lifespan(app: FastAPI):
         _FLAGGED_AGENTS = {
             "ab_test_engine":    (settings.agent_ab_test_engine,    "src.workers.ab_test_engine",    "run_ab_test_engine"),
             "winback_agent":     (settings.agent_winback_agent,     "src.workers.winback_agent",     "run_winback_agent"),
-            "content_factory":   (settings.agent_content_factory,   "src.workers.content_factory",   "run_content_factory"),
-            "channel_expander":  (settings.agent_channel_expander,  "src.workers.channel_expander",  "run_channel_expander"),
-            "competitive_intel": (settings.agent_competitive_intel, "src.workers.competitive_intel", "run_competitive_intel"),
             "referral_agent":    (settings.agent_referral_agent,    "src.workers.referral_agent",    "run_referral_agent"),
             "reflection_agent":  (settings.agent_reflection_agent,  "src.workers.reflection_agent",  "run_reflection_agent"),
         }

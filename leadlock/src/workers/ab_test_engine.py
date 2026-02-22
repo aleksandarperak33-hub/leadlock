@@ -45,12 +45,12 @@ async def run_ab_test_engine():
     await asyncio.sleep(300)
 
     while True:
+        await _heartbeat()
         try:
             await ab_test_cycle()
         except Exception as e:
             logger.error("A/B test engine cycle error: %s", str(e))
 
-        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

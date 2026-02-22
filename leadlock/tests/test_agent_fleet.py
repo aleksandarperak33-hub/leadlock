@@ -48,9 +48,9 @@ def _utc_iso(seconds_ago: float = 0) -> str:
 # ---------------------------------------------------------------------------
 
 class TestAgentRegistry:
-    def test_registry_has_nine_agents(self):
+    def test_registry_has_six_agents(self):
         from src.services.agent_fleet import AGENT_REGISTRY
-        assert len(AGENT_REGISTRY) == 9
+        assert len(AGENT_REGISTRY) == 6
 
     def test_every_agent_has_required_fields(self):
         from src.services.agent_fleet import AGENT_REGISTRY
@@ -130,8 +130,8 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         # No cache hit
         mock_redis.get.return_value = None
-        # All 9 heartbeats — recent timestamps
-        mock_redis.mget.return_value = [_utc_iso(60)] * 9
+        # All 6 heartbeats — recent timestamps
+        mock_redis.mget.return_value = [_utc_iso(60)] * 6
         # Cost hash for today
         mock_redis.hgetall.return_value = {"ab_test_engine": "0.001", "winback_agent": "0.002"}
         mock_redis.set.return_value = True
@@ -150,14 +150,14 @@ class TestGetFleetStatus:
 
         assert "fleet_summary" in result
         assert "agents" in result
-        assert len(result["agents"]) == 9
-        assert result["fleet_summary"]["total_agents"] == 9
+        assert len(result["agents"]) == 6
+        assert result["fleet_summary"]["total_agents"] == 6
 
     @pytest.mark.asyncio
     async def test_uses_cache_when_available(self):
         from src.services.agent_fleet import get_fleet_status
 
-        cached_data = {"fleet_summary": {"total_agents": 9}, "agents": []}
+        cached_data = {"fleet_summary": {"total_agents": 6}, "agents": []}
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(cached_data)
 
@@ -174,7 +174,7 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
         # All heartbeats are None (no data)
-        mock_redis.mget.return_value = [None] * 9
+        mock_redis.mget.return_value = [None] * 6
         mock_redis.hgetall.return_value = {}
         mock_redis.set.return_value = True
 

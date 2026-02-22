@@ -1735,7 +1735,7 @@ class TestSalesOutreachGenerate:
         )
 
         assert result["subject"] == "Your leads"
-        mock_learning.assert_called_once_with("hvac", "TX")
+        mock_learning.assert_called_once_with("hvac", "TX", 1)
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)

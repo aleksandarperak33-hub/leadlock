@@ -21,22 +21,27 @@ PERFORMANCE DATA:
 
 Analyze:
 1. A/B TEST RESULTS: Which angles/approaches worked? What should we test next?
-2. CONTENT QUALITY: Any content types consistently underperforming?
+2. EMAIL PERFORMANCE: Which trades/steps have best open and reply rates?
 3. WIN-BACK EFFECTIVENESS: Which angles got the best response?
 4. COST EFFICIENCY: Any agents spending more than expected?
 5. REGRESSIONS: Any metrics that got worse compared to previous periods?
+6. WINNING PATTERNS: Extract specific subject line instructions that demonstrably work.
 
 For each regression found, output a structured entry.
+For each winning pattern found, output a structured entry with the instruction that works.
 
 Output valid JSON:
 {{
   "summary": "1-2 sentence executive summary",
   "ab_test_insights": "...",
-  "content_insights": "...",
+  "email_insights": "...",
   "winback_insights": "...",
   "cost_insights": "...",
   "regressions": [
     {{"agent_name": "...", "text": "...", "severity": "info|warning|critical"}}
+  ],
+  "winning_patterns": [
+    {{"instruction": "...", "trade": "hvac|plumbing|roofing|null", "step": 1, "open_rate": 0.35, "reason": "..."}}
   ],
   "recommendations": ["...", "...", "..."]
 }}"""
@@ -93,15 +98,67 @@ async def run_reflection_analysis(performance_data: dict) -> dict:
 
         logger.info("Reflection: stored %d regressions", len(regressions))
 
+    # Store discovered winning patterns via intelligence loop
+    winning_patterns = parsed.get("winning_patterns", [])
+    if winning_patterns:
+        try:
+            from src.services.winning_patterns import store_winning_pattern
+
+            stored_count = 0
+            for wp in winning_patterns:
+                instruction = wp.get("instruction", "").strip()
+                if not instruction:
+                    continue
+                trade = wp.get("trade")
+                if trade == "null" or trade == "None":
+                    trade = None
+                await store_winning_pattern(
+                    source="reflection",
+                    instruction_text=instruction,
+                    trade=trade,
+                    step=wp.get("step"),
+                    open_rate=float(wp.get("open_rate", 0.0)),
+                    sample_size=0,  # Reflection-derived, no direct sample
+                )
+                stored_count += 1
+
+            if stored_count:
+                logger.info("Reflection: stored %d winning patterns", stored_count)
+        except Exception as wp_err:
+            logger.warning("Failed to store reflection winning patterns: %s", str(wp_err))
+
+    # Cache latest insights summary in Redis for fast reads
+    summary = parsed.get("summary", "")
+    if summary:
+        try:
+            from src.utils.dedup import get_redis
+
+            redis = await get_redis()
+            cache_data = json.dumps({
+                "summary": summary,
+                "recommendations": parsed.get("recommendations", []),
+                "patterns_count": len(winning_patterns),
+                "regressions_count": len(regressions),
+            })
+            await redis.set(
+                "leadlock:reflection:latest_insights",
+                cache_data,
+                ex=8 * 86400,  # 8-day TTL
+            )
+            logger.info("Reflection: cached insights summary in Redis")
+        except Exception as cache_err:
+            logger.debug("Failed to cache reflection insights: %s", str(cache_err))
+
     return {
-        "summary": parsed.get("summary", ""),
+        "summary": summary,
         "insights": {
             "ab_test": parsed.get("ab_test_insights"),
-            "content": parsed.get("content_insights"),
+            "email": parsed.get("email_insights"),
             "winback": parsed.get("winback_insights"),
             "cost": parsed.get("cost_insights"),
         },
         "regressions": regressions,
+        "winning_patterns": winning_patterns,
         "recommendations": parsed.get("recommendations", []),
         "ai_cost_usd": ai_cost,
     }

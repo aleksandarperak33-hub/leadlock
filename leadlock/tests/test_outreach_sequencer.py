@@ -1604,8 +1604,8 @@ class TestSendSequenceEmail:
                 template_id="bad-uuid",
             )
 
-        # Falls back to AI generation
-        mock_gen.assert_awaited_once()
+        # Falls back to AI generation (may be called twice due to quality gate retry)
+        assert mock_gen.await_count >= 1
 
     @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
     @patch(

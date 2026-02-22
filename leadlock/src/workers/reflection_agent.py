@@ -41,6 +41,7 @@ async def run_reflection_agent():
     await asyncio.sleep(3600)
 
     while True:
+        await _heartbeat()
         try:
             if not await _should_run_this_week():
                 logger.debug("Reflection agent: already ran this week")
@@ -49,7 +50,6 @@ async def run_reflection_agent():
         except Exception as e:
             logger.error("Reflection agent cycle error: %s", str(e))
 
-        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

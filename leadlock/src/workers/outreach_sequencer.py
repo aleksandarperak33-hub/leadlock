@@ -181,7 +181,7 @@ async def _heartbeat():
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        await redis.set("leadlock:worker_health:outreach_sequencer", datetime.now(timezone.utc).isoformat(), ex=3600)
+        await redis.set("leadlock:worker_health:outreach_sequencer", datetime.now(timezone.utc).isoformat(), ex=2700)
     except Exception:
         pass
 
@@ -349,6 +349,7 @@ async def run_outreach_sequencer():
     logger.info("Outreach sequencer started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:
+        await _heartbeat()
         try:
             # Check if sequencer is paused
             async with async_session_factory() as db:
@@ -361,7 +362,6 @@ async def run_outreach_sequencer():
         except Exception as e:
             logger.error("Outreach sequencer error: %s", str(e))
 
-        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -751,6 +751,20 @@ async def _generate_email_with_template(
             else ab_extra_instruction
         )
 
+    # If no AB experiment and no template instructions, inject winning patterns
+    if not ab_extra_instruction and not extra_instructions:
+        try:
+            from src.services.winning_patterns import format_patterns_for_prompt
+
+            patterns = await format_patterns_for_prompt(
+                trade=prospect.prospect_trade_type,
+                step=next_step,
+            )
+            if patterns:
+                extra_instructions = patterns
+        except Exception:
+            pass  # Patterns are a bonus, not critical path
+
     result = await generate_outreach_email(
         prospect_name=prospect.prospect_name,
         company_name=prospect.prospect_company or prospect.prospect_name,
@@ -866,6 +880,52 @@ async def send_sequence_email(
         "body_html": sanitize_dashes(email_result.get("body_html", "")),
         "body_text": sanitize_dashes(email_result.get("body_text", "")),
     }
+
+    # Quality gate - lightweight pre-send validation
+    try:
+        from src.services.email_quality_gate import check_email_quality
+
+        quality = check_email_quality(
+            subject=email_result["subject"],
+            body_text=email_result["body_text"],
+            prospect_name=prospect.prospect_name,
+            company_name=prospect.prospect_company,
+        )
+        if not quality["passed"]:
+            logger.info(
+                "Quality gate failed for %s (step %d): %s - regenerating",
+                str(prospect.id)[:8], next_step, "; ".join(quality["issues"]),
+            )
+            # Regenerate once
+            retry_result = await _generate_email_with_template(
+                prospect=prospect,
+                next_step=next_step,
+                template=template,
+                sender_name=config.sender_name or "Alek",
+                enrichment_data=prospect.enrichment_data,
+            )
+            if not retry_result.get("error"):
+                retry_result = {
+                    **retry_result,
+                    "subject": sanitize_dashes(retry_result.get("subject", "")),
+                    "body_html": sanitize_dashes(retry_result.get("body_html", "")),
+                    "body_text": sanitize_dashes(retry_result.get("body_text", "")),
+                }
+                retry_quality = check_email_quality(
+                    subject=retry_result["subject"],
+                    body_text=retry_result["body_text"],
+                    prospect_name=prospect.prospect_name,
+                    company_name=prospect.prospect_company,
+                )
+                if retry_quality["passed"]:
+                    email_result = retry_result
+                else:
+                    logger.warning(
+                        "Quality gate still failing for %s after retry: %s - sending anyway",
+                        str(prospect.id)[:8], "; ".join(retry_quality["issues"]),
+                    )
+    except Exception as qg_err:
+        logger.debug("Quality gate check failed: %s", str(qg_err))
 
     # Build unsubscribe URL
     base_url = settings.app_base_url.rstrip("/")

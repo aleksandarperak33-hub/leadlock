@@ -56,12 +56,12 @@ async def run_winback_agent():
     await asyncio.sleep(600)
 
     while True:
+        await _heartbeat()
         try:
             await winback_cycle()
         except Exception as e:
             logger.error("Win-back agent cycle error: %s", str(e))
 
-        await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

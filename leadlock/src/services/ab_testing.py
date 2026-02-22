@@ -71,6 +71,21 @@ async def create_experiment(
         f"for email sequence step {sequence_step}{trade_context}."
     )
 
+    # Fetch previous winning patterns to bias new variants toward proven approaches
+    try:
+        from src.services.winning_patterns import format_patterns_for_prompt
+
+        patterns_context = await format_patterns_for_prompt(
+            trade=target_trade, step=sequence_step,
+        )
+        if patterns_context:
+            user_message += (
+                f"\n\nPrevious winners (use as inspiration, but vary the angles):\n"
+                f"{patterns_context}"
+            )
+    except Exception as wp_err:
+        logger.debug("Could not fetch winning patterns for experiment: %s", str(wp_err))
+
     result = await generate_response(
         system_prompt=VARIANT_GENERATION_PROMPT.format(count=variant_count),
         user_message=user_message,
@@ -295,6 +310,23 @@ async def check_and_declare_winner(experiment_id: str) -> Optional[dict]:
             str(experiment.id)[:8], best.variant_label,
             best.open_rate * 100, improvement * 100,
         )
+
+        # Store winning pattern for intelligence loop
+        try:
+            from src.services.winning_patterns import store_winning_pattern
+
+            await store_winning_pattern(
+                source="ab_test",
+                instruction_text=best.subject_instruction,
+                trade=experiment.target_trade,
+                step=experiment.sequence_step,
+                open_rate=best.open_rate,
+                reply_rate=(best.total_replied / best.total_sent) if best.total_sent > 0 else 0.0,
+                sample_size=best.total_sent,
+                source_id=str(experiment.id),
+            )
+        except Exception as wp_err:
+            logger.warning("Failed to store winning pattern: %s", str(wp_err))
 
         return {
             "winner_label": best.variant_label,

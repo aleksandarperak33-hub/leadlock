@@ -49,28 +49,120 @@ JSON format:
 body_html: simple <p> tags only. No complex HTML.
 body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. End with {sender_name} on its own line."""
 
-async def _get_learning_context(trade_type: str, state: str) -> str:
+async def _get_reply_rate_by_trade(trade_type: str) -> float:
+    """Query learning signals for email_replied rate by trade."""
+    try:
+        from src.services.learning import get_open_rate_by_dimension
+
+        # Reuse the dimension query but for reply signals
+        from sqlalchemy import select, func, and_, text
+        from src.database import async_session_factory
+        from src.models.learning_signal import LearningSignal
+
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(func.avg(LearningSignal.value))
+                .where(
+                    and_(
+                        LearningSignal.signal_type == "email_replied",
+                        func.jsonb_extract_path_text(
+                            LearningSignal.dimensions, "trade"
+                        ) == trade_type,
+                    )
+                )
+            )
+            rate = result.scalar()
+            return float(rate) if rate is not None else 0.0
+    except Exception:
+        return 0.0
+
+
+async def _get_best_day_of_week(trade_type: str, state: str) -> str:
+    """Query learning signals for the best day_of_week to send emails."""
+    try:
+        from sqlalchemy import select, func, and_, text
+        from src.database import async_session_factory
+        from src.models.learning_signal import LearningSignal
+
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(
+                    func.jsonb_extract_path_text(
+                        LearningSignal.dimensions, "day_of_week"
+                    ).label("dow"),
+                    func.avg(LearningSignal.value).label("avg_val"),
+                    func.count().label("cnt"),
+                )
+                .where(
+                    and_(
+                        LearningSignal.signal_type == "email_opened",
+                        func.jsonb_extract_path_text(
+                            LearningSignal.dimensions, "trade"
+                        ) == trade_type,
+                    )
+                )
+                .group_by(text("dow"))
+                .having(func.count() >= 5)
+                .order_by(text("avg_val DESC"))
+                .limit(1)
+            )
+            row = result.first()
+            if row and row.dow:
+                return row.dow
+    except Exception:
+        pass
+    return ""
+
+
+async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> str:
     """
     Fetch learning insights to include in AI prompt context.
-    Returns a short string with best-performing patterns, or empty string.
+    Returns a short string with best-performing patterns, capped at 5 lines.
     """
+    parts: list[str] = []
+
     try:
         from src.services.learning import get_open_rate_by_dimension, get_best_send_time
-
-        parts = []
 
         open_rate = await get_open_rate_by_dimension("trade", trade_type)
         if open_rate > 0:
             parts.append(f"Avg open rate for {trade_type}: {open_rate:.0%}")
 
+        # Open rate by step
+        step_open = await get_open_rate_by_dimension("step", str(step))
+        if step_open > 0:
+            parts.append(f"Open rate for step {step}: {step_open:.0%}")
+
+        reply_rate = await _get_reply_rate_by_trade(trade_type)
+        if reply_rate > 0:
+            parts.append(f"Reply rate for {trade_type}: {reply_rate:.0%}")
+
+        best_day = await _get_best_day_of_week(trade_type, state)
+        if best_day:
+            parts.append(f"Best day to send: {best_day}")
+
         best_time = await get_best_send_time(trade_type, state)
         if best_time:
             parts.append(f"Best send time: {best_time}")
-
-        if parts:
-            return "Performance insights:\n" + "\n".join(f"- {p}" for p in parts)
     except Exception:
         pass
+
+    # Add winning patterns
+    try:
+        from src.services.winning_patterns import format_patterns_for_prompt
+
+        patterns = await format_patterns_for_prompt(trade=trade_type, step=step)
+        if patterns:
+            parts.append(patterns)
+    except Exception:
+        pass
+
+    # Cap at 5 insight lines to avoid prompt bloat
+    if parts:
+        capped = parts[:5]
+        return "Performance insights:\n" + "\n".join(
+            f"- {p}" if not p.startswith("Proven") else p for p in capped
+        )
 
     return ""
 
@@ -175,22 +267,40 @@ async def generate_outreach_email(
 - Trade: {trade_type}
 - Location: {city}, {state}"""
 
-    if decision_maker_title:
-        prospect_details += f"\n- Title: {decision_maker_title}"
-    if rating:
-        prospect_details += f"\n- Google Rating: {rating}/5"
-    if review_count:
-        prospect_details += f"\n- Reviews: {review_count}"
     if website:
         prospect_details += f"\n- Website: {website}"
 
-    # Add enrichment context (website summary gives AI more to work with)
+    # Structured personalization instructions from enrichment data
+    personalization: list[str] = []
+    if decision_maker_title:
+        personalization.append(
+            f"Decision-maker is {effective_name}, {decision_maker_title} "
+            f"- use their first name and acknowledge their role."
+        )
+    if rating and review_count:
+        personalization.append(
+            f"Their Google rating is {rating}/5 with {review_count} reviews "
+            f"- reference this specifically."
+        )
+    elif rating:
+        personalization.append(
+            f"Their Google rating is {rating}/5 - reference this specifically."
+        )
+
     website_summary = enrichment.get("website_summary")
     if website_summary:
-        prospect_details += f"\n- About: {website_summary[:200]}"
+        personalization.append(
+            f"About their business: {website_summary[:200]}. "
+            f"Reference something specific from this."
+        )
+
+    if personalization:
+        prospect_details += "\n\nPersonalization instructions:\n" + "\n".join(
+            f"- {p}" for p in personalization
+        )
 
     # Enrich with learning insights
-    learning_context = await _get_learning_context(trade_type, state)
+    learning_context = await _get_learning_context(trade_type, state, step)
     if learning_context:
         prospect_details += f"\n\n{learning_context}"
 

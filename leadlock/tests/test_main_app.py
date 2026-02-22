@@ -426,9 +426,6 @@ class TestLifespan:
             "src.workers.outreach_health.run_outreach_health",
             "src.workers.ab_test_engine.run_ab_test_engine",
             "src.workers.winback_agent.run_winback_agent",
-            "src.workers.content_factory.run_content_factory",
-            "src.workers.channel_expander.run_channel_expander",
-            "src.workers.competitive_intel.run_competitive_intel",
             "src.workers.referral_agent.run_referral_agent",
             "src.workers.reflection_agent.run_reflection_agent",
         ]
@@ -445,8 +442,8 @@ class TestLifespan:
             async with lifespan(mock_app):
                 pass
 
-        # 9 core + 5 sales engine + 7 agent army = 21 workers
-        assert len(task_count) == 21
+        # 9 core + 5 sales engine + 4 flagged agents = 18 workers
+        assert len(task_count) == 18
 
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_cancels_workers(self):

@@ -37,7 +37,7 @@ function formatTime(iso) {
 }
 
 /**
- * Agent Army — mission control for the 9-agent fleet.
+ * Agent Army — mission control for the 6-agent fleet.
  * 4 tabs: Fleet (default), Task Queue, Costs, Activity.
  */
 export default function AdminAgents() {
@@ -92,7 +92,7 @@ export default function AdminAgents() {
         <div className="animate-fade-up">
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 9 }).map((_, i) => (
+              {Array.from({ length: 6 }).map((_, i) => (
                 <AgentCardSkeleton key={i} />
               ))}
             </div>
