@@ -339,10 +339,19 @@ async def get_email_reputation(redis_client) -> dict:
     if sent == 0:
         return {"score": 100, "status": "no_data", "throttle": "normal", "metrics": values}
 
-    delivery_rate = values["delivered"] / sent
+    # If "delivered" events aren't being reported by SendGrid webhook but we have
+    # opens (which prove delivery), infer delivered = sent - bounced.
+    # This prevents the reputation system from self-pausing on missing webhook data.
+    delivered = values["delivered"]
+    if delivered == 0 and (values["opened"] > 0 or values["bounced"] < sent):
+        delivered = sent - values["bounced"]
+        values["delivered"] = delivered
+        values["delivered_inferred"] = True
+
+    delivery_rate = delivered / sent if sent > 0 else 0.0
     bounce_rate = values["bounced"] / sent
     complaint_rate = values["complained"] / sent
-    open_rate = values["opened"] / values["delivered"] if values["delivered"] > 0 else 0.0
+    open_rate = values["opened"] / delivered if delivered > 0 else 0.0
 
     # Weighted score (0-100)
     score = 100.0
