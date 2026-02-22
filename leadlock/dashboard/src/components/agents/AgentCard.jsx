@@ -1,6 +1,9 @@
 import {
   FlaskConical, Thermometer, RefreshCw, Factory, Share2,
   Search, Gift, Brain, HeartPulse, Sparkles,
+  Mail, Settings, Trash2, ShieldCheck, Activity,
+  Database, Send, Bell, GitBranch, AlertTriangle,
+  RotateCw, Shield,
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -13,18 +16,38 @@ const ICON_MAP = {
   'gift': Gift,
   'brain': Brain,
   'heart-pulse': HeartPulse,
+  'mail': Mail,
+  'cog': Settings,
+  'trash-2': Trash2,
+  'shield-check': ShieldCheck,
+  'activity': Activity,
+  'database': Database,
+  'send': Send,
+  'bell': Bell,
+  'git-branch': GitBranch,
+  'alert-triangle': AlertTriangle,
+  'rotate-cw': RotateCw,
+  'shield': Shield,
 };
 
 const COLOR_BG = {
   purple: 'bg-purple-50', blue: 'bg-blue-50', amber: 'bg-amber-50',
   green: 'bg-green-50', cyan: 'bg-cyan-50', red: 'bg-red-50',
   pink: 'bg-pink-50', indigo: 'bg-indigo-50', emerald: 'bg-emerald-50',
+  teal: 'bg-teal-50', sky: 'bg-sky-50', lime: 'bg-lime-50',
+  rose: 'bg-rose-50', slate: 'bg-slate-50', stone: 'bg-stone-50',
+  violet: 'bg-violet-50', orange: 'bg-orange-50', yellow: 'bg-yellow-50',
+  gray: 'bg-gray-50',
 };
 
 const COLOR_ICON = {
   purple: 'text-purple-500', blue: 'text-blue-500', amber: 'text-amber-500',
   green: 'text-green-500', cyan: 'text-cyan-500', red: 'text-red-500',
   pink: 'text-pink-500', indigo: 'text-indigo-500', emerald: 'text-emerald-500',
+  teal: 'text-teal-500', sky: 'text-sky-500', lime: 'text-lime-500',
+  rose: 'text-rose-500', slate: 'text-slate-500', stone: 'text-stone-500',
+  violet: 'text-violet-500', orange: 'text-orange-500', yellow: 'text-yellow-500',
+  gray: 'text-gray-500',
 };
 
 const STATUS_DOT = {

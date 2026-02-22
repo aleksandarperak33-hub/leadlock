@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronDown, ChevronRight } from 'lucide-react';
 import {
+  X, ChevronDown, ChevronRight,
   FlaskConical, Thermometer, RefreshCw, Factory, Share2,
   Search, Gift, Brain, HeartPulse, Sparkles,
+  Mail, Settings, Trash2, ShieldCheck, Activity,
+  Database, Send, Bell, GitBranch, AlertTriangle,
+  RotateCw, Shield,
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { api } from '../../api/client';
@@ -17,24 +20,48 @@ const ICON_MAP = {
   'gift': Gift,
   'brain': Brain,
   'heart-pulse': HeartPulse,
+  'mail': Mail,
+  'cog': Settings,
+  'trash-2': Trash2,
+  'shield-check': ShieldCheck,
+  'activity': Activity,
+  'database': Database,
+  'send': Send,
+  'bell': Bell,
+  'git-branch': GitBranch,
+  'alert-triangle': AlertTriangle,
+  'rotate-cw': RotateCw,
+  'shield': Shield,
 };
 
 const COLOR_ICON = {
   purple: 'text-purple-500', blue: 'text-blue-500', amber: 'text-amber-500',
   green: 'text-green-500', cyan: 'text-cyan-500', red: 'text-red-500',
   pink: 'text-pink-500', indigo: 'text-indigo-500', emerald: 'text-emerald-500',
+  teal: 'text-teal-500', sky: 'text-sky-500', lime: 'text-lime-500',
+  rose: 'text-rose-500', slate: 'text-slate-500', stone: 'text-stone-500',
+  violet: 'text-violet-500', orange: 'text-orange-500', yellow: 'text-yellow-500',
+  gray: 'text-gray-500',
 };
 
 const COLOR_BG = {
   purple: 'bg-purple-50', blue: 'bg-blue-50', amber: 'bg-amber-50',
   green: 'bg-green-50', cyan: 'bg-cyan-50', red: 'bg-red-50',
   pink: 'bg-pink-50', indigo: 'bg-indigo-50', emerald: 'bg-emerald-50',
+  teal: 'bg-teal-50', sky: 'bg-sky-50', lime: 'bg-lime-50',
+  rose: 'bg-rose-50', slate: 'bg-slate-50', stone: 'bg-stone-50',
+  violet: 'bg-violet-50', orange: 'bg-orange-50', yellow: 'bg-yellow-50',
+  gray: 'bg-gray-50',
 };
 
 const COLOR_HEX = {
   purple: '#a855f7', blue: '#3b82f6', amber: '#f59e0b',
   green: '#22c55e', cyan: '#06b6d4', red: '#ef4444',
   pink: '#ec4899', indigo: '#6366f1', emerald: '#10b981',
+  teal: '#14b8a6', sky: '#0ea5e9', lime: '#84cc16',
+  rose: '#f43f5e', slate: '#64748b', stone: '#78716c',
+  violet: '#8b5cf6', orange: '#f97316', yellow: '#eab308',
+  gray: '#6b7280',
 };
 
 const STATUS_BADGE = {

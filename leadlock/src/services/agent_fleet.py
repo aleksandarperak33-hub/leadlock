@@ -27,13 +27,26 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _SOUL_CACHE: dict[str, str] = {}
 
-_SOUL_FILE_MAP: dict[str, str] = {
+_SOUL_FILE_MAP: dict[str, str | None] = {
     "ab_test_engine": "ab_testing.md",
     "warmup_optimizer": "warmup_optimizer.md",
     "winback_agent": "winback.md",
     "referral_agent": "prospect_researcher.md",
     "reflection_agent": "reflection.md",
     "outreach_health": "outreach_health.md",
+    "outreach_sequencer": None,
+    "scraper": None,
+    "task_processor": None,
+    "outreach_cleanup": None,
+    "deliverability_monitor": None,
+    "health_monitor": None,
+    "crm_sync": None,
+    "followup_scheduler": None,
+    "booking_reminder": None,
+    "lead_lifecycle": None,
+    "stuck_lead_sweeper": None,
+    "retry_worker": None,
+    "registration_poller": None,
 }
 
 _SOULS_DIR = Path(__file__).resolve().parent.parent / "agents" / "souls"
@@ -57,7 +70,7 @@ async def _load_soul_summary(agent_name: str) -> str:
         return _SOUL_CACHE[agent_name]
 
     filename = _SOUL_FILE_MAP.get(agent_name)
-    if not filename:
+    if filename is None:
         return ""
 
     path = _SOULS_DIR / filename
@@ -136,6 +149,136 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": False,
         "poll_interval": 900,
         "task_types": ["health_check"],
+    },
+    "outreach_sequencer": {
+        "display_name": "Outreach Sequencer",
+        "description": "Executes multi-step outreach sequences for active campaigns",
+        "schedule": "Every 30 min",
+        "icon": "mail",
+        "color": "red",
+        "uses_ai": True,
+        "poll_interval": 1800,
+        "task_types": ["outreach_sequence"],
+    },
+    "scraper": {
+        "display_name": "Prospect Scraper",
+        "description": "Discovers and enriches new prospect records",
+        "schedule": "Every 15 min",
+        "icon": "search",
+        "color": "cyan",
+        "uses_ai": False,
+        "poll_interval": 900,
+        "task_types": ["scrape_prospects"],
+    },
+    "task_processor": {
+        "display_name": "Task Processor",
+        "description": "Processes queued background tasks from all agents",
+        "schedule": "Every 10s",
+        "icon": "cog",
+        "color": "gray",
+        "uses_ai": False,
+        "poll_interval": 10,
+        "task_types": ["process_task"],
+    },
+    "outreach_cleanup": {
+        "display_name": "Sequence Cleanup",
+        "description": "Removes expired and orphaned outreach sequences",
+        "schedule": "Every 4 hrs",
+        "icon": "trash-2",
+        "color": "slate",
+        "uses_ai": False,
+        "poll_interval": 14400,
+        "task_types": ["cleanup_sequences"],
+    },
+    "deliverability_monitor": {
+        "display_name": "Deliverability Monitor",
+        "description": "Tracks bounce rates, spam complaints, and sender reputation",
+        "schedule": "Every 5 min",
+        "icon": "shield-check",
+        "color": "teal",
+        "uses_ai": False,
+        "poll_interval": 300,
+        "task_types": ["check_deliverability"],
+    },
+    "health_monitor": {
+        "display_name": "System Health",
+        "description": "Monitors infrastructure health and service availability",
+        "schedule": "Every 5 min",
+        "icon": "activity",
+        "color": "green",
+        "uses_ai": False,
+        "poll_interval": 300,
+        "task_types": ["system_health_check"],
+    },
+    "crm_sync": {
+        "display_name": "CRM Sync",
+        "description": "Synchronizes lead and appointment data with external CRMs",
+        "schedule": "Every 30s",
+        "icon": "database",
+        "color": "orange",
+        "uses_ai": False,
+        "poll_interval": 30,
+        "task_types": ["sync_crm"],
+    },
+    "followup_scheduler": {
+        "display_name": "Follow-Up Scheduler",
+        "description": "Schedules and dispatches follow-up messages for active leads",
+        "schedule": "Every 60s",
+        "icon": "send",
+        "color": "sky",
+        "uses_ai": False,
+        "poll_interval": 60,
+        "task_types": ["schedule_followup"],
+    },
+    "booking_reminder": {
+        "display_name": "Booking Reminder",
+        "description": "Sends appointment reminders to booked leads",
+        "schedule": "Every 30 min",
+        "icon": "bell",
+        "color": "yellow",
+        "uses_ai": False,
+        "poll_interval": 1800,
+        "task_types": ["send_booking_reminder"],
+    },
+    "lead_lifecycle": {
+        "display_name": "Lead Lifecycle",
+        "description": "Advances leads through lifecycle stages based on activity",
+        "schedule": "Every 30 min",
+        "icon": "git-branch",
+        "color": "lime",
+        "uses_ai": False,
+        "poll_interval": 1800,
+        "task_types": ["advance_lifecycle"],
+    },
+    "stuck_lead_sweeper": {
+        "display_name": "Stuck Lead Sweeper",
+        "description": "Detects and rescues leads stuck in intermediate states",
+        "schedule": "Every 5 min",
+        "icon": "alert-triangle",
+        "color": "rose",
+        "uses_ai": False,
+        "poll_interval": 300,
+        "task_types": ["sweep_stuck_leads"],
+    },
+    "retry_worker": {
+        "display_name": "Retry Queue",
+        "description": "Retries failed tasks with exponential backoff",
+        "schedule": "Every 60s",
+        "icon": "rotate-cw",
+        "color": "stone",
+        "uses_ai": False,
+        "poll_interval": 60,
+        "task_types": ["retry_failed"],
+    },
+    "registration_poller": {
+        "display_name": "A2P Registration",
+        "description": "Polls carrier registration status for A2P compliance",
+        "schedule": "Every 5 min",
+        "icon": "shield",
+        "color": "violet",
+        "uses_ai": False,
+        "poll_interval": 300,
+        "task_types": ["poll_registration"],
     },
 }
 

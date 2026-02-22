@@ -15,6 +15,19 @@ const AGENT_COLORS = {
   referral_agent: '#ec4899',
   reflection_agent: '#6366f1',
   outreach_health: '#10b981',
+  outreach_sequencer: '#ef4444',
+  scraper: '#06b6d4',
+  task_processor: '#6b7280',
+  outreach_cleanup: '#64748b',
+  deliverability_monitor: '#14b8a6',
+  health_monitor: '#22c55e',
+  crm_sync: '#f97316',
+  followup_scheduler: '#0ea5e9',
+  booking_reminder: '#eab308',
+  lead_lifecycle: '#84cc16',
+  stuck_lead_sweeper: '#f43f5e',
+  retry_worker: '#78716c',
+  registration_poller: '#8b5cf6',
 };
 
 const AGENT_LABELS = {
@@ -24,6 +37,19 @@ const AGENT_LABELS = {
   referral_agent: 'Referral',
   reflection_agent: 'Reflection',
   outreach_health: 'Health',
+  outreach_sequencer: 'Sequencer',
+  scraper: 'Scraper',
+  task_processor: 'Tasks',
+  outreach_cleanup: 'Cleanup',
+  deliverability_monitor: 'Deliverability',
+  health_monitor: 'Sys Health',
+  crm_sync: 'CRM Sync',
+  followup_scheduler: 'Follow-Up',
+  booking_reminder: 'Reminders',
+  lead_lifecycle: 'Lifecycle',
+  stuck_lead_sweeper: 'Sweeper',
+  retry_worker: 'Retry',
+  registration_poller: 'A2P Reg',
 };
 
 /**
