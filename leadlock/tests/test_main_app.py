@@ -1,6 +1,7 @@
 """
 Tests for src/main.py - FastAPI app creation, middleware, lifespan, and CORS.
 """
+import contextlib
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, call
@@ -408,31 +409,44 @@ class TestLifespan:
             async def __aexit__(self, *args):
                 pass
 
-        with (
-            patch("src.main.get_settings", return_value=mock_settings),
-            patch("src.main.logger"),
-            patch("asyncio.create_task", side_effect=capture_create_task),
-            patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
-            patch("src.database.async_session_factory", return_value=_FakeCtx()),
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
-            patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
-            patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
-            patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
-            patch("src.workers.scraper.run_scraper", return_value=AsyncMock()()),
-            patch("src.workers.outreach_sequencer.run_outreach_sequencer", return_value=AsyncMock()()),
-            patch("src.workers.outreach_cleanup.run_outreach_cleanup", return_value=AsyncMock()()),
-            patch("src.workers.task_processor.run_task_processor", return_value=AsyncMock()()),
-        ):
+        worker_patches = [
+            "src.workers.health_monitor.run_health_monitor",
+            "src.workers.retry_worker.run_retry_worker",
+            "src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper",
+            "src.workers.crm_sync.run_crm_sync",
+            "src.workers.followup_scheduler.run_followup_scheduler",
+            "src.workers.deliverability_monitor.run_deliverability_monitor",
+            "src.workers.booking_reminder.run_booking_reminder",
+            "src.workers.lead_lifecycle.run_lead_lifecycle",
+            "src.workers.registration_poller.run_registration_poller",
+            "src.workers.scraper.run_scraper",
+            "src.workers.outreach_sequencer.run_outreach_sequencer",
+            "src.workers.outreach_cleanup.run_outreach_cleanup",
+            "src.workers.task_processor.run_task_processor",
+            "src.workers.outreach_health.run_outreach_health",
+            "src.workers.ab_test_engine.run_ab_test_engine",
+            "src.workers.winback_agent.run_winback_agent",
+            "src.workers.content_factory.run_content_factory",
+            "src.workers.channel_expander.run_channel_expander",
+            "src.workers.competitive_intel.run_competitive_intel",
+            "src.workers.referral_agent.run_referral_agent",
+            "src.workers.reflection_agent.run_reflection_agent",
+        ]
+
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch("src.main.get_settings", return_value=mock_settings))
+            stack.enter_context(patch("src.main.logger"))
+            stack.enter_context(patch("asyncio.create_task", side_effect=capture_create_task))
+            stack.enter_context(patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())))
+            stack.enter_context(patch("src.database.async_session_factory", return_value=_FakeCtx()))
+            for wp in worker_patches:
+                stack.enter_context(patch(wp, return_value=AsyncMock()()))
+
             async with lifespan(mock_app):
                 pass
 
-        # 9 core + 4 sales engine = 13 workers
-        assert len(task_count) == 13
+        # 9 core + 5 sales engine + 7 agent army = 21 workers
+        assert len(task_count) == 21
 
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_cancels_workers(self):

@@ -155,11 +155,32 @@ async def lifespan(app: FastAPI):
         from src.workers.outreach_cleanup import run_outreach_cleanup
         from src.workers.task_processor import run_task_processor
 
+        from src.workers.outreach_health import run_outreach_health
+        from src.workers.ab_test_engine import run_ab_test_engine
+        from src.workers.winback_agent import run_winback_agent
+        from src.workers.content_factory import run_content_factory
+        from src.workers.channel_expander import run_channel_expander
+        from src.workers.competitive_intel import run_competitive_intel
+        from src.workers.referral_agent import run_referral_agent
+        from src.workers.reflection_agent import run_reflection_agent
+
         worker_tasks.append(asyncio.create_task(run_scraper()))
         worker_tasks.append(asyncio.create_task(run_outreach_sequencer()))
         worker_tasks.append(asyncio.create_task(run_outreach_cleanup()))
         worker_tasks.append(asyncio.create_task(run_task_processor()))
-        logger.info("Sales engine workers started (scraper, sequencer, cleanup, task_processor)")
+        worker_tasks.append(asyncio.create_task(run_outreach_health()))
+        worker_tasks.append(asyncio.create_task(run_ab_test_engine()))
+        worker_tasks.append(asyncio.create_task(run_winback_agent()))
+        worker_tasks.append(asyncio.create_task(run_content_factory()))
+        worker_tasks.append(asyncio.create_task(run_channel_expander()))
+        worker_tasks.append(asyncio.create_task(run_competitive_intel()))
+        worker_tasks.append(asyncio.create_task(run_referral_agent()))
+        worker_tasks.append(asyncio.create_task(run_reflection_agent()))
+        logger.info(
+            "Sales engine workers started (scraper, sequencer, cleanup, task_processor, "
+            "outreach_health, ab_test, winback, content_factory, channel_expander, "
+            "competitive_intel, referral, reflection)"
+        )
     else:
         logger.info("Sales engine workers disabled (SALES_ENGINE_ENABLED=false)")
 

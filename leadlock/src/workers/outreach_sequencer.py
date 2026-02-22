@@ -426,8 +426,24 @@ async def sequence_cycle():
         )
         sent_today = sent_today_result.scalar() or 0
 
-        # Apply warmup limit - ramp up daily sends for new domains
+        # Apply warmup limit - dynamic pacing via warmup optimizer
         warmup_limit = await _get_warmup_limit(config.daily_email_limit, config.from_email or "")
+
+        # Apply smart warmup optimizer on top of standard limit
+        try:
+            from src.services.warmup_optimizer import get_optimized_warmup_limit
+            from src.utils.dedup import get_redis as _get_redis_for_warmup
+            _redis = await _get_redis_for_warmup()
+            domain = (config.from_email or "").split("@")[1].lower() if "@" in (config.from_email or "") else "default"
+            _warmup_key = f"leadlock:email_warmup:{domain}"
+            _started_raw = await _redis.get(_warmup_key)
+            if _started_raw:
+                _started_str = _started_raw.decode() if isinstance(_started_raw, bytes) else str(_started_raw)
+                _started = datetime.fromisoformat(_started_str)
+                _days = (datetime.now(timezone.utc) - _started).days
+                warmup_limit = await get_optimized_warmup_limit(warmup_limit, _days)
+        except Exception as opt_err:
+            logger.debug("Warmup optimizer unavailable: %s", str(opt_err))
 
         # Apply reputation throttle factor
         from src.services.deliverability import EMAIL_THROTTLE_FACTORS
@@ -663,9 +679,11 @@ async def _generate_email_with_template(
     next_step: int,
     template: Optional[EmailTemplate] = None,
     sender_name: str = "Alek",
+    enrichment_data: Optional[dict] = None,
 ) -> dict:
     """
     Generate an outreach email, optionally using a template.
+    Checks for active A/B experiments and injects variant instructions.
     - No template or is_ai_generated=True with ai_instructions: use AI with instructions
     - is_ai_generated=False with body_template: render static template with substitutions
     - Fallback: standard AI generation
@@ -674,7 +692,7 @@ async def _generate_email_with_template(
     first_name = _extract_first_name(prospect.prospect_name or "")
 
     if template and not template.is_ai_generated and template.body_template:
-        # Static template with variable substitution
+        # Static template with variable substitution (no A/B testing for static templates)
         substitutions = {
             "{prospect_name}": prospect.prospect_name or "",
             "{first_name}": first_name or "there",
@@ -701,12 +719,39 @@ async def _generate_email_with_template(
             "ai_cost_usd": 0.0,
         }
 
-    # AI-generated email (with optional extra instructions from template)
+    # Check for active A/B experiment for this step
+    ab_variant = None
+    ab_extra_instruction = None
+    try:
+        from src.services.ab_testing import get_active_experiment, assign_variant
+
+        experiment = await get_active_experiment(
+            sequence_step=next_step,
+            trade_type=prospect.prospect_trade_type,
+        )
+        if experiment and experiment.get("variants"):
+            ab_variant = assign_variant(experiment["variants"])
+            if ab_variant and ab_variant.get("instruction"):
+                ab_extra_instruction = (
+                    f"SUBJECT LINE INSTRUCTION (A/B test): {ab_variant['instruction']}"
+                )
+    except Exception as e:
+        logger.debug("A/B experiment lookup failed (proceeding without): %s", str(e))
+
+    # AI-generated email (with optional extra instructions from template + A/B variant)
     extra_instructions = None
     if template and template.is_ai_generated and template.ai_instructions:
         extra_instructions = template.ai_instructions
 
-    return await generate_outreach_email(
+    # Combine template instructions with A/B variant instruction
+    if ab_extra_instruction:
+        extra_instructions = (
+            f"{extra_instructions}\n\n{ab_extra_instruction}"
+            if extra_instructions
+            else ab_extra_instruction
+        )
+
+    result = await generate_outreach_email(
         prospect_name=prospect.prospect_name,
         company_name=prospect.prospect_company or prospect.prospect_name,
         trade_type=prospect.prospect_trade_type or "general",
@@ -718,7 +763,14 @@ async def _generate_email_with_template(
         sequence_step=next_step,
         extra_instructions=extra_instructions,
         sender_name=sender_name,
+        enrichment_data=enrichment_data,
     )
+
+    # Attach A/B variant info for tracking
+    if ab_variant:
+        result["ab_variant_id"] = ab_variant.get("id")
+
+    return result
 
 
 async def send_sequence_email(
@@ -783,12 +835,13 @@ async def send_sequence_email(
                 template_id, str(prospect.id)[:8],
             )
 
-    # Generate personalized email - template-aware
+    # Generate personalized email - template-aware, enrichment-enhanced
     email_result = await _generate_email_with_template(
         prospect=prospect,
         next_step=next_step,
         template=template,
         sender_name=config.sender_name or "Alek",
+        enrichment_data=prospect.enrichment_data,
     )
 
     if email_result.get("error"):
@@ -892,7 +945,15 @@ async def send_sequence_email(
 
     now = datetime.now(timezone.utc)
 
-    # Record email
+    # Record email (with A/B variant if assigned)
+    ab_variant_id_str = email_result.get("ab_variant_id")
+    ab_variant_uuid = None
+    if ab_variant_id_str:
+        try:
+            ab_variant_uuid = uuid.UUID(ab_variant_id_str)
+        except (ValueError, TypeError):
+            pass
+
     email_record = OutreachEmail(
         outreach_id=prospect.id,
         direction="outbound",
@@ -905,8 +966,17 @@ async def send_sequence_email(
         sequence_step=next_step,
         sent_at=now,
         ai_cost_usd=email_result.get("ai_cost_usd", 0.0),
+        ab_variant_id=ab_variant_uuid,
     )
     db.add(email_record)
+
+    # Track A/B variant send event
+    if ab_variant_id_str:
+        try:
+            from src.services.ab_testing import record_event
+            await record_event(ab_variant_id_str, "sent")
+        except Exception as ab_err:
+            logger.debug("A/B send tracking failed: %s", str(ab_err))
 
     # Update prospect
     total_email_cost = email_result.get("ai_cost_usd", 0.0) + send_result.get("cost_usd", 0.0)

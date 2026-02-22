@@ -116,10 +116,14 @@ async def _dispatch_task(task_type: str, payload: dict) -> dict:
     """
     handlers = {
         "enrich_email": _handle_enrich_email,
+        "enrich_prospect": _handle_enrich_prospect,
         "record_signal": _handle_record_signal,
         "classify_reply": _handle_classify_reply,
         "send_sms_followup": _handle_send_sms_followup,
         "send_sequence_email": _handle_send_sequence_email,
+        "generate_ab_variants": _handle_generate_ab_variants,
+        "send_winback_email": _handle_send_winback_email,
+        "generate_content": _handle_generate_content,
     }
 
     handler = handlers.get(task_type)
@@ -139,6 +143,66 @@ async def _handle_enrich_email(payload: dict) -> dict:
 
     result = await enrich_prospect_email(website, company_name)
     return result
+
+
+async def _handle_enrich_prospect(payload: dict) -> dict:
+    """Research a prospect to find decision-maker name and email candidates."""
+    import uuid
+    from src.models.outreach import Outreach
+    from src.services.prospect_research import research_prospect
+
+    outreach_id = payload.get("outreach_id")
+    if not outreach_id:
+        return {"status": "skipped", "reason": "no outreach_id"}
+
+    try:
+        prospect_uuid = uuid.UUID(outreach_id)
+    except ValueError:
+        logger.warning("enrich_prospect: invalid UUID '%s'", outreach_id)
+        return {"status": "skipped", "reason": "invalid uuid"}
+
+    async with async_session_factory() as db:
+        prospect = await db.get(Outreach, prospect_uuid)
+        if not prospect:
+            return {"status": "skipped", "reason": "prospect not found"}
+
+        # Skip if already researched
+        existing = prospect.enrichment_data or {}
+        if existing.get("researched_at"):
+            return {"status": "skipped", "reason": "already researched"}
+
+        enrichment = await research_prospect(
+            website=prospect.website or "",
+            company_name=prospect.prospect_company or prospect.prospect_name or "",
+            google_rating=prospect.google_rating,
+            review_count=prospect.review_count,
+        )
+
+        # Store enrichment data (immutable update)
+        prospect.enrichment_data = {**(prospect.enrichment_data or {}), **enrichment}
+
+        # Update prospect_name with decision-maker name if found and current name is generic
+        if enrichment.get("decision_maker_name"):
+            current_name = prospect.prospect_name or ""
+            # Only update if current name looks like a company name (not a person)
+            from src.agents.sales_outreach import _extract_first_name
+            if not _extract_first_name(current_name):
+                prospect.prospect_name = enrichment["decision_maker_name"]
+                logger.info(
+                    "Updated prospect %s name: %s -> %s",
+                    str(prospect.id)[:8], current_name, enrichment["decision_maker_name"],
+                )
+
+        prospect.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        return {
+            "status": "enriched",
+            "decision_maker": enrichment.get("decision_maker_name"),
+            "source": enrichment.get("research_source"),
+            "email_candidates": len(enrichment.get("email_candidates", [])),
+            "ai_cost_usd": enrichment.get("ai_cost_usd", 0.0),
+        }
 
 
 async def _handle_record_signal(payload: dict) -> dict:
@@ -299,3 +363,87 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
         await db.commit()
 
         return {"status": "sent", "prospect_id": outreach_id}
+
+
+async def _handle_generate_ab_variants(payload: dict) -> dict:
+    """Generate A/B test variants for a sequence step."""
+    from src.services.ab_testing import create_experiment
+
+    sequence_step = payload.get("sequence_step", 1)
+    target_trade = payload.get("target_trade")
+    variant_count = payload.get("variant_count", 3)
+
+    result = await create_experiment(
+        sequence_step=sequence_step,
+        target_trade=target_trade,
+        variant_count=variant_count,
+    )
+
+    if not result:
+        return {"status": "failed", "reason": "variant generation failed"}
+
+    return {
+        "status": "created",
+        "experiment_id": result["experiment_id"],
+        "variant_count": len(result["variants"]),
+        "ai_cost_usd": result["ai_cost_usd"],
+    }
+
+
+async def _handle_send_winback_email(payload: dict) -> dict:
+    """Send a win-back email to a cold prospect."""
+    import uuid as uuid_mod
+    from src.models.outreach import Outreach
+    from src.models.sales_config import SalesEngineConfig
+    from src.workers.winback_agent import _send_winback
+    from src.config import get_settings
+
+    outreach_id = payload.get("outreach_id")
+    if not outreach_id:
+        return {"status": "skipped", "reason": "no outreach_id"}
+
+    async with async_session_factory() as db:
+        prospect = await db.get(Outreach, uuid_mod.UUID(outreach_id))
+        if not prospect:
+            return {"status": "skipped", "reason": "prospect not found"}
+
+        if prospect.winback_sent_at:
+            return {"status": "skipped", "reason": "already sent winback"}
+
+        config_result = await db.execute(
+            select(SalesEngineConfig).limit(1)
+        )
+        config = config_result.scalar_one_or_none()
+        if not config or not config.is_active:
+            return {"status": "skipped", "reason": "engine inactive"}
+
+        settings = get_settings()
+        success = await _send_winback(db, config, settings, prospect, 0)
+        await db.commit()
+
+        return {"status": "sent" if success else "failed", "prospect_id": outreach_id}
+
+
+async def _handle_generate_content(payload: dict) -> dict:
+    """Generate a content piece via the content factory."""
+    from src.services.content_generation import generate_content_piece
+
+    content_type = payload.get("content_type", "blog_post")
+    target_trade = payload.get("target_trade")
+    target_keyword = payload.get("target_keyword")
+
+    result = await generate_content_piece(
+        content_type=content_type,
+        target_trade=target_trade,
+        target_keyword=target_keyword,
+    )
+
+    if result.get("error"):
+        return {"status": "failed", "reason": result["error"]}
+
+    return {
+        "status": "created",
+        "content_id": result.get("content_id"),
+        "word_count": result.get("word_count", 0),
+        "ai_cost_usd": result.get("ai_cost_usd", 0.0),
+    }

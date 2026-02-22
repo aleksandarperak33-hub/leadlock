@@ -297,6 +297,7 @@ async def scrape_location_trade(
     total_cost = 0.0
     new_count = 0
     dupe_count = 0
+    _prospects_to_research: list[str] = []
 
     try:
         # Search via Brave - fetches ALL location IDs in batches of 20
@@ -391,7 +392,12 @@ async def scrape_location_trade(
                 outreach_sequence_step=0,
             )
             db.add(prospect)
+            await db.flush()  # Assign prospect.id within transaction
             new_count += 1
+
+            # Collect prospects to research after commit
+            if website:
+                _prospects_to_research.append(str(prospect.id))
 
         # Update job
         job.status = "completed"
@@ -407,6 +413,25 @@ async def scrape_location_trade(
             trade, location_str, query_variant, query,
             len(all_results), new_count, dupe_count, total_cost,
         )
+
+        # Enqueue prospect research tasks AFTER data is committed by caller.
+        # Uses delay_seconds=10 so the outer commit has time to complete.
+        if _prospects_to_research:
+            from src.services.task_dispatch import enqueue_task
+            for pid in _prospects_to_research:
+                try:
+                    await enqueue_task(
+                        task_type="enrich_prospect",
+                        payload={"outreach_id": pid},
+                        priority=4,
+                        delay_seconds=10,
+                    )
+                except Exception as enq_err:
+                    logger.warning(
+                        "Failed to enqueue research for %s: %s",
+                        pid[:8], str(enq_err),
+                    )
+            logger.info("Enqueued %d prospect research tasks", len(_prospects_to_research))
 
     except Exception as e:
         job.status = "failed"

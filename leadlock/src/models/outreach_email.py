@@ -45,6 +45,13 @@ class OutreachEmail(Base):
 
     ai_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
 
+    # A/B test variant assignment
+    ab_variant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ab_test_variants.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

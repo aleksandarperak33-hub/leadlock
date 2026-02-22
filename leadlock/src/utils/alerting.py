@@ -31,6 +31,11 @@ class AlertType:
     PAYMENT_FAILED = "payment_failed"
     CRM_SYNC_ERROR = "crm_sync_error"
     HIGH_BOUNCE_RATE = "high_bounce_rate"
+    OUTREACH_ZERO_SENDS = "outreach_zero_sends"
+    OUTREACH_LOW_OPEN_RATE = "outreach_low_open_rate"
+    OUTREACH_SEQUENCER_STALE = "outreach_sequencer_stale"
+    OUTREACH_REPUTATION_PAUSED = "outreach_reputation_paused"
+    OUTREACH_REPUTATION_CRITICAL = "outreach_reputation_critical"
 
 
 async def send_alert(

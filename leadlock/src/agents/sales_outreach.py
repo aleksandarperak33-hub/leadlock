@@ -133,6 +133,7 @@ async def generate_outreach_email(
     sequence_step: int = 1,
     extra_instructions: Optional[str] = None,
     sender_name: str = "Alek",
+    enrichment_data: Optional[dict] = None,
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -148,6 +149,7 @@ async def generate_outreach_email(
         website: Business website (optional)
         sequence_step: 1, 2, or 3
         sender_name: Human first name for sign-off (default "Alek")
+        enrichment_data: Prospect research data from enrichment pipeline (optional)
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
@@ -155,7 +157,17 @@ async def generate_outreach_email(
     step = min(max(sequence_step, 1), 3)
     step_instruction = STEP_INSTRUCTIONS[step]
 
-    first_name = _extract_first_name(prospect_name)
+    # Use enrichment data to enhance personalization
+    enrichment = enrichment_data or {}
+    decision_maker_name = enrichment.get("decision_maker_name")
+    decision_maker_title = enrichment.get("decision_maker_title")
+
+    # Prefer decision-maker name over generic prospect name
+    effective_name = prospect_name
+    if decision_maker_name:
+        effective_name = decision_maker_name
+
+    first_name = _extract_first_name(effective_name)
 
     prospect_details = f"""Prospect details:
 - First name: {first_name or '(no first name available - use company name in greeting)'}
@@ -163,12 +175,19 @@ async def generate_outreach_email(
 - Trade: {trade_type}
 - Location: {city}, {state}"""
 
+    if decision_maker_title:
+        prospect_details += f"\n- Title: {decision_maker_title}"
     if rating:
         prospect_details += f"\n- Google Rating: {rating}/5"
     if review_count:
         prospect_details += f"\n- Reviews: {review_count}"
     if website:
         prospect_details += f"\n- Website: {website}"
+
+    # Add enrichment context (website summary gives AI more to work with)
+    website_summary = enrichment.get("website_summary")
+    if website_summary:
+        prospect_details += f"\n- About: {website_summary[:200]}"
 
     # Enrich with learning insights
     learning_context = await _get_learning_context(trade_type, state)
@@ -295,6 +314,7 @@ BOOKING_REPLY_PROMPT = """You write a short reply email from {sender_name} at Le
 RULES:
 - You ARE {sender_name}. Sound like a real person, not a marketer.
 - Open with their first name.
+- If the prospect asked a specific question in their reply, briefly acknowledge or answer it FIRST (1 sentence) before your pitch.
 - Thank them for getting back to you - keep it casual (one sentence).
 - Give ONE concrete benefit of LeadLock in 1-2 sentences: "We make sure every lead that comes in gets a response in under 60 seconds, so you never lose a job to a competitor who called back first."
 - Include the booking link naturally: "Here's my calendar if you want to grab 15 minutes - [booking_link]"
@@ -317,6 +337,8 @@ async def generate_booking_reply(
     booking_url: str,
     sender_name: str = "Alek",
     original_subject: str = "",
+    reply_text: str = "",
+    enrichment_data: Optional[dict] = None,
 ) -> dict:
     """
     Generate an auto-reply for a prospect who replied 'interested'.
@@ -328,11 +350,21 @@ async def generate_booking_reply(
         booking_url: Cal.com/Calendly booking link
         sender_name: Human first name for sign-off
         original_subject: Subject of the email they replied to
+        reply_text: The actual text of the prospect's reply (for context)
+        enrichment_data: Prospect research data from enrichment pipeline (optional)
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
     """
-    first_name = _extract_first_name(prospect_name)
+    enrichment = enrichment_data or {}
+    decision_maker_name = enrichment.get("decision_maker_name")
+
+    # Prefer decision-maker name from enrichment
+    effective_name = prospect_name
+    if decision_maker_name:
+        effective_name = decision_maker_name
+
+    first_name = _extract_first_name(effective_name)
 
     # Reply subject: prepend Re: if not already
     subject_prefix = "Re: " if original_subject and not original_subject.startswith("Re:") else ""
@@ -345,9 +377,19 @@ async def generate_booking_reply(
 - Trade: {trade_type}
 - City: {city}
 - Booking link: {booking_url}
-- Original email subject: {original_subject or 'N/A'}
+- Original email subject: {original_subject or 'N/A'}"""
 
-Write a reply to their interested response. Include the booking link."""
+    if reply_text and reply_text.strip():
+        # Truncate to 300 chars to keep costs low
+        truncated = reply_text.strip()[:300]
+        user_message += f"\n\nThe prospect replied with: \"{truncated}\"\nAcknowledge what they said specifically. If they asked a question, answer briefly before including the booking link."
+    else:
+        user_message += "\n\nWrite a reply to their interested response. Include the booking link."
+
+    # Add enrichment context for better personalization
+    website_summary = enrichment.get("website_summary")
+    if website_summary:
+        user_message += f"\n\nAbout their business: {website_summary[:150]}"
 
     result = await generate_response(
         system_prompt=system_prompt,

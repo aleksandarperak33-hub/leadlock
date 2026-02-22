@@ -64,6 +64,7 @@ async def _send_booking_reply(
     prospect: Outreach,
     config: Optional[SalesEngineConfig],
     original_subject: str = "",
+    reply_text: str = "",
 ) -> bool:
     """
     Send auto-reply email with booking link to an interested prospect.
@@ -82,7 +83,7 @@ async def _send_booking_reply(
     from src.agents.sales_outreach import generate_booking_reply
     from src.services.cold_email import send_cold_email
 
-    # Generate the reply
+    # Generate the reply with context from their message and enrichment data
     reply = await generate_booking_reply(
         prospect_name=prospect.prospect_name or "",
         trade_type=prospect.prospect_trade_type or "",
@@ -90,6 +91,8 @@ async def _send_booking_reply(
         booking_url=config.booking_url,
         sender_name=config.sender_name or "Alek",
         original_subject=original_subject,
+        reply_text=reply_text,
+        enrichment_data=prospect.enrichment_data,
     )
 
     if reply.get("error") or not reply.get("body_html"):
@@ -373,6 +376,7 @@ async def inbound_email_webhook(
                 try:
                     auto_reply_sent = await _send_booking_reply(
                         db, prospect, config, subject,
+                        reply_text=text_body or "",
                     )
                 except Exception as reply_err:
                     logger.warning(

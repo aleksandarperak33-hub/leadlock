@@ -75,6 +75,10 @@ class Outreach(Base):
     # Generation failure tracking - after 3 failures, mark as generation_failed
     generation_failures: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Win-back tracking
+    winback_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    winback_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Campaign association (Phase 3)
     campaign_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
@@ -97,6 +101,7 @@ class Outreach(Base):
         Index("ix_outreach_source_place_id", "source_place_id", unique=True,
               postgresql_where="source_place_id IS NOT NULL"),
         Index("ix_outreach_sequence_step", "outreach_sequence_step"),
+        Index("ix_outreach_winback", "winback_eligible", "winback_sent_at"),
     )
 
     def __repr__(self) -> str:
