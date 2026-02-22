@@ -35,12 +35,12 @@ POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 # Format: (day_range_start, day_range_end, max_daily_emails)
 # day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
 EMAIL_WARMUP_SCHEDULE = [
-    (0, 1, 20),       # Days 0-1: 20 emails/day
-    (2, 4, 40),       # Days 2-4: 40 emails/day
-    (5, 7, 75),       # Days 5-7: 75 emails/day
-    (8, 14, 100),     # Week 2: 100 emails/day
-    (15, 21, 150),    # Week 3: 150 emails/day
-    (22, None, None), # After 3 weeks: use configured limit
+    (0, 3, 10),       # Days 0-3: 10 emails/day (conservative start)
+    (4, 7, 20),       # Days 4-7: 20 emails/day
+    (8, 14, 40),      # Week 2: 40 emails/day
+    (15, 21, 75),     # Week 3: 75 emails/day
+    (22, 28, 120),    # Week 4: 120 emails/day
+    (29, None, None), # After 4 weeks: use configured limit
 ]
 
 
@@ -751,6 +751,25 @@ async def send_sequence_email(
         logger.info("Skipping blacklisted prospect %s", str(prospect.id)[:8])
         return
 
+    # Check for email dedup across prospects - skip if another record with same email was already contacted
+    if prospect.prospect_email:
+        dupe_check = await db.execute(
+            select(Outreach).where(
+                and_(
+                    Outreach.prospect_email == email_lower,
+                    Outreach.id != prospect.id,
+                    Outreach.total_emails_sent > 0,
+                )
+            ).limit(1)
+        )
+        if dupe_check.scalar_one_or_none():
+            logger.info(
+                "Skipping prospect %s - email already contacted via another record",
+                str(prospect.id)[:8],
+            )
+            prospect.status = "duplicate_email"
+            return
+
     next_step = prospect.outreach_sequence_step + 1
 
     # Load template if specified
@@ -759,7 +778,10 @@ async def send_sequence_email(
         try:
             template = await db.get(EmailTemplate, uuid.UUID(template_id))
         except Exception:
-            pass
+            logger.warning(
+                "Template %s not found for prospect %s",
+                template_id, str(prospect.id)[:8],
+            )
 
     # Generate personalized email - template-aware
     email_result = await _generate_email_with_template(
@@ -774,6 +796,14 @@ async def send_sequence_email(
             "Email generation failed for prospect %s: %s",
             str(prospect.id)[:8], email_result["error"],
         )
+        # Track generation failures - after 3 failures, mark as generation_failed
+        prospect.generation_failures = (prospect.generation_failures or 0) + 1
+        if prospect.generation_failures >= 3:
+            prospect.status = "generation_failed"
+            logger.warning(
+                "Prospect %s marked generation_failed after %d failures",
+                str(prospect.id)[:8], prospect.generation_failures,
+            )
         return
 
     # Sanitize dashes from AI-generated content
@@ -806,11 +836,28 @@ async def send_sequence_email(
             in_reply_to = prev_email.sendgrid_message_id
             references = f"<{prev_email.sendgrid_message_id}>"
 
+    # For follow-ups (steps 2-3), reuse step 1 subject with "Re:" for Gmail threading
+    send_subject = email_result["subject"]
+    if next_step > 1 and in_reply_to:
+        # Look up the step 1 subject to thread the conversation
+        step1_result = await db.execute(
+            select(OutreachEmail.subject).where(
+                and_(
+                    OutreachEmail.outreach_id == prospect.id,
+                    OutreachEmail.direction == "outbound",
+                    OutreachEmail.sequence_step == 1,
+                )
+            ).limit(1)
+        )
+        step1_subject = step1_result.scalar()
+        if step1_subject:
+            send_subject = f"Re: {step1_subject}"
+
     # Send email
     send_result = await send_cold_email(
         to_email=prospect.prospect_email,
         to_name=prospect.prospect_name,
-        subject=email_result["subject"],
+        subject=send_subject,
         body_html=email_result["body_html"],
         from_email=config.from_email,
         from_name=config.from_name or "LeadLock",
@@ -823,6 +870,8 @@ async def send_sequence_email(
         },
         in_reply_to=in_reply_to,
         references=references,
+        body_text=email_result.get("body_text", ""),
+        company_name="LeadLock",
     )
 
     if send_result.get("error"):
@@ -847,7 +896,7 @@ async def send_sequence_email(
     email_record = OutreachEmail(
         outreach_id=prospect.id,
         direction="outbound",
-        subject=email_result["subject"],
+        subject=send_subject,
         body_html=email_result["body_html"],
         body_text=email_result["body_text"],
         from_email=config.from_email,

@@ -41,6 +41,8 @@ async def send_cold_email(
     custom_args: Optional[dict] = None,
     in_reply_to: Optional[str] = None,
     references: Optional[str] = None,
+    body_text: Optional[str] = None,
+    company_name: Optional[str] = None,
 ) -> dict:
     """
     Send a cold outreach email via SendGrid with CAN-SPAM compliance.
@@ -82,23 +84,27 @@ async def send_cold_email(
         )
 
         # Append CAN-SPAM footer
+        display_company = company_name or from_name
         footer_html = CAN_SPAM_FOOTER_HTML.format(
-            company_name=from_name,
+            company_name=display_company,
             company_address=company_address,
             unsubscribe_url=unsubscribe_url,
         )
         footer_text = CAN_SPAM_FOOTER_TEXT.format(
-            company_name=from_name,
+            company_name=display_company,
             company_address=company_address,
             unsubscribe_url=unsubscribe_url,
         )
 
         full_html = body_html + footer_html
 
-        # Strip HTML tags for plaintext version
-        plain_body = re.sub(r"<[^>]+>", "", body_html)
-        plain_body = re.sub(r"\s+", " ", plain_body).strip()
-        full_text = plain_body + footer_text
+        # Use AI-generated plaintext when available, fall back to HTML stripping
+        if body_text and body_text.strip():
+            full_text = body_text + footer_text
+        else:
+            plain_body = re.sub(r"<[^>]+>", "", body_html)
+            plain_body = re.sub(r"\s+", " ", plain_body).strip()
+            full_text = plain_body + footer_text
 
         # Build Mail - text/plain MUST be added before text/html per SendGrid
         message = Mail(
@@ -131,7 +137,7 @@ async def send_cold_email(
         )
         message.tracking_settings = TrackingSettings(
             open_tracking=OpenTracking(enable=True),
-            click_tracking=ClickTracking(enable=True),
+            click_tracking=ClickTracking(enable=False),
         )
 
         sg = SendGridAPIClient(api_key=settings.sendgrid_api_key)

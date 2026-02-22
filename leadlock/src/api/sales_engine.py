@@ -113,6 +113,8 @@ async def _send_booking_reply(
         reply_to=config.reply_to_email or config.from_email,
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
+        body_text=reply.get("body_text", ""),
+        company_name="LeadLock",
     )
 
     if send_result.get("error"):
@@ -350,16 +352,33 @@ async def inbound_email_webhook(
         auto_reply_sent = False
         sms_sent = False
         if classification == "interested":
-            # Send auto-reply email with booking link
-            try:
-                auto_reply_sent = await _send_booking_reply(
-                    db, prospect, config, subject,
+            # Check if we already auto-replied recently (prevent spamming on multiple replies)
+            recent_reply = await db.execute(
+                select(OutreachEmail).where(
+                    and_(
+                        OutreachEmail.outreach_id == prospect.id,
+                        OutreachEmail.direction == "outbound",
+                        OutreachEmail.sent_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                        OutreachEmail.sequence_step == prospect.outreach_sequence_step,
+                    )
+                ).limit(1)
+            )
+            if recent_reply.scalar_one_or_none():
+                logger.info(
+                    "Skipping auto-reply for %s - already replied within 24h",
+                    str(prospect.id)[:8],
                 )
-            except Exception as reply_err:
-                logger.warning(
-                    "Auto-reply failed for %s: %s",
-                    str(prospect.id)[:8], str(reply_err),
-                )
+            else:
+                # Send auto-reply email with booking link
+                try:
+                    auto_reply_sent = await _send_booking_reply(
+                        db, prospect, config, subject,
+                    )
+                except Exception as reply_err:
+                    logger.warning(
+                        "Auto-reply failed for %s: %s",
+                        str(prospect.id)[:8], str(reply_err),
+                    )
 
             # SMS follow-up (optional, if configured)
             try:
@@ -585,6 +604,27 @@ async def email_events_webhook(
                         str(email_record.id)[:8],
                         event.get("reason", "unknown"),
                     )
+                    # Track soft bounces - mark unreachable after 3+ deferrals
+                    if outreach_id:
+                        prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                        if prospect and prospect.prospect_email:
+                            deferral_count_result = await db.execute(
+                                select(func.count()).select_from(OutreachEmail).where(
+                                    and_(
+                                        OutreachEmail.outreach_id == prospect.id,
+                                        OutreachEmail.bounce_type == "deferred",
+                                    )
+                                )
+                            )
+                            deferral_count = deferral_count_result.scalar() or 0
+                            if deferral_count >= 3:
+                                prospect.status = "unreachable"
+                                prospect.email_unsubscribed = True
+                                prospect.updated_at = timestamp
+                                logger.warning(
+                                    "Prospect %s marked unreachable after %d soft bounces",
+                                    str(prospect.id)[:8], deferral_count,
+                                )
                 elif event_type == "spamreport":
                     # Record reputation event - spam complaints are CRITICAL
                     if redis:

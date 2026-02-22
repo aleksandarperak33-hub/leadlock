@@ -361,7 +361,7 @@ class TestVerifySendgridWebhook:
 
         settings = MagicMock()
         settings.sendgrid_webhook_verification_key = ""
-        settings.environment = "production"
+        settings.app_env = "production"
         mock_settings.return_value = settings
 
         request = _mock_request(query_params={}, headers={})

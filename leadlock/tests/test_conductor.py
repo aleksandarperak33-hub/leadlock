@@ -136,7 +136,7 @@ class TestHandleNewLead:
     @patch("src.agents.conductor.is_duplicate", new_callable=AsyncMock)
     @patch("src.agents.conductor.normalize_phone")
     async def test_duplicate_lead_rejected(self, mock_normalize, mock_dedup):
-        """Duplicate lead should return status 'duplicate'."""
+        """Duplicate lead should return status 'duplicate_acknowledged'."""
         mock_normalize.return_value = "+15125559876"
         mock_dedup.return_value = True
         db = AsyncMock()
@@ -144,7 +144,7 @@ class TestHandleNewLead:
         envelope = _make_envelope()
         result = await handle_new_lead(db, envelope)
 
-        assert result["status"] == "duplicate"
+        assert result["status"] == "duplicate_acknowledged"
         assert result["lead_id"] is None
 
     @patch("src.agents.conductor.needs_ai_disclosure", return_value=False)

@@ -80,7 +80,18 @@ async def handle_new_lead(
     # Dedup check
     is_dupe = await is_duplicate(envelope.client_id, phone, envelope.source)
     if is_dupe:
-        return {"lead_id": None, "status": "duplicate", "response_ms": timer.elapsed_ms}
+        # Send brief acknowledgment so customer doesn't think we're ignoring them
+        client = await db.get(Client, uuid.UUID(envelope.client_id))
+        if client and client.twilio_phone:
+            try:
+                await send_sms(
+                    to=phone,
+                    body=f"Got it, {envelope.lead.first_name or 'thanks'}! We're on it. Someone will be in touch shortly.",
+                    from_phone=client.twilio_phone,
+                )
+            except Exception as sms_err:
+                logger.warning("Duplicate ack SMS failed: %s", str(sms_err))
+        return {"lead_id": None, "status": "duplicate_acknowledged", "response_ms": timer.elapsed_ms}
 
     # Load client
     client = await db.get(Client, uuid.UUID(envelope.client_id))

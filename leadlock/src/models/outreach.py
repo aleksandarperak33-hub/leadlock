@@ -72,6 +72,9 @@ class Outreach(Base):
     email_unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
     unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    # Generation failure tracking - after 3 failures, mark as generation_failed
+    generation_failures: Mapped[int] = mapped_column(Integer, default=0)
+
     # Campaign association (Phase 3)
     campaign_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True

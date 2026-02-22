@@ -16,13 +16,21 @@ SYSTEM_PROMPT = """You write cold outreach emails from {sender_name} at LeadLock
 VOICE:
 - You ARE {sender_name}. Write like a real person texting a colleague, not a marketer.
 - Casual, direct, zero fluff. Talk like you'd talk to a buddy in the trades.
-- ALWAYS open with their first name: "Hey Mike," or "Mike," - never "Hey," or "Hey there,"
-- ALWAYS sign off with just "{sender_name}" on its own line at the end. Nothing else after it.
+- If you have their first name, open with it: "Hey Mike," or "Mike,"
+- If you only have a company name (no first name), open casually with the company: "Hey [Company] team," or just "Hey," and reference the company in the first sentence instead
+- NEVER use "Hey there," - it screams mass email
+- ALWAYS sign off with just "{sender_name}" on its own line at the end. No "Best," or "Thanks," prefix - just the name.
+
+IDENTITY:
+- {sender_name} works with home services contractors on their lead response. Briefly establish this in the first email.
+- Sound like you've looked at their business specifically, not like you're blasting a list.
+- One line of credibility is enough: "I work with a handful of [trade] shops in [city/state]" or "we've been helping contractors in [city] respond faster"
 
 CONTENT:
 - Reference something SPECIFIC about their business - their Google rating, their city, their trade
 - One pain point per email: slow lead response kills revenue
-- Include a real-sounding stat or observation (e.g. "most HVAC shops in Austin take 3+ hours to call back")
+- Include one specific number or stat that sounds researched, not made up (e.g. "$2,400/month in missed revenue" or "78% of homeowners go with the first contractor who calls back")
+- Subject lines should create curiosity or reference a specific observation - never generic. Examples: "saw your 3.8 rating, Mike" or "Austin HVAC shops losing $12k/month"
 - Soft CTA - ask a question, don't push a demo
 
 FORMATTING:
@@ -31,13 +39,15 @@ FORMATTING:
 - NEVER use em dashes or en dashes. Use hyphens (-) or commas instead
 - NEVER use ellipsis (...)
 - Subject lines must be unique and specific - reference their company name, city, or trade. NEVER reuse the same subject across prospects
+- In body_text, include "If this isn't relevant, just reply 'stop' and I won't reach out again." as the second-to-last line (before {sender_name}). This is NOT needed in body_html (the footer handles it).
+- body_text must have proper line breaks between paragraphs (use \\n\\n). Do NOT output a single blob of text.
 - Output valid JSON only
 
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
 body_html: simple <p> tags only. No complex HTML.
-body_text: plain text version (no HTML tags). End with {sender_name} on its own line."""
+body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. End with {sender_name} on its own line."""
 
 async def _get_learning_context(trade_type: str, state: str) -> str:
     """
@@ -68,18 +78,19 @@ async def _get_learning_context(trade_type: str, state: str) -> str:
 STEP_INSTRUCTIONS = {
     1: """STEP 1 - First contact.
 Open with their first name. Reference something specific about their business (rating, reviews, city, trade).
-Ask a question about their lead response time. Mention how contractors in their area are losing jobs.
+Mention a specific dollar amount contractors lose from slow lead response (e.g. "$2,400/month in missed revenue").
+End with a soft question about their current response time - not a demand.
 Under 120 words. Subject under 50 chars - must include their company name or city.""",
 
     2: """STEP 2 - Follow-up (they didn't reply to step 1).
 Open with their first name. Mention you sent them a note last week - keep it casual.
-Share a specific stat: "contractors who respond in under 5 minutes close 40% more jobs."
+Share a specific stat: "78% of homeowners go with the first contractor who calls back."
 Ask if they're happy with how fast their team gets back to leads.
 Under 90 words. Subject under 50 chars - different angle than step 1.""",
 
     3: """STEP 3 - Final email.
 Open with their first name. Keep it to 3-4 sentences max.
-Say something like "last thing from me" - no guilt, no pressure.
+Mention this is the last email you'll send - creates urgency without pressure.
 Leave the door open: "if this ever becomes a priority, just reply."
 Under 60 words. Subject under 40 chars.""",
 }
@@ -145,11 +156,9 @@ async def generate_outreach_email(
     step_instruction = STEP_INSTRUCTIONS[step]
 
     first_name = _extract_first_name(prospect_name)
-    greeting_name = first_name or "there"
 
     prospect_details = f"""Prospect details:
-- First name: {greeting_name}
-- Full name: {prospect_name}
+- First name: {first_name or '(no first name available - use company name in greeting)'}
 - Company: {company_name}
 - Trade: {trade_type}
 - Location: {city}, {state}"""
@@ -179,7 +188,7 @@ async def generate_outreach_email(
         user_message=user_message,
         model_tier="fast",
         max_tokens=500,
-        temperature=0.7,
+        temperature=0.5,
     )
 
     if result.get("error"):
@@ -324,7 +333,6 @@ async def generate_booking_reply(
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
     """
     first_name = _extract_first_name(prospect_name)
-    greeting_name = first_name or "there"
 
     # Reply subject: prepend Re: if not already
     subject_prefix = "Re: " if original_subject and not original_subject.startswith("Re:") else ""
@@ -333,7 +341,7 @@ async def generate_booking_reply(
     system_prompt = BOOKING_REPLY_PROMPT.replace("{sender_name}", sender_name)
 
     user_message = f"""Prospect details:
-- First name: {greeting_name}
+- First name: {first_name or '(not available - just say Hey,)'}
 - Trade: {trade_type}
 - City: {city}
 - Booking link: {booking_url}
@@ -367,19 +375,29 @@ Write a reply to their interested response. Include the booking link."""
     except (json.JSONDecodeError, IndexError) as e:
         logger.error("Failed to parse AI booking reply: %s", str(e))
         # Fallback: send a simple non-AI reply
+        if booking_url and booking_url.startswith("http"):
+            booking_link_html = (
+                f'<p>Here\'s my calendar if you want to grab 15 minutes - '
+                f'<a href="{booking_url}">{booking_url}</a></p>'
+            )
+            booking_link_text = f"Here's my calendar if you want to grab 15 minutes - {booking_url}\n\n"
+        else:
+            booking_link_html = ""
+            booking_link_text = ""
+
+        greeting = f"Hey {first_name}," if first_name else "Hey,"
         fallback_html = (
-            f"<p>Hey {greeting_name},</p>"
+            f"<p>{greeting}</p>"
             f"<p>Thanks for getting back to me. Would love to show you how LeadLock "
             f"can help your {trade_type} business respond to every lead in under 60 seconds.</p>"
-            f'<p>Here\'s my calendar if you want to grab 15 minutes - '
-            f'<a href="{booking_url}">{booking_url}</a></p>'
+            f"{booking_link_html}"
             f"<p>{sender_name}</p>"
         )
         fallback_text = (
-            f"Hey {greeting_name},\n\n"
+            f"{greeting}\n\n"
             f"Thanks for getting back to me. Would love to show you how LeadLock "
             f"can help your {trade_type} business respond to every lead in under 60 seconds.\n\n"
-            f"Here's my calendar if you want to grab 15 minutes - {booking_url}\n\n"
+            f"{booking_link_text}"
             f"{sender_name}"
         )
         return {

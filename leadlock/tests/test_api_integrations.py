@@ -144,18 +144,17 @@ class TestTestIntegration:
 
     @pytest.mark.asyncio
     async def test_crm_factory_returns_none_for_unsupported_testing(self):
-        """CRM type in SUPPORTED_CRMS but not in factory returns 400."""
+        """CRM type in SUPPORTED_CRMS but not in factory returns coming soon message."""
         request = _make_mock_request(
             json_data={"crm_type": "servicetitan", "api_key": "key123"}
         )
         mock_db = AsyncMock()
         mock_client = _make_mock_client()
 
-        with pytest.raises(HTTPException) as exc_info:
-            await _test_integration_endpoint(request=request, db=mock_db, client=mock_client)
+        result = await _test_integration_endpoint(request=request, db=mock_db, client=mock_client)
 
-        assert exc_info.value.status_code == 400
-        assert "not supported for testing" in exc_info.value.detail
+        assert result["connected"] is False
+        assert "coming soon" in result["message"]
 
     @pytest.mark.asyncio
     async def test_successful_connection(self):

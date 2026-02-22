@@ -109,17 +109,17 @@ class Lead(Base):
     # Relationships
     client: Mapped["Client"] = relationship(back_populates="leads")
     conversations: Mapped[list["Conversation"]] = relationship(
-        back_populates="lead", lazy="selectin", order_by="Conversation.created_at"
+        back_populates="lead", lazy="select", order_by="Conversation.created_at"
     )
     booking: Mapped[Optional["Booking"]] = relationship(
-        back_populates="lead", uselist=False, lazy="selectin"
+        back_populates="lead", uselist=False, lazy="select"
     )
-    consent: Mapped[Optional["ConsentRecord"]] = relationship(lazy="selectin")
+    consent: Mapped[Optional["ConsentRecord"]] = relationship(lazy="select")
     followup_tasks: Mapped[list["FollowupTask"]] = relationship(
-        back_populates="lead", lazy="selectin"
+        back_populates="lead", lazy="select"
     )
     events: Mapped[list["EventLog"]] = relationship(
-        back_populates="lead", lazy="selectin", order_by="EventLog.created_at"
+        back_populates="lead", lazy="select", order_by="EventLog.created_at"
     )
 
     __table_args__ = (

@@ -18,16 +18,20 @@ SUPPORTED_CRMS = {"housecallpro", "jobber", "gohighlevel", "servicetitan", "goog
 
 def _get_crm_instance(crm_type: str, api_key: str, tenant_id: str = ""):
     """Factory to create a CRM instance by type."""
-    if crm_type == "housecallpro":
-        from src.integrations.housecallpro import HousecallProCRM
-        return HousecallProCRM(api_key=api_key)
-    elif crm_type == "jobber":
-        from src.integrations.jobber import JobberCRM
-        return JobberCRM(api_key=api_key)
-    elif crm_type == "gohighlevel":
-        from src.integrations.gohighlevel import GoHighLevelCRM
-        return GoHighLevelCRM(api_key=api_key, location_id=tenant_id)
-    else:
+    try:
+        if crm_type == "housecallpro":
+            from src.integrations.housecallpro import HousecallProCRM
+            return HousecallProCRM(api_key=api_key)
+        elif crm_type == "jobber":
+            from src.integrations.jobber import JobberCRM
+            return JobberCRM(api_key=api_key)
+        elif crm_type == "gohighlevel":
+            from src.integrations.gohighlevel import GoHighLevelCRM
+            return GoHighLevelCRM(api_key=api_key, location_id=tenant_id)
+        else:
+            return None
+    except ImportError:
+        logger.warning("CRM integration '%s' not yet implemented", crm_type)
         return None
 
 
@@ -61,7 +65,11 @@ async def test_integration(
 
     crm = _get_crm_instance(crm_type, api_key, tenant_id)
     if not crm:
-        raise HTTPException(status_code=400, detail="CRM type not supported for testing")
+        return {
+            "connected": False,
+            "message": f"{crm_type} integration coming soon. Use Google Sheets for now.",
+            "technicians_found": 0,
+        }
 
     try:
         # Test by fetching technicians - lightweight call supported by all CRMs

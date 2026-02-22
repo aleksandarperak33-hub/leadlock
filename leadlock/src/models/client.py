@@ -98,7 +98,7 @@ class Client(Base):
     )
 
     # Relationships
-    leads: Mapped[list["Lead"]] = relationship(back_populates="client", lazy="selectin")
+    leads: Mapped[list["Lead"]] = relationship(back_populates="client", lazy="select")
 
     __table_args__ = (
         Index("ix_clients_trade_type", "trade_type"),
