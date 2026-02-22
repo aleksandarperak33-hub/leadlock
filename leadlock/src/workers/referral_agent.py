@@ -72,7 +72,7 @@ async def referral_cycle():
         result = await db.execute(
             select(Client).where(
                 and_(
-                    Client.status == "active",
+                    Client.is_active == True,
                     Client.created_at >= min_date,
                     Client.created_at <= max_date,
                 )
@@ -115,7 +115,7 @@ async def referral_cycle():
                 referral_url = f"{settings.app_base_url.rstrip('/')}/ref/{code}"
 
                 email_result = await generate_referral_email(
-                    client_name=client.company_name or "there",
+                    client_name=client.business_name or "there",
                     trade_type=getattr(client, "trade_type", "home services"),
                     city=getattr(client, "city", ""),
                     days_since_onboard=days_onboard,

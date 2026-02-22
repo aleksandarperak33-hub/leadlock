@@ -30,7 +30,7 @@ class TestGenerateContentPiece:
         with (
             patch("src.services.content_generation.generate_response", new_callable=AsyncMock, return_value=ai_response),
             patch("src.services.content_generation.async_session_factory", return_value=_FakeCtx()),
-            patch("src.services.content_generation._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await generate_content_piece(
                 content_type="blog_post",
@@ -66,7 +66,7 @@ class TestGenerateContentPiece:
         with (
             patch("src.services.content_generation.generate_response", new_callable=AsyncMock, return_value=ai_response),
             patch("src.services.content_generation.async_session_factory", return_value=_FakeCtx()),
-            patch("src.services.content_generation._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await generate_content_piece(content_type="twitter", topic="test topic")
 
@@ -103,7 +103,7 @@ class TestGenerateContentPiece:
 
         with (
             patch("src.services.content_generation.generate_response", new_callable=AsyncMock, return_value=ai_response),
-            patch("src.services.content_generation._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await generate_content_piece(content_type="twitter", topic="test")
 

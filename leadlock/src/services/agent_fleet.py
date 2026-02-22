@@ -184,6 +184,32 @@ _ALL_TASK_TYPES: list[str] = list(_TASK_TYPE_TO_AGENT.keys())
 
 
 # ---------------------------------------------------------------------------
+# Agent feature flags
+# ---------------------------------------------------------------------------
+_AGENT_FLAG_MAP: dict[str, str] = {
+    "ab_test_engine": "agent_ab_test_engine",
+    "warmup_optimizer": "agent_warmup_optimizer",
+    "winback_agent": "agent_winback_agent",
+    "content_factory": "agent_content_factory",
+    "channel_expander": "agent_channel_expander",
+    "competitive_intel": "agent_competitive_intel",
+    "referral_agent": "agent_referral_agent",
+    "reflection_agent": "agent_reflection_agent",
+}
+
+
+def _is_agent_enabled(agent_name: str) -> bool:
+    """Check feature flag for an agent. Core agents without a flag are always enabled."""
+    from src.config import get_settings
+
+    settings = get_settings()
+    flag_attr = _AGENT_FLAG_MAP.get(agent_name)
+    if not flag_attr:
+        return True
+    return getattr(settings, flag_attr, True)
+
+
+# ---------------------------------------------------------------------------
 # Fleet status
 # ---------------------------------------------------------------------------
 _FLEET_CACHE_KEY = "leadlock:fleet_status_cache"
@@ -259,19 +285,29 @@ async def get_fleet_status() -> dict:
         else:
             health = "unhealthy"
 
-        health_summary[health] += 1
+        # Check feature flag
+        enabled = _is_agent_enabled(name)
 
         # Derive status
-        if health == "unhealthy":
+        if not enabled:
+            status = "disabled"
+            health = "disabled"
+        elif health == "unhealthy":
             status = "error"
         elif tasks_today == 0 and health == "healthy":
             status = "idle"
         else:
             status = "running"
 
+        if not enabled:
+            health_summary["disabled"] = health_summary.get("disabled", 0) + 1
+        else:
+            health_summary[health] += 1
+
         agents.append({
             "name": name,
             **meta,
+            "enabled": enabled,
             "health": health,
             "status": status,
             "last_heartbeat": hb_raw,

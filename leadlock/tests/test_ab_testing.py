@@ -102,7 +102,7 @@ class TestCreateExperiment:
         with (
             patch("src.services.ab_testing.generate_response", new_callable=AsyncMock, return_value=ai_response),
             patch("src.services.ab_testing.async_session_factory", return_value=_FakeCtx()),
-            patch("src.services.ab_testing._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await create_experiment(sequence_step=1, variant_count=2)
 

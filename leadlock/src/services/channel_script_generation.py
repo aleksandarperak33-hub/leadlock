@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from src.services.ai import generate_response
+from src.utils.agent_cost import track_agent_cost
 
 logger = logging.getLogger(__name__)
 
@@ -226,20 +227,6 @@ def _track_cost_sync(agent_name: str, cost_usd: float) -> None:
     import asyncio
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_track_agent_cost_async(agent_name, cost_usd))
+        loop.create_task(track_agent_cost(agent_name, cost_usd))
     except RuntimeError:
-        pass
-
-
-async def _track_agent_cost_async(agent_name: str, cost_usd: float) -> None:
-    """Track per-agent AI cost in Redis hash."""
-    try:
-        from src.utils.dedup import get_redis
-        redis = await get_redis()
-        from datetime import datetime, timezone
-        date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        hash_key = f"leadlock:agent_costs:{date_key}"
-        await redis.hincrbyfloat(hash_key, agent_name, cost_usd)
-        await redis.expire(hash_key, 30 * 86400)
-    except Exception:
         pass

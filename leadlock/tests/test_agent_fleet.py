@@ -168,7 +168,7 @@ class TestGetFleetStatus:
         mock_redis.mget.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unhealthy_agent_status_is_error(self):
+    async def test_unhealthy_agent_status_is_error_or_disabled(self):
         from src.services.agent_fleet import get_fleet_status
 
         mock_redis = AsyncMock()
@@ -190,8 +190,12 @@ class TestGetFleetStatus:
             result = await get_fleet_status()
 
         for agent in result["agents"]:
-            assert agent["health"] == "unhealthy"
-            assert agent["status"] == "error"
+            if agent["enabled"]:
+                assert agent["health"] == "unhealthy"
+                assert agent["status"] == "error"
+            else:
+                assert agent["health"] == "disabled"
+                assert agent["status"] == "disabled"
 
 
 # ---------------------------------------------------------------------------

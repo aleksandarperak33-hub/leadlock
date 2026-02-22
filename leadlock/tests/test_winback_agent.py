@@ -73,7 +73,7 @@ class TestGenerateWinbackEmail:
 
         with (
             patch("src.services.winback_generation.generate_response", new_callable=AsyncMock, return_value=ai_response),
-            patch("src.services.winback_generation._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await generate_winback_email(
                 prospect_name="Mike Johnson",
@@ -117,7 +117,7 @@ class TestGenerateWinbackEmail:
 
         with (
             patch("src.services.winback_generation.generate_response", new_callable=AsyncMock, return_value=ai_response),
-            patch("src.services.winback_generation._track_agent_cost", new_callable=AsyncMock),
+            patch("src.utils.agent_cost.track_agent_cost", new_callable=AsyncMock),
         ):
             result = await generate_winback_email(
                 prospect_name="Test",

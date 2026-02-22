@@ -7,6 +7,7 @@ import logging
 from typing import Optional
 
 from src.services.ai import generate_response
+from src.utils.agent_cost import track_agent_cost
 from src.database import async_session_factory
 from src.models.competitive_intel import CompetitiveIntel
 
@@ -75,7 +76,7 @@ async def analyze_competitor(
     )
 
     ai_cost = result.get("cost_usd", 0.0)
-    await _track_agent_cost("competitive_intel", ai_cost)
+    await track_agent_cost("competitive_intel", ai_cost)
 
     if result.get("error"):
         logger.error("Competitor analysis failed for %s: %s", competitor_name, result["error"])
@@ -135,17 +136,3 @@ async def get_previous_analysis(competitor_name: str) -> Optional[str]:
         )
 
 
-async def _track_agent_cost(agent_name: str, cost_usd: float) -> None:
-    """Track per-agent AI cost in Redis hash."""
-    if cost_usd <= 0:
-        return
-    try:
-        from src.utils.dedup import get_redis
-        from datetime import datetime, timezone
-        redis = await get_redis()
-        date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        hash_key = f"leadlock:agent_costs:{date_key}"
-        await redis.hincrbyfloat(hash_key, agent_name, cost_usd)
-        await redis.expire(hash_key, 30 * 86400)
-    except Exception:
-        pass

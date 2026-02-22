@@ -150,37 +150,47 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to verify SalesEngineConfig: %s", str(e))
 
+        # Core sales engine workers (always run when sales engine is on)
         from src.workers.scraper import run_scraper
         from src.workers.outreach_sequencer import run_outreach_sequencer
         from src.workers.outreach_cleanup import run_outreach_cleanup
         from src.workers.task_processor import run_task_processor
-
         from src.workers.outreach_health import run_outreach_health
-        from src.workers.ab_test_engine import run_ab_test_engine
-        from src.workers.winback_agent import run_winback_agent
-        from src.workers.content_factory import run_content_factory
-        from src.workers.channel_expander import run_channel_expander
-        from src.workers.competitive_intel import run_competitive_intel
-        from src.workers.referral_agent import run_referral_agent
-        from src.workers.reflection_agent import run_reflection_agent
 
         worker_tasks.append(asyncio.create_task(run_scraper()))
         worker_tasks.append(asyncio.create_task(run_outreach_sequencer()))
         worker_tasks.append(asyncio.create_task(run_outreach_cleanup()))
         worker_tasks.append(asyncio.create_task(run_task_processor()))
         worker_tasks.append(asyncio.create_task(run_outreach_health()))
-        worker_tasks.append(asyncio.create_task(run_ab_test_engine()))
-        worker_tasks.append(asyncio.create_task(run_winback_agent()))
-        worker_tasks.append(asyncio.create_task(run_content_factory()))
-        worker_tasks.append(asyncio.create_task(run_channel_expander()))
-        worker_tasks.append(asyncio.create_task(run_competitive_intel()))
-        worker_tasks.append(asyncio.create_task(run_referral_agent()))
-        worker_tasks.append(asyncio.create_task(run_reflection_agent()))
-        logger.info(
-            "Sales engine workers started (scraper, sequencer, cleanup, task_processor, "
-            "outreach_health, ab_test, winback, content_factory, channel_expander, "
-            "competitive_intel, referral, reflection)"
-        )
+        logger.info("Sales engine core workers started (scraper, sequencer, cleanup, task_processor, outreach_health)")
+
+        # Feature-flagged agents — toggle via env vars without code deploys
+        _FLAGGED_AGENTS = {
+            "ab_test_engine":    (settings.agent_ab_test_engine,    "src.workers.ab_test_engine",    "run_ab_test_engine"),
+            "winback_agent":     (settings.agent_winback_agent,     "src.workers.winback_agent",     "run_winback_agent"),
+            "content_factory":   (settings.agent_content_factory,   "src.workers.content_factory",   "run_content_factory"),
+            "channel_expander":  (settings.agent_channel_expander,  "src.workers.channel_expander",  "run_channel_expander"),
+            "competitive_intel": (settings.agent_competitive_intel, "src.workers.competitive_intel", "run_competitive_intel"),
+            "referral_agent":    (settings.agent_referral_agent,    "src.workers.referral_agent",    "run_referral_agent"),
+            "reflection_agent":  (settings.agent_reflection_agent,  "src.workers.reflection_agent",  "run_reflection_agent"),
+        }
+
+        enabled_agents = []
+        disabled_agents = []
+        for agent_name, (flag, module_path, func_name) in _FLAGGED_AGENTS.items():
+            if flag:
+                import importlib
+                mod = importlib.import_module(module_path)
+                run_fn = getattr(mod, func_name)
+                worker_tasks.append(asyncio.create_task(run_fn()))
+                enabled_agents.append(agent_name)
+            else:
+                disabled_agents.append(agent_name)
+
+        if enabled_agents:
+            logger.info("Enabled agents: %s", ", ".join(enabled_agents))
+        if disabled_agents:
+            logger.info("Disabled agents (toggle via env): %s", ", ".join(disabled_agents))
     else:
         logger.info("Sales engine workers disabled (SALES_ENGINE_ENABLED=false)")
 

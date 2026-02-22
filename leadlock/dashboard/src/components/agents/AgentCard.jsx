@@ -31,6 +31,7 @@ const STATUS_DOT = {
   running: 'bg-emerald-500 animate-agent-pulse',
   idle: 'bg-gray-300',
   error: 'bg-red-500 animate-pulse',
+  disabled: 'bg-gray-300',
 };
 
 /**
@@ -52,6 +53,7 @@ function formatAge(heartbeat) {
 export default function AgentCard({ agent, selected, onClick }) {
   const Icon = ICON_MAP[agent.icon] || Sparkles;
   const dotClass = STATUS_DOT[agent.status] || 'bg-gray-300';
+  const isDisabled = agent.enabled === false;
 
   return (
     <button
@@ -61,6 +63,7 @@ export default function AgentCard({ agent, selected, onClick }) {
         glass-card p-5 text-left cursor-pointer card-hover-lift
         active:scale-[0.98] transition-all duration-150 w-full
         ${selected ? 'border-orange-400 ring-2 ring-orange-100' : ''}
+        ${isDisabled ? 'opacity-50' : ''}
       `}
     >
       {/* Header row: icon + status dot */}
@@ -68,7 +71,14 @@ export default function AgentCard({ agent, selected, onClick }) {
         <div className={`w-9 h-9 rounded-lg ${COLOR_BG[agent.color]} flex items-center justify-center`}>
           <Icon className={`w-4.5 h-4.5 ${COLOR_ICON[agent.color]}`} />
         </div>
-        <div className={`w-2.5 h-2.5 rounded-full ${dotClass}`} />
+        <div className="flex items-center gap-1.5">
+          {isDisabled && (
+            <span className="text-[10px] font-medium text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
+              OFF
+            </span>
+          )}
+          <div className={`w-2.5 h-2.5 rounded-full ${dotClass}`} />
+        </div>
       </div>
 
       {/* Name + schedule */}
@@ -81,7 +91,7 @@ export default function AgentCard({ agent, selected, onClick }) {
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span className="font-mono">${agent.cost_today?.toFixed(3) ?? '0.000'}</span>
         <span>{agent.tasks_today ?? 0} tasks</span>
-        <span>{formatAge(agent.last_heartbeat)}</span>
+        <span>{isDisabled ? 'Disabled' : formatAge(agent.last_heartbeat)}</span>
       </div>
 
       {/* Uses AI badge */}

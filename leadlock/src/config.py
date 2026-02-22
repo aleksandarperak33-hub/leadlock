@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     sales_daily_email_limit: int = 50
     sales_daily_scrape_limit: int = 100
 
+    # Agent feature flags (toggle without code deploys)
+    agent_ab_test_engine: bool = True
+    agent_warmup_optimizer: bool = True
+    agent_winback_agent: bool = True
+    agent_content_factory: bool = False     # Disabled: no downstream consumers yet
+    agent_channel_expander: bool = False    # Disabled: no downstream consumers yet
+    agent_competitive_intel: bool = False   # Disabled: no downstream consumers yet
+    agent_referral_agent: bool = False      # Disabled: crash bugs, needs fix
+    agent_reflection_agent: bool = False    # Disabled: writes to unread table
+
     # Transactional Email (auth flows, billing notifications)
     sendgrid_transactional_key: str = ""  # Separate key for transactional emails
     from_email_transactional: str = "noreply@leadlock.org"
