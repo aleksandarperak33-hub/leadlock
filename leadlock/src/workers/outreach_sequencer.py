@@ -182,8 +182,8 @@ async def _heartbeat():
         from src.utils.dedup import get_redis
         redis = await get_redis()
         await redis.set("leadlock:worker_health:outreach_sequencer", datetime.now(timezone.utc).isoformat(), ex=2700)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Heartbeat write failed: %s", str(e))
 
 
 async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:

@@ -491,16 +491,16 @@ async def email_events_webhook(
                     if redis:
                         try:
                             await record_email_event(redis, "delivered")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Redis event recording failed: %s", str(e))
                 elif event_type == "open" and not email_record.opened_at:
                     email_record.opened_at = timestamp
                     # Record reputation event
                     if redis:
                         try:
                             await record_email_event(redis, "opened")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Redis event recording failed: %s", str(e))
                     # Also update prospect
                     if outreach_id:
                         prospect = await db.get(Outreach, uuid.UUID(outreach_id))
@@ -516,8 +516,8 @@ async def email_events_webhook(
                     if redis:
                         try:
                             await record_email_event(redis, "clicked")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Redis event recording failed: %s", str(e))
                     if outreach_id:
                         prospect = await db.get(Outreach, uuid.UUID(outreach_id))
                         if prospect:
@@ -534,8 +534,8 @@ async def email_events_webhook(
                     if redis:
                         try:
                             await record_email_event(redis, "bounced")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Redis event recording failed: %s", str(e))
                     # Hard bounce → mark prospect as lost, flag email invalid
                     if event.get("type") == "bounce" or event_type == "bounce":
                         if outreach_id:
@@ -651,8 +651,8 @@ async def email_events_webhook(
                     if redis:
                         try:
                             await record_email_event(redis, "complained")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Redis event recording failed: %s", str(e))
                     # Treat spam report as unsubscribe
                     if outreach_id:
                         prospect = await db.get(Outreach, uuid.UUID(outreach_id))

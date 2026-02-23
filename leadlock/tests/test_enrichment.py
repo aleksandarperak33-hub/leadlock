@@ -210,6 +210,22 @@ class TestIsValidBusinessEmail:
         """support@ is a valid local part (only noreply variants are filtered)."""
         assert _is_valid_business_email("support@acmeplumbing.com") is True
 
+    def test_url_encoded_space_rejected(self):
+        """Emails with URL-encoded spaces (%20) are rejected."""
+        assert _is_valid_business_email("sales%20team@hvacpro.com") is False
+
+    def test_whitespace_in_email_rejected(self):
+        """Emails with whitespace are rejected."""
+        assert _is_valid_business_email("sales team@hvacpro.com") is False
+
+    def test_tab_in_email_rejected(self):
+        """Emails with tabs are rejected."""
+        assert _is_valid_business_email("sales\t@hvacpro.com") is False
+
+    def test_percent_sign_in_email_rejected(self):
+        """Emails with leftover URL encoding artifacts are rejected."""
+        assert _is_valid_business_email("%20info@hvacpro.com") is False
+
 
 # ---------------------------------------------------------------------------
 # scrape_contact_emails (with mocked httpx)

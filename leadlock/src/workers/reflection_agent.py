@@ -32,8 +32,8 @@ async def _heartbeat():
             datetime.now(timezone.utc).isoformat(),
             ex=2 * 86400,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Heartbeat write failed: %s", str(e))
 
 
 async def run_reflection_agent():
@@ -117,5 +117,5 @@ async def reflection_cycle():
         redis = await get_redis()
         date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         await redis.set(f"leadlock:reflection:ran:{date_key}", "1", ex=2 * 86400)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Reflection ran-marker write failed: %s", str(e))

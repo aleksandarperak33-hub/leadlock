@@ -50,8 +50,8 @@ async def run_email_finder():
                 datetime.now(timezone.utc).isoformat(),
                 ex=POLL_INTERVAL * 3,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Heartbeat write failed: %s", str(e))
 
         await asyncio.sleep(POLL_INTERVAL)
 
@@ -191,5 +191,5 @@ async def _process_batch():
                 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 cost_key = f"leadlock:agent_costs:{today}"
                 await redis.hincrbyfloat(cost_key, "email_finder", 0.0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Cost tracking write failed: %s", str(e))

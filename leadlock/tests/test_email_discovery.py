@@ -231,6 +231,26 @@ class TestExtractAllEmails:
         result = _extract_all_emails(html, "hvacpro.com")
         assert result[0] == "primary@hvacpro.com"
 
+    def test_rejects_url_encoded_space_in_email(self):
+        """Emails with URL-encoded spaces (%20) should be rejected."""
+        html = '<a href="mailto:sales%20team@hvacpro.com">Email</a>'
+        result = _extract_all_emails(html, "hvacpro.com")
+        assert not any("%20" in e or " " in e for e in result)
+
+    def test_decodes_url_encoded_mailto(self):
+        """Properly URL-encoded mailto links should be decoded."""
+        # %2B is +, which is valid in emails
+        html = '<a href="mailto:sales@hvacpro.com">Email</a>'
+        result = _extract_all_emails(html, "hvacpro.com")
+        assert "sales@hvacpro.com" in result
+
+    def test_rejects_percent_encoded_artifacts(self):
+        """Emails with leftover URL encoding should be filtered out."""
+        html = '<div>Contact %20info@hvacpro.com for service</div>'
+        result = _extract_all_emails(html, "hvacpro.com")
+        # Should not contain email with %20 prefix
+        assert not any("%20" in e or " " in e for e in result)
+
 
 # ---------------------------------------------------------------------------
 # _extract_json_ld_emails

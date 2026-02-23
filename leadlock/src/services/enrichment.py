@@ -162,6 +162,11 @@ def guess_email_patterns(domain: str, name: Optional[str] = None) -> list[str]:
 def _is_valid_business_email(email: str, target_domain: Optional[str] = None) -> bool:
     """Check if an email looks like a real business contact email."""
     email_lower = email.lower()
+
+    # Reject emails with whitespace or URL-encoded artifacts
+    if " " in email_lower or "\t" in email_lower or "%" in email_lower:
+        return False
+
     email_domain = email_lower.split("@")[1] if "@" in email_lower else ""
 
     if email_domain in _IGNORE_EMAIL_DOMAINS:

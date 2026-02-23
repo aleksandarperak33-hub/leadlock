@@ -30,8 +30,8 @@ async def _cached_query(cache_key: str, query_fn, ttl: int = CACHE_TTL_SECONDS) 
         if cached:
             raw = cached.decode() if isinstance(cached, bytes) else str(cached)
             return json.loads(raw)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Analytics cache read failed for %s: %s", cache_key, str(e))
 
     result = await query_fn()
 
@@ -43,8 +43,8 @@ async def _cached_query(cache_key: str, query_fn, ttl: int = CACHE_TTL_SECONDS) 
             json.dumps(result, default=str),
             ex=ttl,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Analytics cache write failed for %s: %s", cache_key, str(e))
 
     return result
 

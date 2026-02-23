@@ -28,8 +28,8 @@ async def _heartbeat():
         from src.utils.dedup import get_redis
         redis = await get_redis()
         await redis.set("leadlock:worker_health:task_processor", datetime.now(timezone.utc).isoformat(), ex=120)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Heartbeat write failed: %s", str(e))
 
 
 async def run_task_processor():

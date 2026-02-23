@@ -14,7 +14,7 @@ import json
 import logging
 import re
 from typing import Optional
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, unquote
 
 import httpx
 
@@ -253,10 +253,14 @@ def _extract_all_emails(html: str, target_domain: Optional[str]) -> list[str]:
     seen: set[str] = set()
 
     def _add(email: str):
-        email_lower = email.lower().strip()
-        if email_lower not in seen and _is_valid_business_email(email_lower, target_domain):
-            found.append(email_lower)
-            seen.add(email_lower)
+        # URL-decode (mailto: links can be encoded, e.g. %20 for space)
+        email_clean = unquote(email).lower().strip()
+        # Reject if whitespace or control chars remain after decoding
+        if " " in email_clean or "\t" in email_clean or "\n" in email_clean:
+            return
+        if email_clean not in seen and _is_valid_business_email(email_clean, target_domain):
+            found.append(email_clean)
+            seen.add(email_clean)
 
     # 1. mailto: links (highest confidence)
     for email in re.findall(
@@ -434,10 +438,12 @@ async def search_brave_for_email(domain: str) -> list[str]:
         # Search in description and title
         text = f"{result.get('description', '')} {result.get('title', '')}"
         for email in _EMAIL_REGEX.findall(text):
-            email_lower = email.lower()
-            if email_lower not in seen and _is_valid_business_email(email_lower, target_domain=domain):
-                found.append(email_lower)
-                seen.add(email_lower)
+            email_clean = unquote(email).lower().strip()
+            if " " in email_clean or "\t" in email_clean:
+                continue
+            if email_clean not in seen and _is_valid_business_email(email_clean, target_domain=domain):
+                found.append(email_clean)
+                seen.add(email_clean)
 
     if found:
         logger.info("Brave search found %d email(s) for %s", len(found), domain)

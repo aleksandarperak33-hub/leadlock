@@ -73,7 +73,8 @@ async def _get_reply_rate_by_trade(trade_type: str) -> float:
             )
             rate = result.scalar()
             return float(rate) if rate is not None else 0.0
-    except Exception:
+    except Exception as e:
+        logger.debug("Reply rate query failed for %s: %s", trade_type, str(e))
         return 0.0
 
 
@@ -109,8 +110,8 @@ async def _get_best_day_of_week(trade_type: str, state: str) -> str:
             row = result.first()
             if row and row.dow:
                 return row.dow
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Best day query failed for %s: %s", trade_type, str(e))
     return ""
 
 
@@ -144,8 +145,8 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
         best_time = await get_best_send_time(trade_type, state)
         if best_time:
             parts.append(f"Best send time: {best_time}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Learning context query failed for %s: %s", trade_type, str(e))
 
     # Add winning patterns
     try:
@@ -154,8 +155,8 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
         patterns = await format_patterns_for_prompt(trade=trade_type, step=step)
         if patterns:
             parts.append(patterns)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Winning patterns query failed: %s", str(e))
 
     # Cap at 5 insight lines to avoid prompt bloat
     if parts:

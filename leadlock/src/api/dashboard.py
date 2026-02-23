@@ -358,8 +358,8 @@ async def reset_password(
     # Delete the used token
     try:
         await redis.delete(f"pw_reset:{token}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Token cleanup failed: %s", str(e))
 
     logger.info("Password reset completed for %s", client.dashboard_email[:20] + "***")
     return {"message": "Password has been reset successfully. You can now sign in."}
@@ -398,8 +398,8 @@ async def verify_email(
     # Delete the used token
     try:
         await redis.delete(f"email_verify:{token}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Token cleanup failed: %s", str(e))
 
     logger.info("Email verified for %s", client.dashboard_email[:20] + "***")
 

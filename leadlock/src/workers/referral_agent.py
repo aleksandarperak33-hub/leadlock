@@ -28,8 +28,8 @@ async def _heartbeat():
             datetime.now(timezone.utc).isoformat(),
             ex=25 * 3600,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Heartbeat write failed: %s", str(e))
 
 
 async def run_referral_agent():

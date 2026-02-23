@@ -88,8 +88,8 @@ async def _heartbeat():
         from src.utils.dedup import get_redis
         redis = await get_redis()
         await redis.set("leadlock:worker_health:scraper", datetime.now(timezone.utc).isoformat(), ex=7200)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Heartbeat write failed: %s", str(e))
 
 
 def get_query_variants(trade: str) -> list[str]:
@@ -149,8 +149,8 @@ async def _get_poll_interval() -> int:
             config = result.scalar_one_or_none()
             if config and hasattr(config, "scraper_interval_minutes") and config.scraper_interval_minutes:
                 return config.scraper_interval_minutes * 60
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Config interval read failed: %s", str(e))
     return DEFAULT_POLL_INTERVAL_SECONDS
 
 
