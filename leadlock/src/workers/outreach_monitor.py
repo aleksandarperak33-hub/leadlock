@@ -1,32 +1,31 @@
 """
-Outreach pipeline health monitor - checks pipeline health every 15 minutes
-and sends SMS/email alerts when things break.
+Outreach monitor — merged from outreach_health + outreach_cleanup.
+Runs every 15 minutes.
 
-Alert conditions:
-- Zero emails sent in 4h during send window
-- Bounce rate > 10% in 24h
-- Open rate < 5% over 48h (n > 20)
-- Sequencer heartbeat stale for 90 minutes
-- Reputation system paused sending (score < 40)
+Every cycle: Pipeline health checks (from outreach_health).
+Every 16th cycle (~4h): Mark exhausted sequences as lost (from outreach_cleanup).
 """
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 
 from src.database import async_session_factory
+from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
+from src.models.sales_config import SalesEngineConfig
 from src.utils.alerting import send_alert, AlertType
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
+CLEANUP_EVERY_N_CYCLES = 16  # ~4 hours
 
 # Alert thresholds
 ZERO_SENDS_HOURS = 4
-BOUNCE_RATE_THRESHOLD = 0.10  # 10%
-OPEN_RATE_THRESHOLD = 0.05  # 5%
+BOUNCE_RATE_THRESHOLD = 0.10
+OPEN_RATE_THRESHOLD = 0.05
 OPEN_RATE_MIN_SAMPLE = 20
 OPEN_RATE_WINDOW_HOURS = 48
 HEARTBEAT_STALE_MINUTES = 45
@@ -38,7 +37,7 @@ async def _heartbeat():
         from src.utils.dedup import get_redis
         redis = await get_redis()
         await redis.set(
-            "leadlock:worker_health:outreach_health",
+            "leadlock:worker_health:outreach_monitor",
             datetime.now(timezone.utc).isoformat(),
             ex=1800,
         )
@@ -46,26 +45,38 @@ async def _heartbeat():
         pass
 
 
-async def run_outreach_health():
-    """Main loop - check outreach pipeline health every 15 minutes."""
-    logger.info("Outreach health monitor started (poll every %ds)", POLL_INTERVAL_SECONDS)
+async def run_outreach_monitor():
+    """Main loop — health checks every cycle, cleanup every 16th."""
+    logger.info("Outreach monitor started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     # Wait 2 minutes on startup to let other workers initialize
     await asyncio.sleep(120)
 
+    cycle_count = 0
+
     while True:
+        cycle_count += 1
+
         try:
-            await check_outreach_health()
+            # Every cycle: pipeline health checks
+            await _check_outreach_health()
+
+            # Every 16th cycle: cleanup exhausted sequences
+            if cycle_count % CLEANUP_EVERY_N_CYCLES == 0:
+                await _cleanup_exhausted_sequences()
         except Exception as e:
-            logger.error("Outreach health check error: %s", str(e))
+            logger.error("Outreach monitor error: %s", str(e))
 
         await _heartbeat()
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
-async def check_outreach_health():
+# ---------------------------------------------------------------------------
+# Health checks (from outreach_health)
+# ---------------------------------------------------------------------------
+
+async def _check_outreach_health():
     """Run all outreach health checks and send alerts for failures."""
-    from src.models.sales_config import SalesEngineConfig
     from src.workers.outreach_sequencer import is_within_send_window
 
     async with async_session_factory() as db:
@@ -76,8 +87,6 @@ async def check_outreach_health():
             return
 
         now = datetime.now(timezone.utc)
-
-        # Only check send-related alerts during send window
         in_send_window = is_within_send_window(config)
 
         if in_send_window:
@@ -130,7 +139,7 @@ async def _check_bounce_rate(db, now: datetime) -> None:
     sent_count = sent_result.scalar() or 0
 
     if sent_count < 10:
-        return  # Not enough data
+        return
 
     bounced_result = await db.execute(
         select(func.count()).select_from(OutreachEmail).where(
@@ -176,7 +185,7 @@ async def _check_open_rate(db, now: datetime) -> None:
     sent_count = sent_result.scalar() or 0
 
     if sent_count < OPEN_RATE_MIN_SAMPLE:
-        return  # Not enough data for meaningful open rate
+        return
 
     opened_result = await db.execute(
         select(func.count()).select_from(OutreachEmail).where(
@@ -210,7 +219,7 @@ async def _check_open_rate(db, now: datetime) -> None:
 
 
 async def _check_sequencer_heartbeat() -> None:
-    """Alert if the outreach sequencer hasn't heartbeated in 90 minutes."""
+    """Alert if the outreach sequencer hasn't heartbeated in 45 minutes."""
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
@@ -288,3 +297,94 @@ async def _check_reputation_paused() -> None:
             )
     except Exception as e:
         logger.warning("Failed to check email reputation: %s", str(e))
+
+
+# ---------------------------------------------------------------------------
+# Cleanup (from outreach_cleanup, runs every ~4h)
+# ---------------------------------------------------------------------------
+
+async def _cleanup_exhausted_sequences():
+    """Mark exhausted outreach sequences as lost."""
+    async with async_session_factory() as db:
+        result = await db.execute(select(SalesEngineConfig).limit(1))
+        config = result.scalar_one_or_none()
+
+        if not config or not config.is_active:
+            return
+
+        if hasattr(config, "cleanup_paused") and config.cleanup_paused:
+            logger.debug("Outreach cleanup is paused, skipping cycle")
+            return
+
+        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
+        total_marked = 0
+
+        # Pass 1: Campaign-bound prospects
+        from src.models.campaign import Campaign
+
+        campaigns_result = await db.execute(
+            select(Campaign).where(
+                Campaign.status.in_(["active", "paused", "completed"])
+            )
+        )
+        all_campaigns = campaigns_result.scalars().all()
+
+        for campaign in all_campaigns:
+            steps = campaign.sequence_steps or []
+            campaign_max_steps = len(steps)
+            if campaign_max_steps == 0:
+                continue
+
+            stmt = (
+                update(Outreach)
+                .where(
+                    and_(
+                        Outreach.campaign_id == campaign.id,
+                        Outreach.outreach_sequence_step >= campaign_max_steps,
+                        Outreach.status.in_(["cold", "contacted"]),
+                        Outreach.last_email_replied_at.is_(None),
+                        Outreach.last_email_sent_at.isnot(None),
+                        Outreach.last_email_sent_at <= delay_cutoff,
+                    )
+                )
+                .values(status="lost", updated_at=datetime.now(timezone.utc))
+            )
+            result = await db.execute(stmt)
+            campaign_marked = result.rowcount
+            if campaign_marked > 0:
+                logger.info(
+                    "Campaign %s: marked %d exhausted sequences as lost (max_steps=%d)",
+                    str(campaign.id)[:8], campaign_marked, campaign_max_steps,
+                )
+                total_marked += campaign_marked
+
+        # Pass 2: Unbound prospects
+        stmt = (
+            update(Outreach)
+            .where(
+                and_(
+                    Outreach.campaign_id.is_(None),
+                    Outreach.outreach_sequence_step >= config.max_sequence_steps,
+                    Outreach.status.in_(["cold", "contacted"]),
+                    Outreach.last_email_replied_at.is_(None),
+                    Outreach.last_email_sent_at.isnot(None),
+                    Outreach.last_email_sent_at <= delay_cutoff,
+                )
+            )
+            .values(status="lost", updated_at=datetime.now(timezone.utc))
+        )
+
+        result = await db.execute(stmt)
+        unbound_marked = result.rowcount
+        total_marked += unbound_marked
+
+        if unbound_marked > 0:
+            logger.info(
+                "Unbound prospects: marked %d exhausted sequences as lost (max_steps=%d)",
+                unbound_marked, config.max_sequence_steps,
+            )
+
+        if total_marked > 0:
+            logger.info("Total marked %d exhausted outreach sequences as lost", total_marked)
+
+        await db.commit()

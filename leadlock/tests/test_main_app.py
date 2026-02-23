@@ -190,14 +190,11 @@ class TestLifespan:
         # Mock all worker imports to prevent actual background tasks
         worker_mocks = {}
         worker_modules = [
-            "src.workers.health_monitor.run_health_monitor",
+            "src.workers.system_health.run_system_health",
             "src.workers.retry_worker.run_retry_worker",
-            "src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper",
+            "src.workers.lead_state_manager.run_lead_state_manager",
             "src.workers.crm_sync.run_crm_sync",
-            "src.workers.followup_scheduler.run_followup_scheduler",
-            "src.workers.deliverability_monitor.run_deliverability_monitor",
-            "src.workers.booking_reminder.run_booking_reminder",
-            "src.workers.lead_lifecycle.run_lead_lifecycle",
+            "src.workers.sms_dispatch.run_sms_dispatch",
             "src.workers.registration_poller.run_registration_poller",
         ]
 
@@ -230,14 +227,11 @@ class TestLifespan:
             patch("asyncio.create_task", return_value=MagicMock(spec=asyncio.Task)),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
             # Mock all worker imports
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):
@@ -261,14 +255,11 @@ class TestLifespan:
             patch("src.main.logger") as mock_logger,
             patch("asyncio.create_task", return_value=MagicMock(spec=asyncio.Task)),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):
@@ -292,14 +283,11 @@ class TestLifespan:
             patch("asyncio.create_task", return_value=MagicMock(spec=asyncio.Task)),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
             patch("sentry_sdk.init") as mock_sentry_init,
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):
@@ -319,14 +307,11 @@ class TestLifespan:
             patch("asyncio.create_task", return_value=MagicMock(spec=asyncio.Task)),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
             patch("sentry_sdk.init") as mock_sentry_init,
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):
@@ -357,21 +342,18 @@ class TestLifespan:
             patch("src.main.logger"),
             patch("asyncio.create_task", side_effect=capture_create_task),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):
                 pass
 
-        # Should have started 9 core workers
-        assert len(task_names) == 9
+        # Should have started 6 core workers
+        assert len(task_names) == 6
 
     @pytest.mark.asyncio
     async def test_lifespan_starts_sales_engine_workers_when_enabled(self):
@@ -410,20 +392,16 @@ class TestLifespan:
                 pass
 
         worker_patches = [
-            "src.workers.health_monitor.run_health_monitor",
+            "src.workers.system_health.run_system_health",
             "src.workers.retry_worker.run_retry_worker",
-            "src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper",
+            "src.workers.lead_state_manager.run_lead_state_manager",
             "src.workers.crm_sync.run_crm_sync",
-            "src.workers.followup_scheduler.run_followup_scheduler",
-            "src.workers.deliverability_monitor.run_deliverability_monitor",
-            "src.workers.booking_reminder.run_booking_reminder",
-            "src.workers.lead_lifecycle.run_lead_lifecycle",
+            "src.workers.sms_dispatch.run_sms_dispatch",
             "src.workers.registration_poller.run_registration_poller",
             "src.workers.scraper.run_scraper",
             "src.workers.outreach_sequencer.run_outreach_sequencer",
-            "src.workers.outreach_cleanup.run_outreach_cleanup",
+            "src.workers.outreach_monitor.run_outreach_monitor",
             "src.workers.task_processor.run_task_processor",
-            "src.workers.outreach_health.run_outreach_health",
             "src.workers.ab_test_engine.run_ab_test_engine",
             "src.workers.winback_agent.run_winback_agent",
             "src.workers.referral_agent.run_referral_agent",
@@ -442,8 +420,8 @@ class TestLifespan:
             async with lifespan(mock_app):
                 pass
 
-        # 9 core + 5 sales engine + 4 flagged agents = 18 workers
-        assert len(task_count) == 18
+        # 6 core + 4 sales engine + 4 flagged agents = 14 workers
+        assert len(task_count) == 14
 
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_cancels_workers(self):
@@ -466,14 +444,11 @@ class TestLifespan:
             patch("asyncio.create_task", side_effect=capture_create_task),
             patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())),
             patch("asyncio.gather", new_callable=AsyncMock),
-            patch("src.workers.health_monitor.run_health_monitor", return_value=AsyncMock()()),
+            patch("src.workers.system_health.run_system_health", return_value=AsyncMock()()),
             patch("src.workers.retry_worker.run_retry_worker", return_value=AsyncMock()()),
-            patch("src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper", return_value=AsyncMock()()),
+            patch("src.workers.lead_state_manager.run_lead_state_manager", return_value=AsyncMock()()),
             patch("src.workers.crm_sync.run_crm_sync", return_value=AsyncMock()()),
-            patch("src.workers.followup_scheduler.run_followup_scheduler", return_value=AsyncMock()()),
-            patch("src.workers.deliverability_monitor.run_deliverability_monitor", return_value=AsyncMock()()),
-            patch("src.workers.booking_reminder.run_booking_reminder", return_value=AsyncMock()()),
-            patch("src.workers.lead_lifecycle.run_lead_lifecycle", return_value=AsyncMock()()),
+            patch("src.workers.sms_dispatch.run_sms_dispatch", return_value=AsyncMock()()),
             patch("src.workers.registration_poller.run_registration_poller", return_value=AsyncMock()()),
         ):
             async with lifespan(mock_app):

@@ -20,6 +20,18 @@ const TABS = [
   { id: 'activity', label: 'Activity' },
 ];
 
+const TIER_ORDER = ['ai', 'core_ops', 'infra'];
+const TIER_LABELS = {
+  ai: 'AI Agents',
+  core_ops: 'Core Operations',
+  infra: 'Infrastructure',
+};
+const TIER_DESCRIPTIONS = {
+  ai: 'Use Claude API, generate revenue',
+  core_ops: 'Lead-touching, business logic',
+  infra: 'Monitoring, maintenance',
+};
+
 function TabLoader() {
   return (
     <div className="flex items-center justify-center h-48">
@@ -37,8 +49,25 @@ function formatTime(iso) {
 }
 
 /**
- * Agent Army — mission control for the 19-agent fleet.
+ * Groups agents by their tier field.
+ */
+function groupByTier(agents) {
+  const grouped = {};
+  for (const tier of TIER_ORDER) {
+    grouped[tier] = [];
+  }
+  for (const agent of agents) {
+    const tier = agent.tier || 'infra';
+    if (!grouped[tier]) grouped[tier] = [];
+    grouped[tier].push(agent);
+  }
+  return grouped;
+}
+
+/**
+ * Agent Army — mission control for the 14-agent fleet.
  * 4 tabs: Fleet (default), Task Queue, Costs, Activity.
+ * Fleet tab renders agents in 3 tiers: AI Agents, Core Operations, Infrastructure.
  */
 export default function AdminAgents() {
   const { data, loading, error, refresh } = useAgentFleet();
@@ -49,6 +78,8 @@ export default function AdminAgents() {
   const summary = data?.fleet_summary;
   const liveCount = summary ? `${summary.total_agents} agents` : '';
   const updatedAt = summary?.updated_at ? `Updated ${formatTime(summary.updated_at)}` : '';
+
+  const tierGroups = groupByTier(agents);
 
   return (
     <div className="animate-page-in">
@@ -92,22 +123,39 @@ export default function AdminAgents() {
         <div className="animate-fade-up">
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 19 }).map((_, i) => (
+              {Array.from({ length: 14 }).map((_, i) => (
                 <AgentCardSkeleton key={i} />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-in">
-              {agents.map((agent) => (
-                <AgentCard
-                  key={agent.name}
-                  agent={agent}
-                  selected={selectedAgent?.name === agent.name}
-                  onClick={() => setSelectedAgent(
-                    selectedAgent?.name === agent.name ? null : agent
-                  )}
-                />
-              ))}
+            <div className="space-y-8 stagger-in">
+              {TIER_ORDER.map((tier) => {
+                const tierAgents = tierGroups[tier] || [];
+                if (tierAgents.length === 0) return null;
+                return (
+                  <div key={tier}>
+                    {/* Tier header */}
+                    <div className="mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">{TIER_LABELS[tier]}</h3>
+                      <p className="text-xs text-gray-500">{TIER_DESCRIPTIONS[tier]}</p>
+                    </div>
+                    {/* Agent cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {tierAgents.map((agent) => (
+                        <AgentCard
+                          key={agent.name}
+                          agent={agent}
+                          tier={tier}
+                          selected={selectedAgent?.name === agent.name}
+                          onClick={() => setSelectedAgent(
+                            selectedAgent?.name === agent.name ? null : agent
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

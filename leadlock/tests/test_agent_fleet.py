@@ -1,6 +1,7 @@
 """
 Tests for agent fleet service and API endpoints.
 Covers: fleet status, agent activity, task queue, cost breakdown.
+Updated for 14-agent consolidated fleet (from 19).
 """
 import json
 import uuid
@@ -48,13 +49,13 @@ def _utc_iso(seconds_ago: float = 0) -> str:
 # ---------------------------------------------------------------------------
 
 class TestAgentRegistry:
-    def test_registry_has_nineteen_agents(self):
+    def test_registry_has_fourteen_agents(self):
         from src.services.agent_fleet import AGENT_REGISTRY
-        assert len(AGENT_REGISTRY) == 19
+        assert len(AGENT_REGISTRY) == 14
 
     def test_every_agent_has_required_fields(self):
         from src.services.agent_fleet import AGENT_REGISTRY
-        required = {"display_name", "description", "schedule", "icon", "color", "uses_ai", "poll_interval", "task_types"}
+        required = {"display_name", "description", "schedule", "icon", "color", "uses_ai", "poll_interval", "task_types", "tier"}
         for name, meta in AGENT_REGISTRY.items():
             missing = required - set(meta.keys())
             assert not missing, f"{name} missing fields: {missing}"
@@ -64,6 +65,47 @@ class TestAgentRegistry:
         for name, meta in AGENT_REGISTRY.items():
             for tt in meta["task_types"]:
                 assert _TASK_TYPE_TO_AGENT[tt] == name
+
+    def test_no_warmup_optimizer(self):
+        """warmup_optimizer phantom removed from registry."""
+        from src.services.agent_fleet import AGENT_REGISTRY
+        assert "warmup_optimizer" not in AGENT_REGISTRY
+
+    def test_merged_workers_present(self):
+        """Verify all 4 merged workers are in the registry."""
+        from src.services.agent_fleet import AGENT_REGISTRY
+        merged = ["system_health", "lead_state_manager", "outreach_monitor", "sms_dispatch"]
+        for name in merged:
+            assert name in AGENT_REGISTRY, f"Merged worker {name} missing from registry"
+
+    def test_old_workers_removed(self):
+        """Verify old pre-merge workers are NOT in the registry."""
+        from src.services.agent_fleet import AGENT_REGISTRY
+        removed = [
+            "health_monitor", "deliverability_monitor",
+            "stuck_lead_sweeper", "lead_lifecycle",
+            "outreach_health", "outreach_cleanup",
+            "followup_scheduler", "booking_reminder",
+            "warmup_optimizer",
+        ]
+        for name in removed:
+            assert name not in AGENT_REGISTRY, f"Old worker {name} should be removed from registry"
+
+    def test_tier_distribution(self):
+        """5 AI + 5 Core Ops + 4 Infra = 14."""
+        from src.services.agent_fleet import AGENT_REGISTRY, TIER_AI, TIER_CORE_OPS, TIER_INFRA
+        counts = {TIER_AI: 0, TIER_CORE_OPS: 0, TIER_INFRA: 0}
+        for meta in AGENT_REGISTRY.values():
+            counts[meta["tier"]] += 1
+        assert counts[TIER_AI] == 5
+        assert counts[TIER_CORE_OPS] == 5
+        assert counts[TIER_INFRA] == 4
+
+    def test_reflection_agent_is_daily(self):
+        """Reflection agent should have daily poll interval."""
+        from src.services.agent_fleet import AGENT_REGISTRY
+        assert AGENT_REGISTRY["reflection_agent"]["poll_interval"] == 86400
+        assert AGENT_REGISTRY["reflection_agent"]["schedule"] == "Daily"
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +172,8 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         # No cache hit
         mock_redis.get.return_value = None
-        # All 19 heartbeats — recent timestamps
-        mock_redis.mget.return_value = [_utc_iso(60)] * 19
+        # All 14 heartbeats — recent timestamps
+        mock_redis.mget.return_value = [_utc_iso(60)] * 14
         # Cost hash for today
         mock_redis.hgetall.return_value = {"ab_test_engine": "0.001", "winback_agent": "0.002"}
         mock_redis.set.return_value = True
@@ -150,14 +192,14 @@ class TestGetFleetStatus:
 
         assert "fleet_summary" in result
         assert "agents" in result
-        assert len(result["agents"]) == 19
-        assert result["fleet_summary"]["total_agents"] == 19
+        assert len(result["agents"]) == 14
+        assert result["fleet_summary"]["total_agents"] == 14
 
     @pytest.mark.asyncio
     async def test_uses_cache_when_available(self):
         from src.services.agent_fleet import get_fleet_status
 
-        cached_data = {"fleet_summary": {"total_agents": 19}, "agents": []}
+        cached_data = {"fleet_summary": {"total_agents": 14}, "agents": []}
         mock_redis = AsyncMock()
         mock_redis.get.return_value = json.dumps(cached_data)
 
@@ -174,7 +216,7 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
         # All heartbeats are None (no data)
-        mock_redis.mget.return_value = [None] * 19
+        mock_redis.mget.return_value = [None] * 14
         mock_redis.hgetall.return_value = {}
         mock_redis.set.return_value = True
 
@@ -197,6 +239,32 @@ class TestGetFleetStatus:
                 assert agent["health"] == "disabled"
                 assert agent["status"] == "disabled"
 
+    @pytest.mark.asyncio
+    async def test_agents_include_tier_metadata(self):
+        """All agents should have a tier field in the response."""
+        from src.services.agent_fleet import get_fleet_status
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+        mock_redis.mget.return_value = [_utc_iso(60)] * 14
+        mock_redis.hgetall.return_value = {}
+        mock_redis.set.return_value = True
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter([]))
+        mock_session.execute.return_value = mock_result
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.services.agent_fleet.get_redis", return_value=mock_redis), \
+             patch("src.services.agent_fleet.async_session_factory", return_value=mock_session):
+            result = await get_fleet_status()
+
+        for agent in result["agents"]:
+            assert "tier" in agent, f"Agent {agent['name']} missing 'tier' field"
+            assert agent["tier"] in ("ai", "core_ops", "infra")
+
 
 # ---------------------------------------------------------------------------
 # get_agent_activity
@@ -215,6 +283,12 @@ class TestGetAgentActivity:
 
         mock_redis = AsyncMock()
         mock_redis.hget.return_value = "0.001"
+
+        # Mock pipeline for cost history
+        mock_pipe = AsyncMock()
+        mock_pipe.hget.return_value = mock_pipe
+        mock_pipe.execute.return_value = ["0.001"] * 30
+        mock_redis.pipeline.return_value = mock_pipe
 
         task = _make_task()
         mock_session = AsyncMock()

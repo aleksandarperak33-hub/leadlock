@@ -195,9 +195,11 @@ async def _check_workers() -> dict:
 
         workers = {}
         worker_keys = [
-            "leadlock:worker_health:health_monitor",
+            "leadlock:worker_health:system_health",
             "leadlock:worker_health:retry_worker",
-            "leadlock:worker_health:stuck_lead_sweeper",
+            "leadlock:worker_health:lead_state_manager",
+            "leadlock:worker_health:sms_dispatch",
+            "leadlock:worker_health:crm_sync",
         ]
 
         for key in worker_keys:

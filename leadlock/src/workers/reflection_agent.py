@@ -1,6 +1,9 @@
 """
-Reflection agent worker - weekly review of all agent performance.
+Reflection agent worker - daily review of all agent performance.
 Skeleton per AgentOS spec. Proposes SOUL.md improvements and logs regressions.
+
+Changed from weekly (604,800s) to daily (86,400s) so winning patterns
+flow into outreach within 24h instead of 7 days.
 """
 import asyncio
 import logging
@@ -16,7 +19,7 @@ from src.services.reflection_analysis import run_reflection_analysis
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 7 * 24 * 3600  # Weekly
+POLL_INTERVAL_SECONDS = 86400  # Daily
 
 
 async def _heartbeat():
@@ -27,14 +30,14 @@ async def _heartbeat():
         await redis.set(
             "leadlock:worker_health:reflection_agent",
             datetime.now(timezone.utc).isoformat(),
-            ex=8 * 24 * 3600,
+            ex=2 * 86400,
         )
     except Exception:
         pass
 
 
 async def run_reflection_agent():
-    """Main loop - run weekly reflection."""
+    """Main loop - run daily reflection."""
     logger.info("Reflection agent started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     # Wait 1 hour on startup
@@ -43,8 +46,8 @@ async def run_reflection_agent():
     while True:
         await _heartbeat()
         try:
-            if not await _should_run_this_week():
-                logger.debug("Reflection agent: already ran this week")
+            if not await _should_run_today():
+                logger.debug("Reflection agent: already ran today")
             else:
                 await reflection_cycle()
         except Exception as e:
@@ -53,13 +56,13 @@ async def run_reflection_agent():
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
-async def _should_run_this_week() -> bool:
-    """Check if reflection was already done this week."""
+async def _should_run_today() -> bool:
+    """Check if reflection was already done today."""
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        week_key = datetime.now(timezone.utc).strftime("%Y-W%W")
-        ran_key = f"leadlock:reflection:ran:{week_key}"
+        date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        ran_key = f"leadlock:reflection:ran:{date_key}"
         return await redis.get(ran_key) is None
     except Exception:
         return True
@@ -67,7 +70,7 @@ async def _should_run_this_week() -> bool:
 
 async def reflection_cycle():
     """Gather all agent metrics and run reflection analysis."""
-    logger.info("Reflection agent: starting weekly analysis")
+    logger.info("Reflection agent: starting daily analysis")
 
     # Gather performance data from all agents
     performance_data = {}
@@ -108,11 +111,11 @@ async def reflection_cycle():
         result.get("ai_cost_usd", 0.0),
     )
 
-    # Mark week complete
+    # Mark day complete
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        week_key = datetime.now(timezone.utc).strftime("%Y-W%W")
-        await redis.set(f"leadlock:reflection:ran:{week_key}", "1", ex=8 * 86400)
+        date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        await redis.set(f"leadlock:reflection:ran:{date_key}", "1", ex=2 * 86400)
     except Exception:
         pass

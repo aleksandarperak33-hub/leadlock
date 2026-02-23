@@ -73,10 +73,10 @@ class TestArchiveOldLeads:
             yield db
 
         with patch(
-            "src.workers.lead_lifecycle.async_session_factory",
+            "src.workers.lead_state_manager.async_session_factory",
             side_effect=session_factory,
         ):
-            from src.workers.lead_lifecycle import _archive_old_leads
+            from src.workers.lead_state_manager import _archive_old_leads
 
             count = await _archive_old_leads()
 
@@ -95,10 +95,10 @@ class TestArchiveOldLeads:
             yield db
 
         with patch(
-            "src.workers.lead_lifecycle.async_session_factory",
+            "src.workers.lead_state_manager.async_session_factory",
             side_effect=session_factory,
         ):
-            from src.workers.lead_lifecycle import _archive_old_leads
+            from src.workers.lead_state_manager import _archive_old_leads
 
             count = await _archive_old_leads()
 
@@ -118,10 +118,10 @@ class TestArchiveOldLeads:
             yield db
 
         with patch(
-            "src.workers.lead_lifecycle.async_session_factory",
+            "src.workers.lead_state_manager.async_session_factory",
             side_effect=session_factory,
         ):
-            from src.workers.lead_lifecycle import _archive_old_leads
+            from src.workers.lead_state_manager import _archive_old_leads
 
             await _archive_old_leads()
             commit_mock.assert_not_awaited()
@@ -171,14 +171,14 @@ class TestMarkDeadLeads:
 
         with (
             patch(
-                "src.workers.lead_lifecycle.async_session_factory",
+                "src.workers.lead_state_manager.async_session_factory",
                 side_effect=session_factory,
             ),
             patch("src.models.event_log.EventLog") as mock_event_cls,
         ):
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.lead_lifecycle import _mark_dead_leads
+            from src.workers.lead_state_manager import _mark_dead_leads
 
             count = await _mark_dead_leads()
 
@@ -222,14 +222,14 @@ class TestMarkDeadLeads:
 
         with (
             patch(
-                "src.workers.lead_lifecycle.async_session_factory",
+                "src.workers.lead_state_manager.async_session_factory",
                 side_effect=session_factory,
             ),
             patch("src.models.event_log.EventLog") as mock_event_cls,
         ):
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.lead_lifecycle import _mark_dead_leads
+            from src.workers.lead_state_manager import _mark_dead_leads
 
             count = await _mark_dead_leads()
 
@@ -252,10 +252,10 @@ class TestMarkDeadLeads:
             yield db
 
         with patch(
-            "src.workers.lead_lifecycle.async_session_factory",
+            "src.workers.lead_state_manager.async_session_factory",
             side_effect=session_factory,
         ):
-            from src.workers.lead_lifecycle import _mark_dead_leads
+            from src.workers.lead_state_manager import _mark_dead_leads
 
             count = await _mark_dead_leads()
 
@@ -311,11 +311,11 @@ class TestScheduleColdRecycling:
 
         with (
             patch(
-                "src.workers.lead_lifecycle.async_session_factory",
+                "src.workers.lead_state_manager.async_session_factory",
                 side_effect=session_factory,
             ),
             patch(
-                "src.workers.lead_lifecycle.is_cold_followup_enabled",
+                "src.workers.lead_state_manager.is_cold_followup_enabled",
                 return_value=True,
             ),
             patch("src.models.followup.FollowupTask") as mock_task_cls,
@@ -324,7 +324,7 @@ class TestScheduleColdRecycling:
             mock_task_cls.return_value = MagicMock()
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.lead_lifecycle import _schedule_cold_recycling
+            from src.workers.lead_state_manager import _schedule_cold_recycling
 
             count = await _schedule_cold_recycling()
 
@@ -358,15 +358,15 @@ class TestScheduleColdRecycling:
 
         with (
             patch(
-                "src.workers.lead_lifecycle.async_session_factory",
+                "src.workers.lead_state_manager.async_session_factory",
                 side_effect=session_factory,
             ),
             patch(
-                "src.workers.lead_lifecycle.is_cold_followup_enabled",
+                "src.workers.lead_state_manager.is_cold_followup_enabled",
                 return_value=False,
             ),
         ):
-            from src.workers.lead_lifecycle import _schedule_cold_recycling
+            from src.workers.lead_state_manager import _schedule_cold_recycling
 
             count = await _schedule_cold_recycling()
 
@@ -414,15 +414,15 @@ class TestScheduleColdRecycling:
 
         with (
             patch(
-                "src.workers.lead_lifecycle.async_session_factory",
+                "src.workers.lead_state_manager.async_session_factory",
                 side_effect=session_factory,
             ),
             patch(
-                "src.workers.lead_lifecycle.is_cold_followup_enabled",
+                "src.workers.lead_state_manager.is_cold_followup_enabled",
                 return_value=True,
             ),
         ):
-            from src.workers.lead_lifecycle import _schedule_cold_recycling
+            from src.workers.lead_state_manager import _schedule_cold_recycling
 
             count = await _schedule_cold_recycling()
 

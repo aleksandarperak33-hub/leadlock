@@ -781,57 +781,81 @@ class TestReleaseLock:
 
 
 # ---------------------------------------------------------------------------
-# 7. src/utils/alerting.py - send_alert + _should_send
+# 7. src/utils/alerting.py - send_alert + _acquire_cooldown
 # ---------------------------------------------------------------------------
 
 
-class TestShouldSend:
-    """Tests for the alert rate-limit cooldown."""
+class TestAcquireCooldown:
+    """Tests for the atomic alert rate-limit cooldown (Redis SET NX EX)."""
 
-    def test_first_alert_is_always_sent(self):
-        from src.utils.alerting import _should_send, _alert_cooldowns
+    async def test_first_alert_is_always_sent(self):
+        from src.utils.alerting import _acquire_cooldown
 
-        # Clear state for a unique alert type
-        test_type = f"test_unique_{uuid.uuid4().hex[:8]}"
-        _alert_cooldowns.pop(test_type, None)
+        # SET NX returns True — key didn't exist, acquired successfully
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
 
-        assert _should_send(test_type) is True
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            test_type = f"test_unique_{uuid.uuid4().hex[:8]}"
+            assert await _acquire_cooldown(test_type) is True
 
-    def test_second_alert_within_cooldown_is_blocked(self):
-        from src.utils.alerting import _should_send, _alert_cooldowns
+    async def test_second_alert_within_cooldown_is_blocked(self):
+        from src.utils.alerting import _acquire_cooldown
 
-        test_type = f"test_cooldown_{uuid.uuid4().hex[:8]}"
-        # Simulate alert just sent
-        _alert_cooldowns[test_type] = time.time()
+        # SET NX returns None — key already exists, cooldown active
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=None)
 
-        assert _should_send(test_type) is False
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            test_type = f"test_cooldown_{uuid.uuid4().hex[:8]}"
+            assert await _acquire_cooldown(test_type) is False
 
-    def test_alert_after_cooldown_expires_is_sent(self):
-        from src.utils.alerting import (
-            _should_send, _alert_cooldowns, ALERT_COOLDOWN_SECONDS,
-        )
+    async def test_alert_after_cooldown_expires_is_sent(self):
+        from src.utils.alerting import _acquire_cooldown
 
-        test_type = f"test_expired_{uuid.uuid4().hex[:8]}"
-        # Simulate alert sent more than 5 minutes ago
-        _alert_cooldowns[test_type] = time.time() - ALERT_COOLDOWN_SECONDS - 1
+        # SET NX returns True — TTL expired, key acquired
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
 
-        assert _should_send(test_type) is True
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            test_type = f"test_expired_{uuid.uuid4().hex[:8]}"
+            assert await _acquire_cooldown(test_type) is True
 
-    def test_different_alert_types_are_independent(self):
-        from src.utils.alerting import _should_send, _alert_cooldowns
+    async def test_different_alert_types_are_independent(self):
+        from src.utils.alerting import _acquire_cooldown
 
         type_a = f"test_a_{uuid.uuid4().hex[:8]}"
         type_b = f"test_b_{uuid.uuid4().hex[:8]}"
 
-        _alert_cooldowns.pop(type_a, None)
-        _alert_cooldowns.pop(type_b, None)
+        key_a = f"leadlock:alert_cooldown:{type_a}"
 
-        # Send type_a
-        _alert_cooldowns[type_a] = time.time()
+        # type_a: SET NX fails (cooldown active), type_b: SET NX succeeds
+        async def fake_set(key, value, **kwargs):
+            if key == key_a:
+                return None  # Already exists
+            return True  # New key
 
-        # type_a is now on cooldown, type_b is not
-        assert _should_send(type_a) is False
-        assert _should_send(type_b) is True
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(side_effect=fake_set)
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            assert await _acquire_cooldown(type_a) is False
+            assert await _acquire_cooldown(type_b) is True
+
+    async def test_redis_failure_uses_local_fallback(self):
+        from src.utils.alerting import _acquire_cooldown, _local_cooldowns
+
+        test_type = f"test_fallback_{uuid.uuid4().hex[:8]}"
+        _local_cooldowns.pop(test_type, None)
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("Redis down")):
+            # First call — no local cooldown, should allow
+            assert await _acquire_cooldown(test_type) is True
+            # Second call — local cooldown set, should block
+            assert await _acquire_cooldown(test_type) is False
+
+        # Cleanup
+        _local_cooldowns.pop(test_type, None)
 
 
 class TestSendAlert:
@@ -842,7 +866,7 @@ class TestSendAlert:
         test_type = f"test_log_{uuid.uuid4().hex[:8]}"
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-test"),
             patch("src.utils.alerting._send_webhook_alert", new_callable=AsyncMock),
             patch("src.utils.alerting._send_email_alert", new_callable=AsyncMock),
@@ -865,7 +889,7 @@ class TestSendAlert:
         test_type = f"test_crit_{uuid.uuid4().hex[:8]}"
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-crit"),
             patch("src.utils.alerting._send_webhook_alert", new_callable=AsyncMock),
             patch("src.utils.alerting._send_email_alert", new_callable=AsyncMock),
@@ -889,7 +913,7 @@ class TestSendAlert:
         mock_email = AsyncMock()
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-wh"),
             patch("src.utils.alerting._send_webhook_alert", mock_webhook),
             patch("src.utils.alerting._send_email_alert", mock_email),
@@ -906,11 +930,11 @@ class TestSendAlert:
             )
 
     async def test_rate_limited_alert_is_skipped(self):
-        """When _should_send returns False, no logging or webhook occurs."""
+        """When _acquire_cooldown returns False, no logging or webhook occurs."""
         mock_webhook = AsyncMock()
 
         with (
-            patch("src.utils.alerting._should_send", return_value=False),
+            patch("src.utils.alerting._acquire_cooldown", return_value=False),
             patch("src.utils.alerting._send_webhook_alert", mock_webhook),
             patch("src.utils.alerting._send_email_alert", new_callable=AsyncMock),
             patch("src.utils.alerting.logger") as mock_logger,
@@ -972,7 +996,7 @@ class TestSendAlert:
         mock_webhook = AsyncMock()
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-extra"),
             patch("src.utils.alerting._send_webhook_alert", mock_webhook),
             patch("src.utils.alerting._send_email_alert", new_callable=AsyncMock),

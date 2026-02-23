@@ -6,16 +6,17 @@ Alert channels:
 2. Webhook (configurable) - Discord/Slack URL via ALERT_WEBHOOK_URL env var
 
 Rate limiting: Max 1 alert per type per 5 minutes to prevent alert storms.
+Cooldowns stored in Redis (survives restarts, prevents post-deploy alert spam).
 """
 import logging
-import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Rate limit: alert type → last sent timestamp
-_alert_cooldowns: dict[str, float] = {}
 ALERT_COOLDOWN_SECONDS = 300  # 5 minutes
+
+# In-memory fallback when Redis is down (cleared on restart, but prevents alert storms)
+_local_cooldowns: dict[str, float] = {}  # alert_type → expiry timestamp
 
 
 class AlertType:
@@ -49,11 +50,9 @@ async def send_alert(
     Send an alert through all configured channels.
     Rate-limited to prevent alert storms.
     """
-    # Check rate limit
-    if not _should_send(alert_type):
+    # Atomic rate limit check + record (SET NX EX in Redis, in-memory fallback)
+    if not await _acquire_cooldown(alert_type):
         return
-
-    _alert_cooldowns[alert_type] = time.time()
 
     # Build alert payload
     from src.utils.logging import get_correlation_id
@@ -86,12 +85,31 @@ async def send_alert(
         await _send_email_alert(alert_type, message, cid, extra)
 
 
-def _should_send(alert_type: str) -> bool:
-    """Check if alert is within rate limit cooldown."""
-    last_sent = _alert_cooldowns.get(alert_type)
-    if last_sent is None:
+async def _acquire_cooldown(alert_type: str) -> bool:
+    """
+    Atomically check-and-set alert cooldown. Returns True if alert should be sent.
+
+    Uses Redis SET NX EX (atomic) to eliminate the race between check and record.
+    Falls back to in-memory dict when Redis is unavailable.
+    """
+    import time
+
+    # Try Redis first (atomic SET NX EX)
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        cooldown_key = f"leadlock:alert_cooldown:{alert_type}"
+        # SET NX EX: only sets if key doesn't exist, with TTL — atomic check+record
+        acquired = await redis.set(cooldown_key, "1", nx=True, ex=ALERT_COOLDOWN_SECONDS)
+        return bool(acquired)
+    except Exception:
+        # Redis down — use in-memory fallback to prevent alert storms
+        now = time.monotonic()
+        expiry = _local_cooldowns.get(alert_type, 0)
+        if now < expiry:
+            return False
+        _local_cooldowns[alert_type] = now + ALERT_COOLDOWN_SECONDS
         return True
-    return (time.time() - last_sent) >= ALERT_COOLDOWN_SECONDS
 
 
 async def _send_webhook_alert(
@@ -112,7 +130,7 @@ async def _send_webhook_alert(
         import httpx
 
         # Format for Discord/Slack compatibility
-        severity_emoji = {"critical": "🚨", "error": "❌", "warning": "⚠️"}.get("error", "ℹ️")
+        severity_emoji = {"critical": "\U0001f6a8", "error": "\u274c", "warning": "\u26a0\ufe0f"}.get("error", "\u2139\ufe0f")
         content = f"{severity_emoji} **{alert_type}**\n{message}"
         if correlation_id:
             content += f"\n`correlation_id: {correlation_id}`"

@@ -1563,7 +1563,7 @@ class TestGetWorkerStatus:
         assert "workers" in result
         assert result["workers"]["scraper"]["health"] == "healthy"
         assert result["workers"]["outreach_sequencer"]["health"] == "warning"
-        assert result["workers"]["health_monitor"]["health"] == "unknown"
+        assert result["workers"]["system_health"]["health"] == "unknown"
 
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("Redis down"))
     async def test_handles_redis_failure(self, mock_redis, db):

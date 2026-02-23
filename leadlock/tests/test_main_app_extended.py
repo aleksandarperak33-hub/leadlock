@@ -36,21 +36,18 @@ def _make_mock_settings(**overrides):
 
 
 _CORE_WORKER_PATHS = [
-    "src.workers.health_monitor.run_health_monitor",
+    "src.workers.system_health.run_system_health",
     "src.workers.retry_worker.run_retry_worker",
-    "src.workers.stuck_lead_sweeper.run_stuck_lead_sweeper",
+    "src.workers.lead_state_manager.run_lead_state_manager",
     "src.workers.crm_sync.run_crm_sync",
-    "src.workers.followup_scheduler.run_followup_scheduler",
-    "src.workers.deliverability_monitor.run_deliverability_monitor",
-    "src.workers.booking_reminder.run_booking_reminder",
-    "src.workers.lead_lifecycle.run_lead_lifecycle",
+    "src.workers.sms_dispatch.run_sms_dispatch",
     "src.workers.registration_poller.run_registration_poller",
 ]
 
 _SALES_WORKER_PATHS = [
     "src.workers.scraper.run_scraper",
     "src.workers.outreach_sequencer.run_outreach_sequencer",
-    "src.workers.outreach_cleanup.run_outreach_cleanup",
+    "src.workers.outreach_monitor.run_outreach_monitor",
     "src.workers.task_processor.run_task_processor",
 ]
 

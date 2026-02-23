@@ -16,6 +16,7 @@ from src.models.sales_config import SalesEngineConfig
 from src.models.email_blacklist import EmailBlacklist
 from src.models.webhook_event import WebhookEvent
 from src.models.failed_lead import FailedLead
+from src.models.ab_test import ABTestExperiment, ABTestVariant
 
 __all__ = [
     "Client",
@@ -33,4 +34,6 @@ __all__ = [
     "EmailBlacklist",
     "WebhookEvent",
     "FailedLead",
+    "ABTestExperiment",
+    "ABTestVariant",
 ]

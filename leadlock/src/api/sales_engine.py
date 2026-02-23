@@ -769,7 +769,18 @@ async def update_sales_config(
             setattr(config, field, payload[field])
 
     config.updated_at = datetime.now(timezone.utc)
-    await db.flush()
+
+    # Commit first, THEN invalidate cache — prevents TOCTOU where workers
+    # read stale data from uncommitted transaction and re-cache it
+    await db.commit()
+
+    # Invalidate cached config so workers pick up changes immediately
+    from src.services.config_cache import invalidate_sales_config
+    await invalidate_sales_config()
+
+    # Notify workers via event bus
+    from src.services.event_bus import publish_event
+    await publish_event("config_changed")
 
     return {"status": "updated"}
 
@@ -1405,7 +1416,7 @@ async def get_worker_status(
         from src.utils.dedup import get_redis
         redis = await get_redis()
 
-        workers = ["scraper", "outreach_sequencer", "outreach_cleanup", "health_monitor", "task_processor"]
+        workers = ["scraper", "outreach_sequencer", "outreach_monitor", "system_health", "task_processor"]
         status = {}
 
         for name in workers:
@@ -2158,11 +2169,11 @@ async def get_command_center(
         try:
             from src.utils.dedup import get_redis
             redis = await get_redis()
-            worker_names = ["scraper", "outreach_sequencer", "outreach_cleanup", "health_monitor", "task_processor"]
+            worker_names = ["scraper", "outreach_sequencer", "outreach_monitor", "system_health", "task_processor"]
             pause_map = {
                 "scraper": "scraper_paused",
                 "outreach_sequencer": "sequencer_paused",
-                "outreach_cleanup": "cleanup_paused",
+                "outreach_monitor": "cleanup_paused",
             }
 
             for name in worker_names:

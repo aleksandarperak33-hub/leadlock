@@ -50,6 +50,16 @@ const COLOR_ICON = {
   gray: 'text-gray-500',
 };
 
+const COLOR_BORDER = {
+  purple: 'border-purple-300', blue: 'border-blue-300', amber: 'border-amber-300',
+  green: 'border-green-300', cyan: 'border-cyan-300', red: 'border-red-300',
+  pink: 'border-pink-300', indigo: 'border-indigo-300', emerald: 'border-emerald-300',
+  teal: 'border-teal-300', sky: 'border-sky-300', lime: 'border-lime-300',
+  rose: 'border-rose-300', slate: 'border-slate-300', stone: 'border-stone-300',
+  violet: 'border-violet-300', orange: 'border-orange-300', yellow: 'border-yellow-300',
+  gray: 'border-gray-300',
+};
+
 const STATUS_DOT = {
   running: 'bg-emerald-500 animate-agent-pulse',
   idle: 'bg-gray-300',
@@ -71,12 +81,14 @@ function formatAge(heartbeat) {
 
 /**
  * Individual agent card with status pulse, cost, and task count.
- * @param {{ agent: object, selected: boolean, onClick: () => void }} props
+ * AI tier agents get a larger card with accent border.
+ * @param {{ agent: object, tier: string, selected: boolean, onClick: () => void }} props
  */
-export default function AgentCard({ agent, selected, onClick }) {
+export default function AgentCard({ agent, tier, selected, onClick }) {
   const Icon = ICON_MAP[agent.icon] || Sparkles;
   const dotClass = STATUS_DOT[agent.status] || 'bg-gray-300';
   const isDisabled = agent.enabled === false;
+  const isAI = tier === 'ai';
 
   return (
     <button
@@ -87,12 +99,13 @@ export default function AgentCard({ agent, selected, onClick }) {
         active:scale-[0.98] transition-all duration-150 w-full
         ${selected ? 'border-orange-400 ring-2 ring-orange-100' : ''}
         ${isDisabled ? 'opacity-50' : ''}
+        ${isAI ? `border-l-4 ${COLOR_BORDER[agent.color]}` : ''}
       `}
     >
       {/* Header row: icon + status dot */}
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-9 h-9 rounded-lg ${COLOR_BG[agent.color]} flex items-center justify-center`}>
-          <Icon className={`w-4.5 h-4.5 ${COLOR_ICON[agent.color]}`} />
+        <div className={`${isAI ? 'w-10 h-10' : 'w-9 h-9'} rounded-lg ${COLOR_BG[agent.color]} flex items-center justify-center`}>
+          <Icon className={`${isAI ? 'w-5 h-5' : 'w-4.5 h-4.5'} ${COLOR_ICON[agent.color]}`} />
         </div>
         <div className="flex items-center gap-1.5">
           {isDisabled && (
@@ -105,7 +118,7 @@ export default function AgentCard({ agent, selected, onClick }) {
       </div>
 
       {/* Name + schedule */}
-      <div className="font-semibold text-gray-900 text-sm leading-tight mb-0.5">
+      <div className={`font-semibold text-gray-900 leading-tight mb-0.5 ${isAI ? 'text-sm' : 'text-sm'}`}>
         {agent.display_name}
       </div>
       <div className="text-xs text-gray-500 mb-3">{agent.schedule}</div>

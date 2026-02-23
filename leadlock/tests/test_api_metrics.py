@@ -517,7 +517,7 @@ class TestGetWorkerHealth:
             result = await get_worker_health(admin=admin)
 
         workers = result["workers"]
-        assert len(workers) == 8
+        assert len(workers) == 7
         for name, info in workers.items():
             assert info["status"] == "healthy"
             assert info["last_heartbeat"] == recent_ts
@@ -568,7 +568,7 @@ class TestGetWorkerHealth:
 
         # Return different values per worker key
         async def mock_get(key):
-            if "health_monitor" in key:
+            if "system_health" in key:
                 return recent_ts
             if "retry_worker" in key:
                 return stale_ts
@@ -580,9 +580,9 @@ class TestGetWorkerHealth:
             result = await get_worker_health(admin=admin)
 
         workers = result["workers"]
-        assert workers["health_monitor"]["status"] == "healthy"
+        assert workers["system_health"]["status"] == "healthy"
         assert workers["retry_worker"]["status"] == "stale"
-        assert workers["stuck_lead_sweeper"]["status"] == "unknown"
+        assert workers["lead_state_manager"]["status"] == "unknown"
 
     async def test_redis_failure_returns_error(self):
         """If Redis connection fails, return empty workers with error."""
@@ -637,7 +637,7 @@ class TestGetWorkerHealth:
             assert 50 <= info["age_seconds"] <= 120
 
     async def test_worker_list_completeness(self):
-        """All 8 expected workers are present in the response."""
+        """All 7 expected workers are present in the response."""
         admin = _make_admin_client()
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
@@ -646,13 +646,12 @@ class TestGetWorkerHealth:
             result = await get_worker_health(admin=admin)
 
         expected_workers = {
-            "health_monitor",
+            "system_health",
             "retry_worker",
-            "stuck_lead_sweeper",
+            "lead_state_manager",
             "crm_sync",
-            "followup_scheduler",
-            "deliverability_monitor",
-            "booking_reminder",
-            "lead_lifecycle",
+            "sms_dispatch",
+            "outreach_monitor",
+            "registration_poller",
         }
         assert set(result["workers"].keys()) == expected_workers

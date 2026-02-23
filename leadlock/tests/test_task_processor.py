@@ -91,7 +91,7 @@ def _mock_async_session_factory(tasks=None):
 
 class TestConstants:
     def test_poll_interval(self):
-        assert POLL_INTERVAL_SECONDS == 10
+        assert POLL_INTERVAL_SECONDS == 30
 
     def test_max_tasks_per_cycle(self):
         assert MAX_TASKS_PER_CYCLE == 10

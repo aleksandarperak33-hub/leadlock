@@ -1,9 +1,9 @@
 """
 Tests for worker heartbeat and main-loop coverage across five workers:
-- deliverability_monitor: _heartbeat, run_deliverability_monitor
-- stuck_lead_sweeper: _heartbeat, run_stuck_lead_sweeper
+- deliverability_monitor: _heartbeat, run_system_health
+- stuck_lead_sweeper: _heartbeat, run_lead_state_manager
 - retry_worker: _heartbeat, run_retry_worker
-- lead_lifecycle: _heartbeat, run_lead_lifecycle
+- lead_lifecycle: _heartbeat, run_lead_state_manager
 - crm_sync: _heartbeat, run_crm_sync
 
 Covers the uncovered lines:
@@ -34,13 +34,13 @@ class TestDeliverabilityMonitorHeartbeat:
             new_callable=AsyncMock,
             return_value=redis_mock,
         ):
-            from src.workers.deliverability_monitor import _heartbeat
+            from src.workers.system_health import _heartbeat
 
             await _heartbeat()
 
         redis_mock.set.assert_awaited_once()
         args, kwargs = redis_mock.set.call_args
-        assert args[0] == "leadlock:worker_health:deliverability_monitor"
+        assert args[0] == "leadlock:worker_health:system_health"
         assert kwargs.get("ex") == 600
 
     async def test_heartbeat_swallows_redis_errors(self):
@@ -50,13 +50,13 @@ class TestDeliverabilityMonitorHeartbeat:
             new_callable=AsyncMock,
             side_effect=ConnectionError("no redis"),
         ):
-            from src.workers.deliverability_monitor import _heartbeat
+            from src.workers.system_health import _heartbeat
 
             await _heartbeat()  # must not raise
 
 
 class TestRunDeliverabilityMonitor:
-    """run_deliverability_monitor() - main loop behaviour."""
+    """run_system_health() - main loop behaviour."""
 
     async def test_loop_calls_check_then_heartbeat_then_sleeps(self):
         """One iteration: _check_deliverability -> _heartbeat -> sleep."""
@@ -74,30 +74,34 @@ class TestRunDeliverabilityMonitor:
 
         with (
             patch(
-                "src.workers.deliverability_monitor._check_deliverability",
+                "src.workers.system_health._check_connectivity",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.system_health._check_deliverability",
                 side_effect=fake_check,
             ),
             patch(
-                "src.workers.deliverability_monitor._heartbeat",
+                "src.workers.system_health._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.deliverability_monitor.asyncio.sleep",
+                "src.workers.system_health.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.deliverability_monitor import (
-                MONITOR_INTERVAL_SECONDS,
-                run_deliverability_monitor,
+            from src.workers.system_health import (
+                POLL_INTERVAL_SECONDS,
+                run_system_health,
             )
 
             with pytest.raises(KeyboardInterrupt):
-                await run_deliverability_monitor()
+                await run_system_health()
 
         assert call_order == [
             "check",
             "heartbeat",
-            ("sleep", MONITOR_INTERVAL_SECONDS),
+            ("sleep", POLL_INTERVAL_SECONDS),
         ]
 
     async def test_loop_catches_check_errors_and_continues(self, caplog):
@@ -117,66 +121,74 @@ class TestRunDeliverabilityMonitor:
 
         with (
             patch(
-                "src.workers.deliverability_monitor._check_deliverability",
+                "src.workers.system_health._check_connectivity",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.system_health._check_deliverability",
                 side_effect=fail_check,
             ),
             patch(
-                "src.workers.deliverability_monitor._heartbeat",
+                "src.workers.system_health._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.deliverability_monitor.asyncio.sleep",
+                "src.workers.system_health.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.deliverability_monitor import run_deliverability_monitor
+            from src.workers.system_health import run_system_health
 
             with (
                 caplog.at_level(
-                    logging.ERROR, logger="src.workers.deliverability_monitor"
+                    logging.ERROR, logger="src.workers.system_health"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_deliverability_monitor()
+                await run_system_health()
 
         assert "check_error" in call_order
         assert "heartbeat" in call_order
         assert any(
-            "Deliverability monitor error" in r.message for r in caplog.records
+            "System health worker error" in r.message for r in caplog.records
         )
 
     async def test_loop_logs_start_message(self, caplog):
-        """run_deliverability_monitor logs an info message on start."""
+        """run_system_health logs an info message on start."""
 
         async def fake_sleep(seconds):
             raise KeyboardInterrupt()
 
         with (
             patch(
-                "src.workers.deliverability_monitor._check_deliverability",
+                "src.workers.system_health._check_connectivity",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.deliverability_monitor._heartbeat",
+                "src.workers.system_health._check_deliverability",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.deliverability_monitor.asyncio.sleep",
+                "src.workers.system_health._heartbeat",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.system_health.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.deliverability_monitor import run_deliverability_monitor
+            from src.workers.system_health import run_system_health
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.deliverability_monitor"
+                    logging.INFO, logger="src.workers.system_health"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_deliverability_monitor()
+                await run_system_health()
 
         assert any(
-            "Deliverability monitor started" in r.message for r in caplog.records
+            "System health worker started" in r.message for r in caplog.records
         )
 
 
@@ -196,13 +208,13 @@ class TestStuckLeadSweeperHeartbeat:
             new_callable=AsyncMock,
             return_value=redis_mock,
         ):
-            from src.workers.stuck_lead_sweeper import _heartbeat
+            from src.workers.lead_state_manager import _heartbeat
 
             await _heartbeat()
 
         redis_mock.set.assert_awaited_once()
         args, kwargs = redis_mock.set.call_args
-        assert args[0] == "leadlock:worker_health:stuck_lead_sweeper"
+        assert args[0] == "leadlock:worker_health:lead_state_manager"
         assert kwargs.get("ex") == 600
 
     async def test_heartbeat_swallows_redis_errors(self):
@@ -212,13 +224,13 @@ class TestStuckLeadSweeperHeartbeat:
             new_callable=AsyncMock,
             side_effect=ConnectionError("no redis"),
         ):
-            from src.workers.stuck_lead_sweeper import _heartbeat
+            from src.workers.lead_state_manager import _heartbeat
 
             await _heartbeat()  # must not raise
 
 
 class TestRunStuckLeadSweeper:
-    """run_stuck_lead_sweeper() - main loop behaviour."""
+    """run_lead_state_manager() - main loop behaviour."""
 
     async def test_loop_calls_sweep_then_heartbeat_then_sleeps(self):
         """One iteration: _sweep_stuck_leads -> _heartbeat -> sleep."""
@@ -237,30 +249,45 @@ class TestRunStuckLeadSweeper:
 
         with (
             patch(
-                "src.workers.stuck_lead_sweeper._sweep_stuck_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 side_effect=fake_sweep,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper._heartbeat",
+                "src.workers.lead_state_manager._archive_old_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._mark_dead_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.stuck_lead_sweeper import (
-                SWEEP_INTERVAL_SECONDS,
-                run_stuck_lead_sweeper,
+            from src.workers.lead_state_manager import (
+                POLL_INTERVAL_SECONDS,
+                run_lead_state_manager,
             )
 
             with pytest.raises(KeyboardInterrupt):
-                await run_stuck_lead_sweeper()
+                await run_lead_state_manager()
 
         assert call_order == [
             "sweep",
             "heartbeat",
-            ("sleep", SWEEP_INTERVAL_SECONDS),
+            ("sleep", POLL_INTERVAL_SECONDS),
         ]
 
     async def test_loop_logs_found_count_when_positive(self, caplog):
@@ -279,30 +306,45 @@ class TestRunStuckLeadSweeper:
 
         with (
             patch(
-                "src.workers.stuck_lead_sweeper._sweep_stuck_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 side_effect=fake_sweep,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper._heartbeat",
+                "src.workers.lead_state_manager._archive_old_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._mark_dead_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.stuck_lead_sweeper import run_stuck_lead_sweeper
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.stuck_lead_sweeper"
+                    logging.INFO, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_stuck_lead_sweeper()
+                await run_lead_state_manager()
 
         assert any(
-            "found 3 stuck leads" in r.message for r in caplog.records
+            "stuck=3" in r.message for r in caplog.records
         )
 
     async def test_loop_catches_sweep_errors_and_continues(self, caplog):
@@ -322,67 +364,82 @@ class TestRunStuckLeadSweeper:
 
         with (
             patch(
-                "src.workers.stuck_lead_sweeper._sweep_stuck_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 side_effect=fail_sweep,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper._heartbeat",
+                "src.workers.lead_state_manager._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.stuck_lead_sweeper import run_stuck_lead_sweeper
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.ERROR, logger="src.workers.stuck_lead_sweeper"
+                    logging.ERROR, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_stuck_lead_sweeper()
+                await run_lead_state_manager()
 
         assert "sweep_error" in call_order
         assert "heartbeat" in call_order
         assert any(
-            "Stuck lead sweeper error" in r.message for r in caplog.records
+            "Lead state manager error" in r.message for r in caplog.records
         )
 
     async def test_loop_logs_start_message(self, caplog):
-        """run_stuck_lead_sweeper logs an info message on start."""
+        """run_lead_state_manager logs an info message on start."""
 
         async def fake_sleep(seconds):
             raise KeyboardInterrupt()
 
         with (
             patch(
-                "src.workers.stuck_lead_sweeper._sweep_stuck_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper._heartbeat",
+                "src.workers.lead_state_manager._archive_old_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._mark_dead_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.stuck_lead_sweeper.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.stuck_lead_sweeper import run_stuck_lead_sweeper
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.stuck_lead_sweeper"
+                    logging.INFO, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_stuck_lead_sweeper()
+                await run_lead_state_manager()
 
         assert any(
-            "Stuck lead sweeper started" in r.message for r in caplog.records
+            "Lead state manager started" in r.message for r in caplog.records
         )
 
 
@@ -601,21 +658,21 @@ class TestLeadLifecycleHeartbeat:
     """_heartbeat() - Redis health check storage and error handling."""
 
     async def test_heartbeat_stores_timestamp_in_redis(self):
-        """Heartbeat sets key with 3600s TTL in Redis."""
+        """Heartbeat sets key with 600s TTL in Redis."""
         redis_mock = AsyncMock()
         with patch(
             "src.utils.dedup.get_redis",
             new_callable=AsyncMock,
             return_value=redis_mock,
         ):
-            from src.workers.lead_lifecycle import _heartbeat
+            from src.workers.lead_state_manager import _heartbeat
 
             await _heartbeat()
 
         redis_mock.set.assert_awaited_once()
         args, kwargs = redis_mock.set.call_args
-        assert args[0] == "leadlock:worker_health:lead_lifecycle"
-        assert kwargs.get("ex") == 3600
+        assert args[0] == "leadlock:worker_health:lead_state_manager"
+        assert kwargs.get("ex") == 600
 
     async def test_heartbeat_swallows_redis_errors(self):
         """Heartbeat silently handles Redis connection failures."""
@@ -624,13 +681,13 @@ class TestLeadLifecycleHeartbeat:
             new_callable=AsyncMock,
             side_effect=ConnectionError("no redis"),
         ):
-            from src.workers.lead_lifecycle import _heartbeat
+            from src.workers.lead_state_manager import _heartbeat
 
             await _heartbeat()  # must not raise
 
 
 class TestRunLeadLifecycle:
-    """run_lead_lifecycle() - main loop behaviour."""
+    """run_lead_state_manager() - main loop behaviour."""
 
     async def test_loop_calls_subroutines_then_heartbeat_then_sleeps(self):
         """One iteration: archive + dead + recycle -> _heartbeat -> sleep."""
@@ -657,33 +714,38 @@ class TestRunLeadLifecycle:
 
         with (
             patch(
-                "src.workers.lead_lifecycle._archive_old_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fake_archive,
             ),
             patch(
-                "src.workers.lead_lifecycle._mark_dead_leads",
+                "src.workers.lead_state_manager._mark_dead_leads",
                 side_effect=fake_dead,
             ),
             patch(
-                "src.workers.lead_lifecycle._schedule_cold_recycling",
+                "src.workers.lead_state_manager._schedule_cold_recycling",
                 side_effect=fake_recycle,
             ),
             patch(
-                "src.workers.lead_lifecycle._heartbeat",
+                "src.workers.lead_state_manager._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.lead_lifecycle.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.lead_lifecycle import (
+            from src.workers.lead_state_manager import (
                 POLL_INTERVAL_SECONDS,
-                run_lead_lifecycle,
+                run_lead_state_manager,
             )
 
             with pytest.raises(KeyboardInterrupt):
-                await run_lead_lifecycle()
+                await run_lead_state_manager()
 
         assert call_order == [
             "archive",
@@ -709,35 +771,40 @@ class TestRunLeadLifecycle:
 
         with (
             patch(
-                "src.workers.lead_lifecycle._archive_old_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fake_archive,
             ),
             patch(
-                "src.workers.lead_lifecycle._mark_dead_leads",
+                "src.workers.lead_state_manager._mark_dead_leads",
                 side_effect=fake_dead,
             ),
             patch(
-                "src.workers.lead_lifecycle._schedule_cold_recycling",
+                "src.workers.lead_state_manager._schedule_cold_recycling",
                 side_effect=fake_recycle,
             ),
             patch(
-                "src.workers.lead_lifecycle._heartbeat",
+                "src.workers.lead_state_manager._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.lead_lifecycle.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.lead_lifecycle import run_lead_lifecycle
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.lead_lifecycle"
+                    logging.INFO, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_lead_lifecycle()
+                await run_lead_state_manager()
 
         assert any(
             "archived=2" in r.message
@@ -753,40 +820,45 @@ class TestRunLeadLifecycle:
 
         with (
             patch(
-                "src.workers.lead_lifecycle._archive_old_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._mark_dead_leads",
+                "src.workers.lead_state_manager._archive_old_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._schedule_cold_recycling",
+                "src.workers.lead_state_manager._mark_dead_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._heartbeat",
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.lead_lifecycle.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.lead_lifecycle import run_lead_lifecycle
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.lead_lifecycle"
+                    logging.INFO, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_lead_lifecycle()
+                await run_lead_state_manager()
 
-        # The "Lead lifecycle:" summary line must not appear
+        # The summary line must not appear when all counts are zero
         assert not any(
             "archived=" in r.message and "dead=" in r.message
             for r in caplog.records
@@ -809,77 +881,97 @@ class TestRunLeadLifecycle:
 
         with (
             patch(
-                "src.workers.lead_lifecycle._archive_old_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fail_archive,
             ),
             patch(
-                "src.workers.lead_lifecycle._heartbeat",
+                "src.workers.lead_state_manager._mark_dead_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 side_effect=fake_heartbeat,
             ),
             patch(
-                "src.workers.lead_lifecycle.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.lead_lifecycle import run_lead_lifecycle
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.ERROR, logger="src.workers.lead_lifecycle"
+                    logging.ERROR, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_lead_lifecycle()
+                await run_lead_state_manager()
 
         assert "archive_error" in call_order
         assert "heartbeat" in call_order
         assert any(
-            "Lead lifecycle error" in r.message for r in caplog.records
+            "Lead state manager error" in r.message for r in caplog.records
         )
 
     async def test_loop_logs_start_message(self, caplog):
-        """run_lead_lifecycle logs an info message on start."""
+        """run_lead_state_manager logs an info message on start."""
 
         async def fake_sleep(seconds):
             raise KeyboardInterrupt()
 
         with (
             patch(
-                "src.workers.lead_lifecycle._archive_old_leads",
+                "src.workers.lead_state_manager._sweep_stuck_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._mark_dead_leads",
+                "src.workers.lead_state_manager._archive_old_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._schedule_cold_recycling",
+                "src.workers.lead_state_manager._mark_dead_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "src.workers.lead_lifecycle._heartbeat",
+                "src.workers.lead_state_manager._schedule_cold_recycling",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.lead_lifecycle.asyncio.sleep",
+                "src.workers.lead_state_manager.asyncio.sleep",
                 side_effect=fake_sleep,
             ),
         ):
-            from src.workers.lead_lifecycle import run_lead_lifecycle
+            from src.workers.lead_state_manager import run_lead_state_manager
 
             with (
                 caplog.at_level(
-                    logging.INFO, logger="src.workers.lead_lifecycle"
+                    logging.INFO, logger="src.workers.lead_state_manager"
                 ),
                 pytest.raises(KeyboardInterrupt),
             ):
-                await run_lead_lifecycle()
+                await run_lead_state_manager()
 
         assert any(
-            "Lead lifecycle worker started" in r.message for r in caplog.records
+            "Lead state manager started" in r.message for r in caplog.records
         )
 
 
@@ -1064,16 +1156,16 @@ class TestDeliverabilityMonitorNoneRate:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 

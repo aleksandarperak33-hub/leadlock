@@ -3,7 +3,7 @@ Tests for src/workers/booking_reminder.py - booking reminder worker.
 
 Covers:
 - _heartbeat: Redis heartbeat storage + error swallowing
-- run_booking_reminder: main loop, logging, error handling
+- run_sms_dispatch: main loop, logging, error handling
 - _send_due_reminders: DB query, iteration, commit, empty bookings
 - _send_single_reminder: full reminder flow (compliance, followup, SMS, DB records)
   - Missing lead/client
@@ -159,13 +159,13 @@ class TestHeartbeat:
             new_callable=AsyncMock,
             return_value=redis_mock,
         ):
-            from src.workers.booking_reminder import _heartbeat
+            from src.workers.sms_dispatch import _heartbeat
             await _heartbeat()
 
         redis_mock.set.assert_called_once()
         call_args = redis_mock.set.call_args
-        assert call_args[0][0] == "leadlock:worker_health:booking_reminder"
-        assert call_args[1]["ex"] == 3600
+        assert call_args[0][0] == "leadlock:worker_health:sms_dispatch"
+        assert call_args[1]["ex"] == 300
 
     async def test_heartbeat_swallows_exceptions(self):
         """Heartbeat silently swallows any exception (e.g. Redis down)."""
@@ -174,7 +174,7 @@ class TestHeartbeat:
             new_callable=AsyncMock,
             side_effect=ConnectionError("Redis offline"),
         ):
-            from src.workers.booking_reminder import _heartbeat
+            from src.workers.sms_dispatch import _heartbeat
             # Should not raise
             await _heartbeat()
 
@@ -193,7 +193,7 @@ class TestSendSingleReminder:
         db.get = AsyncMock(side_effect=[None, _make_client()])
         booking = _make_booking()
 
-        from src.workers.booking_reminder import _send_single_reminder
+        from src.workers.sms_dispatch import _send_single_reminder
         result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -204,7 +204,7 @@ class TestSendSingleReminder:
         db.get = AsyncMock(side_effect=[_make_lead(), None])
         booking = _make_booking()
 
-        from src.workers.booking_reminder import _send_single_reminder
+        from src.workers.sms_dispatch import _send_single_reminder
         result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -216,7 +216,7 @@ class TestSendSingleReminder:
         db.get = AsyncMock(side_effect=[lead, _make_client()])
         booking = _make_booking(extra_data=None)
 
-        from src.workers.booking_reminder import _send_single_reminder
+        from src.workers.sms_dispatch import _send_single_reminder
         result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -230,7 +230,7 @@ class TestSendSingleReminder:
         db.get = AsyncMock(side_effect=[lead, _make_client()])
         booking = _make_booking(extra_data={"previous_key": "value"})
 
-        from src.workers.booking_reminder import _send_single_reminder
+        from src.workers.sms_dispatch import _send_single_reminder
         result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -249,10 +249,10 @@ class TestSendSingleReminder:
         blocked = ComplianceResult(allowed=False, reason="Quiet hours", rule="tcpa_quiet_hours")
 
         with patch(
-            "src.workers.booking_reminder.full_compliance_check",
+            "src.workers.sms_dispatch.full_compliance_check",
             return_value=blocked,
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -271,20 +271,20 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ),
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=_make_followup_response(),
             ),
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_blocked,
             ),
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -310,25 +310,25 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ),
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=followup_resp,
             ) as mock_followup,
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_ok,
             ),
             patch(
-                "src.workers.booking_reminder.send_sms",
+                "src.workers.sms_dispatch.send_sms",
                 new_callable=AsyncMock,
                 return_value=sms_result,
             ) as mock_sms,
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is True
@@ -378,25 +378,25 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ),
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=_make_followup_response(),
             ) as mock_followup,
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_ok,
             ),
             patch(
-                "src.workers.booking_reminder.send_sms",
+                "src.workers.sms_dispatch.send_sms",
                 new_callable=AsyncMock,
                 return_value=sms_result,
             ),
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is True
@@ -423,25 +423,25 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ),
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=_make_followup_response(),
             ) as mock_followup,
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_ok,
             ),
             patch(
-                "src.workers.booking_reminder.send_sms",
+                "src.workers.sms_dispatch.send_sms",
                 new_callable=AsyncMock,
                 return_value=sms_result,
             ),
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is True
@@ -460,10 +460,10 @@ class TestSendSingleReminder:
         blocked = ComplianceResult(allowed=False, reason="No consent record", rule="tcpa_no_consent")
 
         with patch(
-            "src.workers.booking_reminder.full_compliance_check",
+            "src.workers.sms_dispatch.full_compliance_check",
             return_value=blocked,
         ) as mock_compliance:
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is False
@@ -488,25 +488,25 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ) as mock_compliance,
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=_make_followup_response(),
             ),
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_ok,
             ),
             patch(
-                "src.workers.booking_reminder.send_sms",
+                "src.workers.sms_dispatch.send_sms",
                 new_callable=AsyncMock,
                 return_value=sms_result,
             ),
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is True
@@ -530,7 +530,7 @@ class TestSendSingleReminder:
         db.get = AsyncMock(side_effect=[lead, client])
         booking = _make_booking()
 
-        from src.workers.booking_reminder import _send_single_reminder
+        from src.workers.sms_dispatch import _send_single_reminder
 
         with pytest.raises(ValidationError):
             await _send_single_reminder(db, booking)
@@ -553,25 +553,25 @@ class TestSendSingleReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder.full_compliance_check",
+                "src.workers.sms_dispatch.full_compliance_check",
                 return_value=compliance_ok,
             ),
             patch(
-                "src.workers.booking_reminder.process_followup",
+                "src.workers.sms_dispatch.process_followup",
                 new_callable=AsyncMock,
                 return_value=_make_followup_response(),
             ),
             patch(
-                "src.workers.booking_reminder.check_content_compliance",
+                "src.workers.sms_dispatch.check_content_compliance",
                 return_value=content_ok,
             ),
             patch(
-                "src.workers.booking_reminder.send_sms",
+                "src.workers.sms_dispatch.send_sms",
                 new_callable=AsyncMock,
                 return_value=sms_result,
             ),
         ):
-            from src.workers.booking_reminder import _send_single_reminder
+            from src.workers.sms_dispatch import _send_single_reminder
             result = await _send_single_reminder(db, booking)
 
         assert result is True
@@ -598,10 +598,10 @@ class TestSendDueReminders:
         db_mock.commit = AsyncMock()
 
         with patch(
-            "src.workers.booking_reminder.async_session_factory",
+            "src.workers.sms_dispatch.async_session_factory",
             side_effect=lambda: _mock_session_factory(db_mock),
         ):
-            from src.workers.booking_reminder import _send_due_reminders
+            from src.workers.sms_dispatch import _send_due_reminders
             count = await _send_due_reminders()
 
         assert count == 0
@@ -622,16 +622,16 @@ class TestSendDueReminders:
 
         with (
             patch(
-                "src.workers.booking_reminder.async_session_factory",
+                "src.workers.sms_dispatch.async_session_factory",
                 side_effect=lambda: _mock_session_factory(db_mock),
             ),
             patch(
-                "src.workers.booking_reminder._send_single_reminder",
+                "src.workers.sms_dispatch._send_single_reminder",
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_send,
         ):
-            from src.workers.booking_reminder import _send_due_reminders
+            from src.workers.sms_dispatch import _send_due_reminders
             count = await _send_due_reminders()
 
         assert count == 2
@@ -654,16 +654,16 @@ class TestSendDueReminders:
 
         with (
             patch(
-                "src.workers.booking_reminder.async_session_factory",
+                "src.workers.sms_dispatch.async_session_factory",
                 side_effect=lambda: _mock_session_factory(db_mock),
             ),
             patch(
-                "src.workers.booking_reminder._send_single_reminder",
+                "src.workers.sms_dispatch._send_single_reminder",
                 new_callable=AsyncMock,
                 side_effect=[True, False, True],
             ),
         ):
-            from src.workers.booking_reminder import _send_due_reminders
+            from src.workers.sms_dispatch import _send_due_reminders
             count = await _send_due_reminders()
 
         assert count == 2
@@ -683,16 +683,16 @@ class TestSendDueReminders:
 
         with (
             patch(
-                "src.workers.booking_reminder.async_session_factory",
+                "src.workers.sms_dispatch.async_session_factory",
                 side_effect=lambda: _mock_session_factory(db_mock),
             ),
             patch(
-                "src.workers.booking_reminder._send_single_reminder",
+                "src.workers.sms_dispatch._send_single_reminder",
                 new_callable=AsyncMock,
                 side_effect=[RuntimeError("SMS failed"), True],
             ),
         ):
-            from src.workers.booking_reminder import _send_due_reminders
+            from src.workers.sms_dispatch import _send_due_reminders
             count = await _send_due_reminders()
 
         # Only the second booking succeeded
@@ -702,12 +702,12 @@ class TestSendDueReminders:
 
 
 # ---------------------------------------------------------------------------
-# run_booking_reminder (main loop)
+# run_sms_dispatch (main loop)
 # ---------------------------------------------------------------------------
 
 
 class TestRunBookingReminder:
-    """Tests for run_booking_reminder - the infinite loop."""
+    """Tests for run_sms_dispatch - the infinite loop."""
 
     async def test_logs_sent_count_when_positive(self):
         """When reminders are sent, logs the count."""
@@ -722,21 +722,25 @@ class TestRunBookingReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder._send_due_reminders",
+                "src.workers.sms_dispatch._process_due_followups",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.sms_dispatch._send_due_reminders",
                 side_effect=mock_send_due,
             ),
             patch(
-                "src.workers.booking_reminder._heartbeat",
+                "src.workers.sms_dispatch._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.asyncio.sleep",
+                "src.workers.sms_dispatch.asyncio.sleep",
                 new_callable=AsyncMock,
             ),
         ):
-            from src.workers.booking_reminder import run_booking_reminder
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_booking_reminder()
+                await run_sms_dispatch()
 
     async def test_does_not_log_when_zero_sent(self):
         """When no reminders sent (0), no info log about count."""
@@ -751,24 +755,28 @@ class TestRunBookingReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder._send_due_reminders",
+                "src.workers.sms_dispatch._process_due_followups",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.sms_dispatch._send_due_reminders",
                 side_effect=mock_send_due,
             ),
             patch(
-                "src.workers.booking_reminder._heartbeat",
+                "src.workers.sms_dispatch._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.asyncio.sleep",
+                "src.workers.sms_dispatch.asyncio.sleep",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.logger",
+                "src.workers.sms_dispatch.logger",
             ) as mock_logger,
         ):
-            from src.workers.booking_reminder import run_booking_reminder
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_booking_reminder()
+                await run_sms_dispatch()
 
         # logger.info called once for "started" but not for "Sent 0 ..."
         info_calls = mock_logger.info.call_args_list
@@ -791,28 +799,32 @@ class TestRunBookingReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder._send_due_reminders",
+                "src.workers.sms_dispatch._process_due_followups",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.sms_dispatch._send_due_reminders",
                 side_effect=mock_send_due,
             ),
             patch(
-                "src.workers.booking_reminder._heartbeat",
+                "src.workers.sms_dispatch._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.asyncio.sleep",
+                "src.workers.sms_dispatch.asyncio.sleep",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.logger",
+                "src.workers.sms_dispatch.logger",
             ) as mock_logger,
         ):
-            from src.workers.booking_reminder import run_booking_reminder
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_booking_reminder()
+                await run_sms_dispatch()
 
         # Error was logged on first iteration
         mock_logger.error.assert_called_once()
-        assert "Booking reminder error" in str(mock_logger.error.call_args)
+        assert "SMS dispatch error" in str(mock_logger.error.call_args)
 
     async def test_heartbeat_called_each_iteration(self):
         """_heartbeat is called every iteration, even when exceptions occur."""
@@ -827,21 +839,25 @@ class TestRunBookingReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder._send_due_reminders",
+                "src.workers.sms_dispatch._process_due_followups",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.sms_dispatch._send_due_reminders",
                 side_effect=mock_send_due,
             ),
             patch(
-                "src.workers.booking_reminder._heartbeat",
+                "src.workers.sms_dispatch._heartbeat",
                 new_callable=AsyncMock,
             ) as mock_hb,
             patch(
-                "src.workers.booking_reminder.asyncio.sleep",
+                "src.workers.sms_dispatch.asyncio.sleep",
                 new_callable=AsyncMock,
             ),
         ):
-            from src.workers.booking_reminder import run_booking_reminder
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_booking_reminder()
+                await run_sms_dispatch()
 
         # Heartbeat called at least once (the first iteration before KeyboardInterrupt)
         assert mock_hb.call_count >= 1
@@ -859,23 +875,27 @@ class TestRunBookingReminder:
 
         with (
             patch(
-                "src.workers.booking_reminder._send_due_reminders",
+                "src.workers.sms_dispatch._process_due_followups",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.sms_dispatch._send_due_reminders",
                 side_effect=mock_send_due,
             ),
             patch(
-                "src.workers.booking_reminder._heartbeat",
+                "src.workers.sms_dispatch._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.booking_reminder.asyncio.sleep",
+                "src.workers.sms_dispatch.asyncio.sleep",
                 new_callable=AsyncMock,
             ) as mock_sleep,
         ):
-            from src.workers.booking_reminder import run_booking_reminder
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_booking_reminder()
+                await run_sms_dispatch()
 
-        from src.workers.booking_reminder import POLL_INTERVAL_SECONDS
+        from src.workers.sms_dispatch import POLL_INTERVAL_SECONDS
         mock_sleep.assert_called_with(POLL_INTERVAL_SECONDS)
 
 
@@ -887,7 +907,7 @@ class TestRunBookingReminder:
 class TestModuleConstants:
     """Tests for module-level constants."""
 
-    def test_poll_interval_is_30_minutes(self):
-        """POLL_INTERVAL_SECONDS should be 1800 (30 minutes)."""
-        from src.workers.booking_reminder import POLL_INTERVAL_SECONDS
-        assert POLL_INTERVAL_SECONDS == 1800
+    def test_poll_interval_is_60_seconds(self):
+        """POLL_INTERVAL_SECONDS should be 60 (every 60 seconds for merged sms_dispatch)."""
+        from src.workers.sms_dispatch import POLL_INTERVAL_SECONDS
+        assert POLL_INTERVAL_SECONDS == 60

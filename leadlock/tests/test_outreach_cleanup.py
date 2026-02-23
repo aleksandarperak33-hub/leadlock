@@ -1,6 +1,6 @@
 """
 Tests for outreach cleanup worker - marks exhausted sequences as lost.
-Covers _heartbeat, run_outreach_cleanup, and cleanup_cycle.
+Covers _heartbeat, run_outreach_monitor, and _cleanup_exhausted_sequences.
 """
 import uuid
 import asyncio
@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.outreach import Outreach
 from src.models.sales_config import SalesEngineConfig
 from src.models.campaign import Campaign
-from src.workers.outreach_cleanup import (
+from src.workers.outreach_monitor import (
     _heartbeat,
-    run_outreach_cleanup,
-    cleanup_cycle,
+    run_outreach_monitor,
+    _cleanup_exhausted_sequences,
     POLL_INTERVAL_SECONDS,
 )
 
@@ -109,8 +109,8 @@ async def _session_factory_from(db: AsyncSession):
 
 
 class TestConstants:
-    def test_poll_interval_is_4_hours(self):
-        assert POLL_INTERVAL_SECONDS == 4 * 60 * 60
+    def test_poll_interval_is_15_minutes(self):
+        assert POLL_INTERVAL_SECONDS == 15 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ class TestConstants:
 
 class TestHeartbeat:
     async def test_heartbeat_sets_redis_key(self):
-        """Heartbeat stores timestamp in Redis with 18000s expiry."""
+        """Heartbeat stores timestamp in Redis with 1800s expiry."""
         redis_mock = AsyncMock()
         redis_mock.set = AsyncMock(return_value=True)
 
@@ -133,8 +133,8 @@ class TestHeartbeat:
 
         redis_mock.set.assert_called_once()
         call_args = redis_mock.set.call_args
-        assert call_args[0][0] == "leadlock:worker_health:outreach_cleanup"
-        assert call_args[1]["ex"] == 18000
+        assert call_args[0][0] == "leadlock:worker_health:outreach_monitor"
+        assert call_args[1]["ex"] == 1800
 
     async def test_heartbeat_swallows_redis_errors(self):
         """Heartbeat must not raise even if Redis is down."""
@@ -147,27 +147,27 @@ class TestHeartbeat:
 
 
 # ---------------------------------------------------------------------------
-# Test: cleanup_cycle
+# Test: _cleanup_exhausted_sequences
 # ---------------------------------------------------------------------------
 
 
 class TestCleanupCycle:
-    """Tests for the cleanup_cycle function."""
+    """Tests for the _cleanup_exhausted_sequences function."""
 
     async def test_no_config_returns_early(self, db):
-        """If no SalesEngineConfig exists, cleanup_cycle does nothing."""
+        """If no SalesEngineConfig exists, _cleanup_exhausted_sequences does nothing."""
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         # No outreach records - just verify it didn't crash
         result = await db.execute(select(Outreach))
         assert result.scalars().all() == []
 
     async def test_inactive_config_returns_early(self, db):
-        """If config.is_active is False, cleanup_cycle does nothing."""
+        """If config.is_active is False, _cleanup_exhausted_sequences does nothing."""
         _make_config(db, is_active=False)
         o = _make_outreach(
             db,
@@ -178,10 +178,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"  # Unchanged
@@ -199,10 +199,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "lost"
@@ -220,10 +220,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "lost"
@@ -242,10 +242,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -263,10 +263,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -284,10 +284,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -305,10 +305,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -326,10 +326,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "won"
@@ -356,10 +356,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "lost"
@@ -382,10 +382,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "lost"
@@ -406,10 +406,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"  # Not touched
@@ -430,10 +430,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -458,10 +458,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -485,10 +485,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         assert o.status == "cold"
@@ -511,10 +511,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o)
         # Draft campaigns are not included, so this prospect is not cleaned up
@@ -551,10 +551,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o1)
         await db.refresh(o2)
@@ -588,10 +588,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o_campaign)
         await db.refresh(o_unbound)
@@ -604,10 +604,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
         # Just verify no exception
 
     async def test_campaign_with_multiple_prospects_partial_mark(self, db):
@@ -646,10 +646,10 @@ class TestCleanupCycle:
         await db.flush()
 
         with patch(
-            "src.workers.outreach_cleanup.async_session_factory",
+            "src.workers.outreach_monitor.async_session_factory",
             return_value=_session_factory_from(db),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         await db.refresh(o_eligible)
         await db.refresh(o_low_step)
@@ -660,56 +660,68 @@ class TestCleanupCycle:
 
 
 # ---------------------------------------------------------------------------
-# Test: run_outreach_cleanup (main loop)
+# Test: run_outreach_monitor (main loop)
 # ---------------------------------------------------------------------------
 
 
 class TestRunOutreachCleanup:
-    """Tests for the main loop function run_outreach_cleanup."""
+    """Tests for the main loop function run_outreach_monitor."""
 
     async def test_loop_calls_cleanup_when_not_paused(self, db):
-        """Normal run: no config → cleanup_cycle is called."""
+        """Normal run: _cleanup_exhausted_sequences is called on the Nth cycle."""
         call_count = 0
 
         async def _fake_cleanup():
             nonlocal call_count
             call_count += 1
 
+        sleep_calls = 0
+
         async def _fake_sleep(seconds):
-            raise _StopLoop()
+            nonlocal sleep_calls
+            sleep_calls += 1
+            # Allow startup sleep (120s), stop after first loop sleep
+            if sleep_calls > 1:
+                raise _StopLoop()
 
         class _StopLoop(Exception):
             pass
 
-        # No config in db means cleanup_paused check defaults to calling cleanup
         _make_config(db, cleanup_paused=False)
         await db.flush()
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
             patch(
-                "src.workers.outreach_cleanup.cleanup_cycle",
+                "src.workers.outreach_monitor._cleanup_exhausted_sequences",
                 side_effect=_fake_cleanup,
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._check_outreach_health",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor._heartbeat",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.outreach_monitor.CLEANUP_EVERY_N_CYCLES", 1,
+            ),
+            patch(
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_fake_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
 
         assert call_count == 1
 
     async def test_loop_skips_cleanup_when_paused(self, db):
-        """When cleanup_paused=True, cleanup_cycle is NOT called."""
+        """When cleanup_paused=True, _cleanup_exhausted_sequences is NOT called."""
         cleanup_called = False
 
         async def _fake_cleanup():
@@ -727,24 +739,24 @@ class TestRunOutreachCleanup:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
             patch(
-                "src.workers.outreach_cleanup.cleanup_cycle",
+                "src.workers.outreach_monitor._cleanup_exhausted_sequences",
                 side_effect=_fake_cleanup,
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_fake_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
 
         assert cleanup_called is False
 
@@ -768,32 +780,37 @@ class TestRunOutreachCleanup:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_exploding_cm(),
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._heartbeat",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_fake_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
         # No crash - error was caught and logged
 
     async def test_loop_runs_without_config(self, db):
-        """When no config exists, cleanup_cycle is still called (config=None branch)."""
+        """When no config exists, _cleanup_exhausted_sequences is still called."""
         call_count = 0
 
         async def _fake_cleanup():
             nonlocal call_count
             call_count += 1
 
+        sleep_calls = 0
+
         async def _fake_sleep(seconds):
-            raise _StopLoop()
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls > 1:
+                raise _StopLoop()
 
         class _StopLoop(Exception):
             pass
@@ -801,33 +818,43 @@ class TestRunOutreachCleanup:
         # Empty db - no config at all
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
             patch(
-                "src.workers.outreach_cleanup.cleanup_cycle",
+                "src.workers.outreach_monitor._cleanup_exhausted_sequences",
                 side_effect=_fake_cleanup,
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._check_outreach_health",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor._heartbeat",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.outreach_monitor.CLEANUP_EVERY_N_CYCLES", 1,
+            ),
+            patch(
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_fake_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
 
-        # config is None → cleanup_cycle is called (the `if config and ...` is False)
         assert call_count == 1
 
     async def test_loop_calls_heartbeat(self, db):
         """Heartbeat is called after each cycle."""
+        sleep_calls = 0
 
         async def _fake_sleep(seconds):
-            raise _StopLoop()
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls > 1:
+                raise _StopLoop()
 
         class _StopLoop(Exception):
             pass
@@ -836,62 +863,72 @@ class TestRunOutreachCleanup:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
             patch(
-                "src.workers.outreach_cleanup.cleanup_cycle",
+                "src.workers.outreach_monitor._cleanup_exhausted_sequences",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._check_outreach_health",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.outreach_monitor._heartbeat",
                 heartbeat_mock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_fake_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
 
         heartbeat_mock.assert_called_once()
 
     async def test_loop_sleeps_correct_interval(self, db):
-        """Loop sleeps for POLL_INTERVAL_SECONDS."""
+        """Loop sleeps for POLL_INTERVAL_SECONDS after the startup delay."""
 
-        sleep_value = None
+        sleep_values = []
 
         async def _capture_sleep(seconds):
-            nonlocal sleep_value
-            sleep_value = seconds
-            raise _StopLoop()
+            sleep_values.append(seconds)
+            if len(sleep_values) > 1:
+                raise _StopLoop()
 
         class _StopLoop(Exception):
             pass
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
             patch(
-                "src.workers.outreach_cleanup.cleanup_cycle",
+                "src.workers.outreach_monitor._cleanup_exhausted_sequences",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup._heartbeat",
+                "src.workers.outreach_monitor._check_outreach_health",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.workers.outreach_cleanup.asyncio.sleep",
+                "src.workers.outreach_monitor._heartbeat",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.outreach_monitor.asyncio.sleep",
                 side_effect=_capture_sleep,
             ),
         ):
             with pytest.raises(_StopLoop):
-                await run_outreach_cleanup()
+                await run_outreach_monitor()
 
-        assert sleep_value == POLL_INTERVAL_SECONDS
+        # First sleep is startup delay (120s), second is loop interval
+        assert sleep_values[0] == 120
+        assert sleep_values[1] == POLL_INTERVAL_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -921,12 +958,12 @@ class TestCleanupLogging:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
-            caplog.at_level("INFO", logger="src.workers.outreach_cleanup"),
+            caplog.at_level("INFO", logger="src.workers.outreach_monitor"),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         assert any("marked" in r.message and "Campaign" in r.message for r in caplog.records)
 
@@ -944,12 +981,12 @@ class TestCleanupLogging:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
-            caplog.at_level("INFO", logger="src.workers.outreach_cleanup"),
+            caplog.at_level("INFO", logger="src.workers.outreach_monitor"),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         assert any("Unbound" in r.message for r in caplog.records)
 
@@ -967,12 +1004,12 @@ class TestCleanupLogging:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
-            caplog.at_level("INFO", logger="src.workers.outreach_cleanup"),
+            caplog.at_level("INFO", logger="src.workers.outreach_monitor"),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         assert any("Total marked" in r.message for r in caplog.records)
 
@@ -983,11 +1020,11 @@ class TestCleanupLogging:
 
         with (
             patch(
-                "src.workers.outreach_cleanup.async_session_factory",
+                "src.workers.outreach_monitor.async_session_factory",
                 return_value=_session_factory_from(db),
             ),
-            caplog.at_level("INFO", logger="src.workers.outreach_cleanup"),
+            caplog.at_level("INFO", logger="src.workers.outreach_monitor"),
         ):
-            await cleanup_cycle()
+            await _cleanup_exhausted_sequences()
 
         assert not any("Total marked" in r.message for r in caplog.records)

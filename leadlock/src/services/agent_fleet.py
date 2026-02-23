@@ -29,22 +29,17 @@ _SOUL_CACHE: dict[str, str] = {}
 
 _SOUL_FILE_MAP: dict[str, str | None] = {
     "ab_test_engine": "ab_testing.md",
-    "warmup_optimizer": "warmup_optimizer.md",
     "winback_agent": "winback.md",
     "referral_agent": "prospect_researcher.md",
     "reflection_agent": "reflection.md",
-    "outreach_health": "outreach_health.md",
+    "outreach_monitor": "outreach_health.md",
     "outreach_sequencer": None,
     "scraper": None,
     "task_processor": None,
-    "outreach_cleanup": None,
-    "deliverability_monitor": None,
-    "health_monitor": None,
+    "system_health": None,
+    "lead_state_manager": None,
+    "sms_dispatch": None,
     "crm_sync": None,
-    "followup_scheduler": None,
-    "booking_reminder": None,
-    "lead_lifecycle": None,
-    "stuck_lead_sweeper": None,
     "retry_worker": None,
     "registration_poller": None,
 }
@@ -87,9 +82,27 @@ async def _load_soul_summary(agent_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Agent registry (static metadata)
+# Agent registry (static metadata) — 14 agents in 3 tiers
 # ---------------------------------------------------------------------------
+
+# Tier constants
+TIER_AI = "ai"
+TIER_CORE_OPS = "core_ops"
+TIER_INFRA = "infra"
+
 AGENT_REGISTRY: dict[str, dict[str, Any]] = {
+    # --- Tier 1: AI Agents (use Claude API, generate revenue) ---
+    "outreach_sequencer": {
+        "display_name": "Outreach Sequencer",
+        "description": "Executes multi-step outreach sequences for active campaigns",
+        "schedule": "Every 30 min",
+        "icon": "mail",
+        "color": "red",
+        "uses_ai": True,
+        "poll_interval": 1800,
+        "task_types": ["outreach_sequence"],
+        "tier": TIER_AI,
+    },
     "ab_test_engine": {
         "display_name": "A/B Testing Engine",
         "description": "Optimizes subject lines through controlled experiments",
@@ -99,16 +112,7 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": True,
         "poll_interval": 21600,
         "task_types": ["generate_ab_variants"],
-    },
-    "warmup_optimizer": {
-        "display_name": "Warmup Optimizer",
-        "description": "Adjusts email send volumes based on reputation signals",
-        "schedule": "Every 6 hours",
-        "icon": "thermometer",
-        "color": "blue",
-        "uses_ai": True,
-        "poll_interval": 21600,
-        "task_types": ["warmup_adjustment"],
+        "tier": TIER_AI,
     },
     "winback_agent": {
         "display_name": "Win-Back Agent",
@@ -119,6 +123,18 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": True,
         "poll_interval": 86400,
         "task_types": ["winback_sequence"],
+        "tier": TIER_AI,
+    },
+    "reflection_agent": {
+        "display_name": "Reflection Agent",
+        "description": "Daily performance audit across all agents",
+        "schedule": "Daily",
+        "icon": "brain",
+        "color": "indigo",
+        "uses_ai": True,
+        "poll_interval": 86400,
+        "task_types": ["daily_reflection"],
+        "tier": TIER_AI,
     },
     "referral_agent": {
         "display_name": "Referral Agent",
@@ -129,86 +145,31 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": True,
         "poll_interval": 86400,
         "task_types": ["send_referral"],
+        "tier": TIER_AI,
     },
-    "reflection_agent": {
-        "display_name": "Reflection Agent",
-        "description": "Weekly performance audit across all agents",
-        "schedule": "Weekly",
-        "icon": "brain",
-        "color": "indigo",
-        "uses_ai": True,
-        "poll_interval": 604800,
-        "task_types": ["weekly_reflection"],
-    },
-    "outreach_health": {
-        "display_name": "Outreach Health Monitor",
-        "description": "Detects pipeline anomalies and alert fatigue",
-        "schedule": "Every 15 min",
-        "icon": "heart-pulse",
-        "color": "emerald",
+
+    # --- Tier 2: Core Ops (lead-touching, business logic) ---
+    "sms_dispatch": {
+        "display_name": "SMS Dispatch",
+        "description": "Sends follow-up messages and booking reminders with compliance checks",
+        "schedule": "Every 60s",
+        "icon": "send",
+        "color": "sky",
         "uses_ai": False,
-        "poll_interval": 900,
-        "task_types": ["health_check"],
+        "poll_interval": 60,
+        "task_types": ["schedule_followup", "send_booking_reminder"],
+        "tier": TIER_CORE_OPS,
     },
-    "outreach_sequencer": {
-        "display_name": "Outreach Sequencer",
-        "description": "Executes multi-step outreach sequences for active campaigns",
-        "schedule": "Every 30 min",
-        "icon": "mail",
-        "color": "red",
-        "uses_ai": True,
-        "poll_interval": 1800,
-        "task_types": ["outreach_sequence"],
-    },
-    "scraper": {
-        "display_name": "Prospect Scraper",
-        "description": "Discovers and enriches new prospect records",
-        "schedule": "Every 15 min",
-        "icon": "search",
-        "color": "cyan",
-        "uses_ai": False,
-        "poll_interval": 900,
-        "task_types": ["scrape_prospects"],
-    },
-    "task_processor": {
-        "display_name": "Task Processor",
-        "description": "Processes queued background tasks from all agents",
-        "schedule": "Every 10s",
-        "icon": "cog",
-        "color": "gray",
-        "uses_ai": False,
-        "poll_interval": 10,
-        "task_types": ["process_task"],
-    },
-    "outreach_cleanup": {
-        "display_name": "Sequence Cleanup",
-        "description": "Removes expired and orphaned outreach sequences",
-        "schedule": "Every 4 hrs",
-        "icon": "trash-2",
-        "color": "slate",
-        "uses_ai": False,
-        "poll_interval": 14400,
-        "task_types": ["cleanup_sequences"],
-    },
-    "deliverability_monitor": {
-        "display_name": "Deliverability Monitor",
-        "description": "Tracks bounce rates, spam complaints, and sender reputation",
+    "lead_state_manager": {
+        "display_name": "Lead State Manager",
+        "description": "Sweeps stuck leads and manages lifecycle transitions",
         "schedule": "Every 5 min",
-        "icon": "shield-check",
-        "color": "teal",
+        "icon": "git-branch",
+        "color": "lime",
         "uses_ai": False,
         "poll_interval": 300,
-        "task_types": ["check_deliverability"],
-    },
-    "health_monitor": {
-        "display_name": "System Health",
-        "description": "Monitors infrastructure health and service availability",
-        "schedule": "Every 5 min",
-        "icon": "activity",
-        "color": "green",
-        "uses_ai": False,
-        "poll_interval": 300,
-        "task_types": ["system_health_check"],
+        "task_types": ["sweep_stuck_leads", "advance_lifecycle"],
+        "tier": TIER_CORE_OPS,
     },
     "crm_sync": {
         "display_name": "CRM Sync",
@@ -219,46 +180,53 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": False,
         "poll_interval": 30,
         "task_types": ["sync_crm"],
+        "tier": TIER_CORE_OPS,
     },
-    "followup_scheduler": {
-        "display_name": "Follow-Up Scheduler",
-        "description": "Schedules and dispatches follow-up messages for active leads",
-        "schedule": "Every 60s",
-        "icon": "send",
-        "color": "sky",
+    "scraper": {
+        "display_name": "Prospect Scraper",
+        "description": "Discovers and enriches new prospect records",
+        "schedule": "Every 15 min",
+        "icon": "search",
+        "color": "cyan",
         "uses_ai": False,
-        "poll_interval": 60,
-        "task_types": ["schedule_followup"],
+        "poll_interval": 900,
+        "task_types": ["scrape_prospects"],
+        "tier": TIER_CORE_OPS,
     },
-    "booking_reminder": {
-        "display_name": "Booking Reminder",
-        "description": "Sends appointment reminders to booked leads",
-        "schedule": "Every 30 min",
-        "icon": "bell",
-        "color": "yellow",
+    "task_processor": {
+        "display_name": "Task Processor",
+        "description": "Processes queued background tasks from all agents",
+        "schedule": "Every ~30s",
+        "icon": "cog",
+        "color": "gray",
         "uses_ai": False,
-        "poll_interval": 1800,
-        "task_types": ["send_booking_reminder"],
+        "poll_interval": 30,
+        "task_types": ["process_task"],
+        "tier": TIER_CORE_OPS,
     },
-    "lead_lifecycle": {
-        "display_name": "Lead Lifecycle",
-        "description": "Advances leads through lifecycle stages based on activity",
-        "schedule": "Every 30 min",
-        "icon": "git-branch",
-        "color": "lime",
-        "uses_ai": False,
-        "poll_interval": 1800,
-        "task_types": ["advance_lifecycle"],
-    },
-    "stuck_lead_sweeper": {
-        "display_name": "Stuck Lead Sweeper",
-        "description": "Detects and rescues leads stuck in intermediate states",
+
+    # --- Tier 3: Infrastructure (monitoring, maintenance) ---
+    "system_health": {
+        "display_name": "System Health",
+        "description": "Monitors infrastructure health, SMS/email deliverability, and sender reputation",
         "schedule": "Every 5 min",
-        "icon": "alert-triangle",
-        "color": "rose",
+        "icon": "activity",
+        "color": "green",
         "uses_ai": False,
         "poll_interval": 300,
-        "task_types": ["sweep_stuck_leads"],
+        "task_types": ["system_health_check", "check_deliverability"],
+        "tier": TIER_INFRA,
+    },
+    "outreach_monitor": {
+        "display_name": "Outreach Monitor",
+        "description": "Detects pipeline anomalies and cleans exhausted sequences",
+        "schedule": "Every 15 min",
+        "icon": "heart-pulse",
+        "color": "emerald",
+        "uses_ai": False,
+        "poll_interval": 900,
+        "task_types": ["health_check", "cleanup_sequences"],
+        "tier": TIER_INFRA,
     },
     "retry_worker": {
         "display_name": "Retry Queue",
@@ -269,6 +237,7 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": False,
         "poll_interval": 60,
         "task_types": ["retry_failed"],
+        "tier": TIER_INFRA,
     },
     "registration_poller": {
         "display_name": "A2P Registration",
@@ -279,6 +248,7 @@ AGENT_REGISTRY: dict[str, dict[str, Any]] = {
         "uses_ai": False,
         "poll_interval": 300,
         "task_types": ["poll_registration"],
+        "tier": TIER_INFRA,
     },
 }
 
@@ -292,13 +262,19 @@ _TASK_TYPE_TO_AGENT: dict[str, str] = {
 # All task types across the fleet
 _ALL_TASK_TYPES: list[str] = list(_TASK_TYPE_TO_AGENT.keys())
 
+# Tier display metadata
+TIER_METADATA: dict[str, dict[str, str]] = {
+    TIER_AI: {"label": "AI Agents", "description": "Use Claude API, generate revenue"},
+    TIER_CORE_OPS: {"label": "Core Operations", "description": "Lead-touching, business logic"},
+    TIER_INFRA: {"label": "Infrastructure", "description": "Monitoring, maintenance"},
+}
+
 
 # ---------------------------------------------------------------------------
 # Agent feature flags
 # ---------------------------------------------------------------------------
 _AGENT_FLAG_MAP: dict[str, str] = {
     "ab_test_engine": "agent_ab_test_engine",
-    "warmup_optimizer": "agent_warmup_optimizer",
     "winback_agent": "agent_winback_agent",
     "referral_agent": "agent_referral_agent",
     "reflection_agent": "agent_reflection_agent",
@@ -521,16 +497,37 @@ async def get_agent_activity(name: str, limit: int = 20) -> dict:
     except Exception:
         logger.exception("Failed to query tasks for agent %s", name)
 
-    # --- Cost history from Redis (last 30 days) ---
+    # --- Cost history from Redis (last 30 days) --- pipeline batch reads ---
     cost_history: list[dict] = []
     cost_7d_total = 0.0
+
+    # Build date keys and batch via pipeline
+    date_keys = []
     for offset in range(30):
         day = (now - timedelta(days=offset)).strftime("%Y-%m-%d")
-        raw = await redis.hget(f"leadlock:agent_costs:{day}", name)
-        cost = float(raw) if raw else 0.0
-        cost_history.append({"date": day, "cost": cost})
-        if offset < 7:
-            cost_7d_total += cost
+        date_keys.append((day, f"leadlock:agent_costs:{day}"))
+
+    try:
+        pipe = redis.pipeline()
+        for _, redis_key in date_keys:
+            pipe.hget(redis_key, name)
+        results = await pipe.execute()
+
+        for idx, (day, _) in enumerate(date_keys):
+            raw = results[idx]
+            cost = float(raw) if raw else 0.0
+            cost_history.append({"date": day, "cost": cost})
+            if idx < 7:
+                cost_7d_total += cost
+    except Exception:
+        # Fallback to individual reads if pipeline fails
+        for offset in range(30):
+            day = (now - timedelta(days=offset)).strftime("%Y-%m-%d")
+            raw = await redis.hget(f"leadlock:agent_costs:{day}", name)
+            cost = float(raw) if raw else 0.0
+            cost_history.append({"date": day, "cost": cost})
+            if offset < 7:
+                cost_7d_total += cost
 
     metrics_7d["total_cost"] = round(cost_7d_total, 4)
     cost_history.reverse()  # chronological order

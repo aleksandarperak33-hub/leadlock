@@ -3,9 +3,9 @@ Tests for src/workers/followup_scheduler.py - follow-up scheduler worker.
 
 Covers:
 - _heartbeat(): Redis heartbeat storage and error handling
-- run_followup_scheduler(): Main loop with process/error/sleep cycle
-- process_due_tasks(): Query logic, iteration, error handling, commit
-- execute_followup_task(): All code paths including compliance, plan limits, consent, SMS send
+- run_sms_dispatch(): Main loop with process/error/sleep cycle
+- _process_due_followups(): Query logic, iteration, error handling, commit
+- _execute_followup_task(): All code paths including compliance, plan limits, consent, SMS send
 """
 import uuid
 import asyncio
@@ -124,32 +124,32 @@ class TestHeartbeat:
     async def test_heartbeat_stores_timestamp_in_redis(self):
         redis_mock = AsyncMock()
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=redis_mock):
-            from src.workers.followup_scheduler import _heartbeat
+            from src.workers.sms_dispatch import _heartbeat
             await _heartbeat()
 
         redis_mock.set.assert_awaited_once()
         args, kwargs = redis_mock.set.call_args
-        assert args[0] == "leadlock:worker_health:followup_scheduler"
+        assert args[0] == "leadlock:worker_health:sms_dispatch"
         assert kwargs.get("ex") == 300
 
     async def test_heartbeat_swallows_redis_errors(self):
         """Heartbeat should silently handle Redis failures."""
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=ConnectionError("no redis")):
-            from src.workers.followup_scheduler import _heartbeat
+            from src.workers.sms_dispatch import _heartbeat
             # Should not raise
             await _heartbeat()
 
 
 # ---------------------------------------------------------------------------
-# run_followup_scheduler
+# run_sms_dispatch
 # ---------------------------------------------------------------------------
 
 
 class TestRunFollowupScheduler:
-    """Tests for run_followup_scheduler() - main loop."""
+    """Tests for run_sms_dispatch() - main loop."""
 
     async def test_loop_calls_process_then_heartbeat_then_sleeps(self):
-        """Verify the loop calls process_due_tasks, _heartbeat, and sleeps."""
+        """Verify the loop calls _process_due_followups, _heartbeat, and sleeps."""
         call_order = []
 
         async def fake_process():
@@ -163,17 +163,18 @@ class TestRunFollowupScheduler:
             # Stop the loop after one iteration
             raise KeyboardInterrupt()
 
-        with patch("src.workers.followup_scheduler.process_due_tasks", side_effect=fake_process), \
-             patch("src.workers.followup_scheduler._heartbeat", side_effect=fake_heartbeat), \
-             patch("src.workers.followup_scheduler.asyncio.sleep", side_effect=fake_sleep):
-            from src.workers.followup_scheduler import run_followup_scheduler
+        with patch("src.workers.sms_dispatch._process_due_followups", side_effect=fake_process), \
+             patch("src.workers.sms_dispatch._send_due_reminders", new_callable=AsyncMock), \
+             patch("src.workers.sms_dispatch._heartbeat", side_effect=fake_heartbeat), \
+             patch("src.workers.sms_dispatch.asyncio.sleep", side_effect=fake_sleep):
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_followup_scheduler()
+                await run_sms_dispatch()
 
         assert call_order == ["process", "heartbeat", ("sleep", 60)]
 
     async def test_loop_catches_process_errors_and_continues(self):
-        """process_due_tasks errors should be caught so the loop keeps going."""
+        """_process_due_followups errors should be caught so the loop keeps going."""
         call_order = []
 
         async def fail_process():
@@ -187,36 +188,37 @@ class TestRunFollowupScheduler:
             call_order.append("sleep")
             raise KeyboardInterrupt()
 
-        with patch("src.workers.followup_scheduler.process_due_tasks", side_effect=fail_process), \
-             patch("src.workers.followup_scheduler._heartbeat", side_effect=fake_heartbeat), \
-             patch("src.workers.followup_scheduler.asyncio.sleep", side_effect=fake_sleep):
-            from src.workers.followup_scheduler import run_followup_scheduler
+        with patch("src.workers.sms_dispatch._process_due_followups", side_effect=fail_process), \
+             patch("src.workers.sms_dispatch._send_due_reminders", new_callable=AsyncMock), \
+             patch("src.workers.sms_dispatch._heartbeat", side_effect=fake_heartbeat), \
+             patch("src.workers.sms_dispatch.asyncio.sleep", side_effect=fake_sleep):
+            from src.workers.sms_dispatch import run_sms_dispatch
             with pytest.raises(KeyboardInterrupt):
-                await run_followup_scheduler()
+                await run_sms_dispatch()
 
         assert "process_error" in call_order
         assert "heartbeat" in call_order
 
 
 # ---------------------------------------------------------------------------
-# process_due_tasks
+# _process_due_followups
 # ---------------------------------------------------------------------------
 
 
 class TestProcessDueTasks:
-    """Tests for process_due_tasks() - finds and dispatches tasks."""
+    """Tests for _process_due_followups() - finds and dispatches tasks."""
 
     async def test_no_tasks_returns_early(self, db):
-        """When there are no pending tasks, process_due_tasks returns early."""
-        with patch("src.workers.followup_scheduler.async_session_factory") as factory_mock:
+        """When there are no pending tasks, _process_due_followups returns early."""
+        with patch("src.workers.sms_dispatch.async_session_factory") as factory_mock:
             # Create an async context manager that yields the db session
             session_cm = AsyncMock()
             session_cm.__aenter__ = AsyncMock(return_value=db)
             session_cm.__aexit__ = AsyncMock(return_value=False)
             factory_mock.return_value = session_cm
 
-            from src.workers.followup_scheduler import process_due_tasks
-            await process_due_tasks()
+            from src.workers.sms_dispatch import _process_due_followups
+            await _process_due_followups()
             # commit should not be called when there are no tasks
             # (function returns before commit)
 
@@ -244,12 +246,12 @@ class TestProcessDueTasks:
             sequence_number=1,
         )
 
-        with patch("src.workers.followup_scheduler.async_session_factory") as factory_mock, \
-             patch("src.workers.followup_scheduler.full_compliance_check") as comp_mock, \
-             patch("src.workers.followup_scheduler.check_content_compliance") as content_mock, \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_response), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result), \
-             patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True):
+        with patch("src.workers.sms_dispatch.async_session_factory") as factory_mock, \
+             patch("src.workers.sms_dispatch.full_compliance_check") as comp_mock, \
+             patch("src.workers.sms_dispatch.check_content_compliance") as content_mock, \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_response), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result), \
+             patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True):
 
             session_cm = AsyncMock()
             session_cm.__aenter__ = AsyncMock(return_value=db)
@@ -259,15 +261,15 @@ class TestProcessDueTasks:
             comp_mock.return_value = ComplianceResult(True, "All clear")
             content_mock.return_value = ComplianceResult(True, "Content ok")
 
-            from src.workers.followup_scheduler import process_due_tasks
-            await process_due_tasks()
+            from src.workers.sms_dispatch import _process_due_followups
+            await _process_due_followups()
 
         # Task should be updated to sent
         await db.refresh(task)
         assert task.status == "sent"
 
     async def test_task_exception_increments_attempt(self, db):
-        """When execute_followup_task raises, attempt_count increments and error is recorded."""
+        """When _execute_followup_task raises, attempt_count increments and error is recorded."""
         lead_id, client_id, _ = _make_ids()
         client = _make_client(client_id)
         lead = _make_lead(lead_id, client_id, state="cold")
@@ -276,16 +278,16 @@ class TestProcessDueTasks:
         db.add_all([client, lead, task])
         await db.commit()
 
-        with patch("src.workers.followup_scheduler.async_session_factory") as factory_mock, \
-             patch("src.workers.followup_scheduler.execute_followup_task", new_callable=AsyncMock, side_effect=RuntimeError("boom")):
+        with patch("src.workers.sms_dispatch.async_session_factory") as factory_mock, \
+             patch("src.workers.sms_dispatch._execute_followup_task", new_callable=AsyncMock, side_effect=RuntimeError("boom")):
 
             session_cm = AsyncMock()
             session_cm.__aenter__ = AsyncMock(return_value=db)
             session_cm.__aexit__ = AsyncMock(return_value=False)
             factory_mock.return_value = session_cm
 
-            from src.workers.followup_scheduler import process_due_tasks
-            await process_due_tasks()
+            from src.workers.sms_dispatch import _process_due_followups
+            await _process_due_followups()
 
         await db.refresh(task)
         assert task.attempt_count == 1
@@ -302,16 +304,16 @@ class TestProcessDueTasks:
         db.add_all([client, lead, task])
         await db.commit()
 
-        with patch("src.workers.followup_scheduler.async_session_factory") as factory_mock, \
-             patch("src.workers.followup_scheduler.execute_followup_task", new_callable=AsyncMock, side_effect=RuntimeError("fail3")):
+        with patch("src.workers.sms_dispatch.async_session_factory") as factory_mock, \
+             patch("src.workers.sms_dispatch._execute_followup_task", new_callable=AsyncMock, side_effect=RuntimeError("fail3")):
 
             session_cm = AsyncMock()
             session_cm.__aenter__ = AsyncMock(return_value=db)
             session_cm.__aexit__ = AsyncMock(return_value=False)
             factory_mock.return_value = session_cm
 
-            from src.workers.followup_scheduler import process_due_tasks
-            await process_due_tasks()
+            from src.workers.sms_dispatch import _process_due_followups
+            await _process_due_followups()
 
         await db.refresh(task)
         assert task.attempt_count == 3
@@ -319,12 +321,12 @@ class TestProcessDueTasks:
 
 
 # ---------------------------------------------------------------------------
-# execute_followup_task
+# _execute_followup_task
 # ---------------------------------------------------------------------------
 
 
 class TestExecuteFollowupTask:
-    """Tests for execute_followup_task() - the main execution logic."""
+    """Tests for _execute_followup_task() - the main execution logic."""
 
     # ---- Skip paths ----
 
@@ -340,8 +342,8 @@ class TestExecuteFollowupTask:
         db.add(task)
         await db.commit()
 
-        from src.workers.followup_scheduler import execute_followup_task
-        await execute_followup_task(db, task)
+        from src.workers.sms_dispatch import _execute_followup_task
+        await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "not found" in task.skip_reason
@@ -358,8 +360,8 @@ class TestExecuteFollowupTask:
         db.add(task)
         await db.commit()
 
-        from src.workers.followup_scheduler import execute_followup_task
-        await execute_followup_task(db, task)
+        from src.workers.sms_dispatch import _execute_followup_task
+        await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "not found" in task.skip_reason
@@ -374,8 +376,8 @@ class TestExecuteFollowupTask:
         db.add_all([client, lead, task])
         await db.commit()
 
-        from src.workers.followup_scheduler import execute_followup_task
-        await execute_followup_task(db, task)
+        from src.workers.sms_dispatch import _execute_followup_task
+        await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "opted_out" in task.skip_reason
@@ -390,8 +392,8 @@ class TestExecuteFollowupTask:
         db.add_all([client, lead, task])
         await db.commit()
 
-        from src.workers.followup_scheduler import execute_followup_task
-        await execute_followup_task(db, task)
+        from src.workers.sms_dispatch import _execute_followup_task
+        await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "dead" in task.skip_reason
@@ -407,8 +409,8 @@ class TestExecuteFollowupTask:
         db.add_all([client, consent, lead, task])
         await db.commit()
 
-        from src.workers.followup_scheduler import execute_followup_task
-        await execute_followup_task(db, task)
+        from src.workers.sms_dispatch import _execute_followup_task
+        await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "starter" in task.skip_reason.lower()
@@ -424,9 +426,9 @@ class TestExecuteFollowupTask:
         db.add_all([client, consent, lead, task])
         await db.commit()
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert task.skip_reason == "Lead re-engaged"
@@ -449,13 +451,13 @@ class TestExecuteFollowupTask:
         )
         sms_result = {"sid": "SM1", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "sent"
         assert lead.cold_outreach_count == 1
@@ -478,13 +480,13 @@ class TestExecuteFollowupTask:
         )
         sms_result = {"sid": "SM2", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "sent"
 
@@ -501,10 +503,10 @@ class TestExecuteFollowupTask:
 
         blocked = ComplianceResult(False, "Quiet hours active", "tcpa_quiet_hours")
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=blocked):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=blocked):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert task.skip_reason == "Quiet hours active"
@@ -527,12 +529,12 @@ class TestExecuteFollowupTask:
         )
         content_blocked = ComplianceResult(False, "URL shortener detected", "content_url_shortener")
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=content_blocked):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=content_blocked):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         assert "Content compliance failed" in task.skip_reason
@@ -553,13 +555,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message="Hi Jane!", followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM3", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")) as comp_mock, \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")) as comp_mock, \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         # Verify compliance was called with consent info
         comp_mock.assert_called_once()
@@ -580,10 +582,10 @@ class TestExecuteFollowupTask:
         # Compliance will block because no consent
         blocked = ComplianceResult(False, "No consent", "tcpa_no_consent")
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=blocked) as comp_mock:
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=blocked) as comp_mock:
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "skipped"
         # Verify has_consent=False was passed
@@ -616,13 +618,13 @@ class TestExecuteFollowupTask:
             "cost_usd": 0.0158,
         }
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         # Task updates
         assert task.status == "sent"
@@ -653,12 +655,12 @@ class TestExecuteFollowupTask:
         )
         sms_result = {"sid": "SM_r1", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "sent"
         assert lead.cold_outreach_count == 0  # not incremented
@@ -682,13 +684,13 @@ class TestExecuteFollowupTask:
         # Minimal SMS result - missing optional keys
         sms_result = {}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "sent"
         assert lead.total_sms_cost_usd == 0.0  # default from .get("cost_usd", 0.0)
@@ -713,13 +715,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message="Hi!", followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM_c", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         # Verify process_followup was called with Mike as rep_name
         pf_mock.assert_awaited_once()
@@ -747,14 +749,14 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message="Hi!", followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM_d", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.ClientConfig", return_value=mock_config) as cc_ctor, \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.ClientConfig", return_value=mock_config) as cc_ctor, \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         # ClientConfig() was called with no args (the else branch)
         cc_ctor.assert_called_once_with()
@@ -778,13 +780,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message="Hi!", followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM_n", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         assert task.status == "sent"
 
@@ -808,13 +810,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message="Msg", followup_type="cold_nurture", sequence_number=3)
         sms_result = {"sid": "SM_p", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp) as pf_mock, \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         pf_mock.assert_awaited_once_with(
             lead_first_name="Bob",
@@ -842,13 +844,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message=msg, followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM_s", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result) as sms_mock:
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result) as sms_mock:
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         sms_mock.assert_awaited_once_with(
             to="+15125559999",
@@ -872,10 +874,10 @@ class TestExecuteFollowupTask:
 
         blocked = ComplianceResult(False, "Opted out", "tcpa_opt_out")
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=blocked) as comp_mock:
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=blocked) as comp_mock:
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         comp_mock.assert_called_once_with(
             has_consent=True,
@@ -905,13 +907,13 @@ class TestExecuteFollowupTask:
         followup_resp = FollowupResponse(message=msg, followup_type="cold_nurture", sequence_number=1)
         sms_result = {"sid": "SM_cc", "status": "sent", "provider": "twilio", "segments": 1, "cost_usd": 0.0079}
 
-        with patch("src.workers.followup_scheduler.is_cold_followup_enabled", return_value=True), \
-             patch("src.workers.followup_scheduler.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
-             patch("src.workers.followup_scheduler.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
-             patch("src.workers.followup_scheduler.check_content_compliance", return_value=ComplianceResult(True, "ok")) as cc_mock, \
-             patch("src.workers.followup_scheduler.send_sms", new_callable=AsyncMock, return_value=sms_result):
-            from src.workers.followup_scheduler import execute_followup_task
-            await execute_followup_task(db, task)
+        with patch("src.workers.sms_dispatch.is_cold_followup_enabled", return_value=True), \
+             patch("src.workers.sms_dispatch.full_compliance_check", return_value=ComplianceResult(True, "ok")), \
+             patch("src.workers.sms_dispatch.process_followup", new_callable=AsyncMock, return_value=followup_resp), \
+             patch("src.workers.sms_dispatch.check_content_compliance", return_value=ComplianceResult(True, "ok")) as cc_mock, \
+             patch("src.workers.sms_dispatch.send_sms", new_callable=AsyncMock, return_value=sms_result):
+            from src.workers.sms_dispatch import _execute_followup_task
+            await _execute_followup_task(db, task)
 
         cc_mock.assert_called_once_with(
             message=msg,
@@ -927,5 +929,5 @@ class TestExecuteFollowupTask:
 
 class TestConstants:
     def test_poll_interval_is_60(self):
-        from src.workers.followup_scheduler import POLL_INTERVAL_SECONDS
+        from src.workers.sms_dispatch import POLL_INTERVAL_SECONDS
         assert POLL_INTERVAL_SECONDS == 60

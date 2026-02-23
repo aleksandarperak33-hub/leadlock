@@ -89,18 +89,17 @@ class TestSweepStuckLeads:
             yield db
 
         with (
-            patch("src.database.async_session_factory", side_effect=session_factory),
+            patch("src.workers.lead_state_manager.async_session_factory", side_effect=session_factory),
             patch(
-                "src.workers.stuck_lead_sweeper._handle_stuck_lead",
-                new_callable=AsyncMock,
+                "src.workers.lead_state_manager._handle_stuck_lead",
             ) as mock_handle,
         ):
-            from src.workers.stuck_lead_sweeper import _sweep_stuck_leads
+            from src.workers.lead_state_manager import _sweep_stuck_leads
 
             found = await _sweep_stuck_leads()
 
             assert found == 2
-            assert mock_handle.await_count == 2
+            assert mock_handle.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +122,9 @@ class TestHandleStuckLead:
         with patch("src.models.event_log.EventLog") as mock_event_cls:
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.stuck_lead_sweeper import _handle_stuck_lead
+            from src.workers.lead_state_manager import _handle_stuck_lead
 
-            await _handle_stuck_lead(db, lead, "intake_sent", now)
+            _handle_stuck_lead(db, lead, "intake_sent", now)
 
             assert lead.state == "qualifying"
             assert lead.current_agent == "qualify"
@@ -144,9 +143,9 @@ class TestHandleStuckLead:
         with patch("src.models.event_log.EventLog") as mock_event_cls:
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.stuck_lead_sweeper import _handle_stuck_lead
+            from src.workers.lead_state_manager import _handle_stuck_lead
 
-            await _handle_stuck_lead(db, lead, "qualifying", now)
+            _handle_stuck_lead(db, lead, "qualifying", now)
 
             assert lead.state == "cold"
             assert lead.current_agent == "followup"
@@ -165,9 +164,9 @@ class TestHandleStuckLead:
         with patch("src.models.event_log.EventLog") as mock_event_cls:
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.stuck_lead_sweeper import _handle_stuck_lead
+            from src.workers.lead_state_manager import _handle_stuck_lead
 
-            await _handle_stuck_lead(db, lead, "qualified", now)
+            _handle_stuck_lead(db, lead, "qualified", now)
 
             assert lead.state == "cold"
             assert lead.current_agent == "followup"
@@ -183,12 +182,12 @@ class TestHandleStuckLead:
         db = MagicMock()
         db.add = MagicMock()
 
-        with patch("src.models.event_log.EventLog") as mock_event_cls:
+        with patch("src.workers.lead_state_manager.EventLog") as mock_event_cls:
             mock_event_cls.return_value = MagicMock()
 
-            from src.workers.stuck_lead_sweeper import _handle_stuck_lead
+            from src.workers.lead_state_manager import _handle_stuck_lead
 
-            await _handle_stuck_lead(db, lead, "booking", now)
+            _handle_stuck_lead(db, lead, "booking", now)
 
             # State should NOT change
             assert lead.state == original_state

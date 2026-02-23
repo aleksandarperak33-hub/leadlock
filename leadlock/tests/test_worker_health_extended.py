@@ -1,6 +1,6 @@
 """
 Extended tests for src/workers/health_monitor.py - covers _heartbeat (lines 13-18)
-and run_health_monitor loop (lines 23-31).
+and run_system_health loop (lines 23-31).
 """
 import asyncio
 import logging
@@ -27,14 +27,14 @@ class TestHeartbeat:
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
-            from src.workers.health_monitor import _heartbeat
+            from src.workers.system_health import _heartbeat
 
             await _heartbeat()
 
             mock_redis.set.assert_called_once()
             call_args = mock_redis.set.call_args
             key = call_args[0][0]
-            assert key == "leadlock:worker_health:health_monitor"
+            assert key == "leadlock:worker_health:system_health"
             assert call_args[1]["ex"] == 600
 
     async def test_heartbeat_swallows_redis_errors(self):
@@ -44,32 +44,33 @@ class TestHeartbeat:
             new_callable=AsyncMock,
             side_effect=ConnectionError("Redis gone"),
         ):
-            from src.workers.health_monitor import _heartbeat
+            from src.workers.system_health import _heartbeat
 
             # Should not raise
             await _heartbeat()
 
 
 # ---------------------------------------------------------------------------
-# run_health_monitor - loop behavior (lines 23-31)
+# run_system_health - loop behavior (lines 23-31)
 # ---------------------------------------------------------------------------
 
 class TestRunHealthMonitor:
-    """Cover the run_health_monitor loop."""
+    """Cover the run_system_health loop."""
 
-    async def test_loop_calls_check_health_and_heartbeat(self):
-        """run_health_monitor calls check_health, _heartbeat, and sleeps (lines 23-31)."""
+    async def test_loop_calls_check_phases_and_heartbeat(self):
+        """run_system_health calls _check_connectivity, _check_deliverability, _heartbeat, and sleeps."""
         call_order = []
 
-        async def mock_check_health():
-            call_order.append("check_health")
+        async def mock_connectivity():
+            call_order.append("connectivity")
+
+        async def mock_deliverability():
+            call_order.append("deliverability")
 
         async def mock_heartbeat():
             call_order.append("heartbeat")
 
         iteration = 0
-
-        original_sleep = asyncio.sleep
 
         async def mock_sleep(seconds):
             nonlocal iteration
@@ -78,20 +79,22 @@ class TestRunHealthMonitor:
                 raise asyncio.CancelledError("Stop loop after 1 iteration")
 
         with (
-            patch("src.workers.health_monitor.check_health", mock_check_health),
-            patch("src.workers.health_monitor._heartbeat", mock_heartbeat),
-            patch("src.workers.health_monitor.asyncio.sleep", mock_sleep),
+            patch("src.workers.system_health._check_connectivity", mock_connectivity),
+            patch("src.workers.system_health._check_deliverability", mock_deliverability),
+            patch("src.workers.system_health._heartbeat", mock_heartbeat),
+            patch("src.workers.system_health.asyncio.sleep", mock_sleep),
         ):
-            from src.workers.health_monitor import run_health_monitor
+            from src.workers.system_health import run_system_health
 
             with pytest.raises(asyncio.CancelledError):
-                await run_health_monitor()
+                await run_system_health()
 
-        assert "check_health" in call_order
+        assert "connectivity" in call_order
+        assert "deliverability" in call_order
         assert "heartbeat" in call_order
 
     async def test_loop_handles_check_health_exception(self, caplog):
-        """run_health_monitor logs error if check_health raises (lines 28-29)."""
+        """run_system_health logs error if a check phase raises."""
         async def failing_check():
             raise RuntimeError("Check failed")
 
@@ -107,14 +110,15 @@ class TestRunHealthMonitor:
                 raise asyncio.CancelledError("Stop loop")
 
         with (
-            patch("src.workers.health_monitor.check_health", failing_check),
-            patch("src.workers.health_monitor._heartbeat", mock_heartbeat),
-            patch("src.workers.health_monitor.asyncio.sleep", mock_sleep),
+            patch("src.workers.system_health._check_connectivity", failing_check),
+            patch("src.workers.system_health._check_deliverability", AsyncMock()),
+            patch("src.workers.system_health._heartbeat", mock_heartbeat),
+            patch("src.workers.system_health.asyncio.sleep", mock_sleep),
         ):
-            from src.workers.health_monitor import run_health_monitor
+            from src.workers.system_health import run_system_health
 
-            with caplog.at_level(logging.ERROR, logger="src.workers.health_monitor"):
+            with caplog.at_level(logging.ERROR, logger="src.workers.system_health"):
                 with pytest.raises(asyncio.CancelledError):
-                    await run_health_monitor()
+                    await run_system_health()
 
-            assert any("Health monitor error" in r.message for r in caplog.records)
+            assert any("System health worker error" in r.message for r in caplog.records)

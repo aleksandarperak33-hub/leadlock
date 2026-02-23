@@ -170,7 +170,7 @@ class TestSendEmailAlert:
         mock_email = AsyncMock()
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-test"),
             patch("src.utils.alerting._send_webhook_alert", mock_webhook),
             patch("src.utils.alerting._send_email_alert", mock_email),
@@ -193,7 +193,7 @@ class TestSendEmailAlert:
         mock_email = AsyncMock()
 
         with (
-            patch("src.utils.alerting._should_send", return_value=True),
+            patch("src.utils.alerting._acquire_cooldown", return_value=True),
             patch("src.utils.logging.get_correlation_id", return_value="corr-test"),
             patch("src.utils.alerting._send_webhook_alert", mock_webhook),
             patch("src.utils.alerting._send_email_alert", mock_email),

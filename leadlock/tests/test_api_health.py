@@ -362,7 +362,7 @@ class TestCheckWorkers:
     async def test_some_workers_missing_heartbeats(self):
         """Workers with missing heartbeats returns unhealthy."""
         async def mock_get(key):
-            if "health_monitor" in key:
+            if "system_health" in key:
                 return "2025-01-01T00:00:00Z"
             return None
 
@@ -373,7 +373,7 @@ class TestCheckWorkers:
             result = await _check_workers()
 
         assert result["healthy"] is False
-        assert result["workers"]["health_monitor"]["healthy"] is True
+        assert result["workers"]["system_health"]["healthy"] is True
         assert result["workers"]["retry_worker"]["healthy"] is False
 
     @pytest.mark.asyncio

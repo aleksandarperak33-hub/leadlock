@@ -176,7 +176,7 @@ class TestHeartbeatTiming:
 
     def test_health_monitor_stale_threshold_is_45(self):
         """Health monitor should alert after 45 minutes, not 90."""
-        from src.workers.outreach_health import HEARTBEAT_STALE_MINUTES
+        from src.workers.outreach_monitor import HEARTBEAT_STALE_MINUTES
         assert HEARTBEAT_STALE_MINUTES == 45
 
     def test_sequencer_heartbeats_before_work(self):

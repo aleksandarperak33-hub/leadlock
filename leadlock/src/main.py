@@ -62,50 +62,37 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Sentry initialization failed: %s", str(e))
 
-    # Start background workers
+    # Start background workers (14 total after consolidation)
     worker_tasks: list[asyncio.Task] = []
 
-    # Health monitor always runs
-    from src.workers.health_monitor import run_health_monitor
-    worker_tasks.append(asyncio.create_task(run_health_monitor()))
-    logger.info("Health monitor worker started")
+    # --- Always-on core workers ---
 
-    # Dead letter queue retry worker always runs
+    # System health (merged: health_monitor + deliverability_monitor)
+    from src.workers.system_health import run_system_health
+    worker_tasks.append(asyncio.create_task(run_system_health()))
+    logger.info("System health worker started")
+
+    # Retry worker
     from src.workers.retry_worker import run_retry_worker
     worker_tasks.append(asyncio.create_task(run_retry_worker()))
     logger.info("Retry worker started")
 
-    # Stuck lead sweeper always runs
-    from src.workers.stuck_lead_sweeper import run_stuck_lead_sweeper
-    worker_tasks.append(asyncio.create_task(run_stuck_lead_sweeper()))
-    logger.info("Stuck lead sweeper started")
+    # Lead state manager (merged: stuck_lead_sweeper + lead_lifecycle)
+    from src.workers.lead_state_manager import run_lead_state_manager
+    worker_tasks.append(asyncio.create_task(run_lead_state_manager()))
+    logger.info("Lead state manager started")
 
-    # CRM sync worker always runs
+    # CRM sync worker
     from src.workers.crm_sync import run_crm_sync
     worker_tasks.append(asyncio.create_task(run_crm_sync()))
     logger.info("CRM sync worker started")
 
-    # Follow-up scheduler always runs
-    from src.workers.followup_scheduler import run_followup_scheduler
-    worker_tasks.append(asyncio.create_task(run_followup_scheduler()))
-    logger.info("Follow-up scheduler started")
+    # SMS dispatch (merged: followup_scheduler + booking_reminder)
+    from src.workers.sms_dispatch import run_sms_dispatch
+    worker_tasks.append(asyncio.create_task(run_sms_dispatch()))
+    logger.info("SMS dispatch worker started")
 
-    # Deliverability monitor always runs (reputation tracking)
-    from src.workers.deliverability_monitor import run_deliverability_monitor
-    worker_tasks.append(asyncio.create_task(run_deliverability_monitor()))
-    logger.info("Deliverability monitor started")
-
-    # Booking reminder worker always runs
-    from src.workers.booking_reminder import run_booking_reminder
-    worker_tasks.append(asyncio.create_task(run_booking_reminder()))
-    logger.info("Booking reminder worker started")
-
-    # Lead lifecycle worker always runs
-    from src.workers.lead_lifecycle import run_lead_lifecycle
-    worker_tasks.append(asyncio.create_task(run_lead_lifecycle()))
-    logger.info("Lead lifecycle worker started")
-
-    # Registration poller - monitors A2P / toll-free registration status
+    # Registration poller
     from src.workers.registration_poller import run_registration_poller
     worker_tasks.append(asyncio.create_task(run_registration_poller()))
     logger.info("Registration poller started")
@@ -150,19 +137,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to verify SalesEngineConfig: %s", str(e))
 
-        # Core sales engine workers (always run when sales engine is on)
+        # Core sales engine workers
         from src.workers.scraper import run_scraper
         from src.workers.outreach_sequencer import run_outreach_sequencer
-        from src.workers.outreach_cleanup import run_outreach_cleanup
+        from src.workers.outreach_monitor import run_outreach_monitor
         from src.workers.task_processor import run_task_processor
-        from src.workers.outreach_health import run_outreach_health
 
         worker_tasks.append(asyncio.create_task(run_scraper()))
         worker_tasks.append(asyncio.create_task(run_outreach_sequencer()))
-        worker_tasks.append(asyncio.create_task(run_outreach_cleanup()))
+        worker_tasks.append(asyncio.create_task(run_outreach_monitor()))
         worker_tasks.append(asyncio.create_task(run_task_processor()))
-        worker_tasks.append(asyncio.create_task(run_outreach_health()))
-        logger.info("Sales engine core workers started (scraper, sequencer, cleanup, task_processor, outreach_health)")
+        logger.info("Sales engine core workers started (scraper, sequencer, outreach_monitor, task_processor)")
 
         # Feature-flagged agents — toggle via env vars without code deploys
         _FLAGGED_AGENTS = {

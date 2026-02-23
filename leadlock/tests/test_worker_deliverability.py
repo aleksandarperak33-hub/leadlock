@@ -25,16 +25,16 @@ class TestCheckDeliverabilityNoSends:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -59,16 +59,16 @@ class TestCheckDeliverabilityRateAlerts:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "good",
@@ -79,7 +79,7 @@ class TestCheckDeliverabilityRateAlerts:
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -99,16 +99,16 @@ class TestCheckDeliverabilityRateAlerts:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "good",
@@ -119,7 +119,7 @@ class TestCheckDeliverabilityRateAlerts:
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -138,16 +138,16 @@ class TestCheckDeliverabilityRateAlerts:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "good",
@@ -158,7 +158,7 @@ class TestCheckDeliverabilityRateAlerts:
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -197,22 +197,22 @@ class TestCheckDeliverabilityEmailReputation:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value=email_rep,
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -249,22 +249,22 @@ class TestCheckDeliverabilityEmailReputation:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value=email_rep,
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -294,22 +294,22 @@ class TestCheckDeliverabilityEmailReputation:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ) as mock_alert,
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value=email_rep,
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
             await _check_deliverability()
 
@@ -326,12 +326,12 @@ class TestCheckDeliverabilityEmailReputation:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -340,9 +340,9 @@ class TestCheckDeliverabilityEmailReputation:
                 side_effect=ConnectionError("Redis down"),
             ),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
-            with caplog.at_level(logging.WARNING, logger="src.workers.deliverability_monitor"):
+            with caplog.at_level(logging.WARNING, logger="src.workers.system_health"):
                 await _check_deliverability()
 
             assert any(
@@ -386,16 +386,16 @@ class TestCheckDeliverabilityNumberStats:
 
         with (
             patch(
-                "src.workers.deliverability_monitor.get_deliverability_summary",
+                "src.workers.system_health.get_deliverability_summary",
                 new_callable=AsyncMock,
                 return_value=summary,
             ),
             patch(
-                "src.workers.deliverability_monitor.send_alert",
+                "src.workers.system_health.send_alert",
                 new_callable=AsyncMock,
             ),
             patch(
-                "src.services.deliverability.get_email_reputation",
+                "src.workers.system_health.get_email_reputation",
                 new_callable=AsyncMock,
                 return_value={
                     "status": "good",
@@ -406,9 +406,9 @@ class TestCheckDeliverabilityNumberStats:
             ),
             patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
         ):
-            from src.workers.deliverability_monitor import _check_deliverability
+            from src.workers.system_health import _check_deliverability
 
-            with caplog.at_level(logging.WARNING, logger="src.workers.deliverability_monitor"):
+            with caplog.at_level(logging.WARNING, logger="src.workers.system_health"):
                 await _check_deliverability()
 
             warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]

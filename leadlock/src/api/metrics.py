@@ -236,14 +236,13 @@ async def get_worker_health(admin: Client = Depends(get_current_admin)):
         redis = await get_redis()
 
         workers = [
-            "health_monitor",
+            "system_health",
             "retry_worker",
-            "stuck_lead_sweeper",
+            "lead_state_manager",
             "crm_sync",
-            "followup_scheduler",
-            "deliverability_monitor",
-            "booking_reminder",
-            "lead_lifecycle",
+            "sms_dispatch",
+            "outreach_monitor",
+            "registration_poller",
         ]
 
         statuses = {}

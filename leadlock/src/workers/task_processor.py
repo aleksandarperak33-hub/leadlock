@@ -1,6 +1,9 @@
 """
 Task processor worker - polls the task_queue table and dispatches tasks.
-Handles retries with exponential backoff. Runs every 10 seconds.
+Handles retries with exponential backoff.
+
+Uses BRPOP on a Redis notification key for near-instant wake on new tasks,
+with a 30-second timeout falling back to DB poll as safety net.
 """
 import asyncio
 import logging
@@ -13,8 +16,10 @@ from src.models.task_queue import TaskQueue
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 10
+POLL_INTERVAL_SECONDS = 30  # Fallback DB poll interval
 MAX_TASKS_PER_CYCLE = 10
+BRPOP_TIMEOUT = 30  # seconds to wait for Redis notification
+TASK_NOTIFY_KEY = "leadlock:task_notify"
 
 
 async def _heartbeat():
@@ -28,8 +33,8 @@ async def _heartbeat():
 
 
 async def run_task_processor():
-    """Main loop - process pending tasks every 10 seconds."""
-    logger.info("Task processor started (poll every %ds)", POLL_INTERVAL_SECONDS)
+    """Main loop - wait for notification or poll every 30s."""
+    logger.info("Task processor started (adaptive polling, BRPOP %ds timeout)", BRPOP_TIMEOUT)
 
     while True:
         try:
@@ -38,7 +43,20 @@ async def run_task_processor():
             logger.error("Task processor cycle error: %s", str(e))
 
         await _heartbeat()
-        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+
+        # Wait for either a Redis notification or timeout
+        try:
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            # BRPOP blocks until a notification arrives or timeout expires
+            result = await redis.brpop(TASK_NOTIFY_KEY, timeout=BRPOP_TIMEOUT)
+            if result:
+                # Drain any additional notifications to avoid stacking
+                while await redis.rpop(TASK_NOTIFY_KEY):
+                    pass
+        except Exception:
+            # If Redis is unavailable, fall back to sleep
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
 async def process_cycle():

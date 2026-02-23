@@ -1,6 +1,9 @@
 """
 Task dispatch service - enqueue tasks for event-driven processing.
 Central helper for creating tasks in the task queue.
+
+Also pushes a notification to Redis so the task processor can wake
+immediately via BRPOP instead of polling every 10 seconds.
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -10,6 +13,8 @@ from src.database import async_session_factory
 from src.models.task_queue import TaskQueue
 
 logger = logging.getLogger(__name__)
+
+TASK_NOTIFY_KEY = "leadlock:task_notify"
 
 
 async def enqueue_task(
@@ -53,4 +58,14 @@ async def enqueue_task(
         "Task enqueued: type=%s priority=%d delay=%ds id=%s",
         task_type, priority, delay_seconds, task_id[:8],
     )
+
+    # Notify task processor to wake immediately (non-blocking, best-effort)
+    if delay_seconds == 0:
+        try:
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            await redis.lpush(TASK_NOTIFY_KEY, task_id)
+        except Exception:
+            pass  # Task processor will pick it up on next DB poll anyway
+
     return task_id
