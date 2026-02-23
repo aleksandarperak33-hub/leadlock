@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # Anthropic
-    anthropic_api_key: str
+    # Anthropic (legacy; no longer used in primary routing)
+    anthropic_api_key: str = ""
     anthropic_model_fast: str = "claude-haiku-4-5-20251001"
     anthropic_model_smart: str = "claude-sonnet-4-5-20250929"
     anthropic_max_tokens_fast: int = 300
