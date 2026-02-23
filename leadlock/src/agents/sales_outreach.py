@@ -214,6 +214,72 @@ def _extract_first_name(full_name: str) -> str:
     return first.capitalize()
 
 
+def _build_fallback_outreach_email(
+    prospect_name: str,
+    company_name: str,
+    trade_type: str,
+    city: str,
+    state: str,
+    sequence_step: int,
+    sender_name: str,
+) -> dict:
+    """Deterministic fallback when AI providers are unavailable."""
+    first_name = _extract_first_name(prospect_name)
+    greeting = f"Hey {first_name}," if first_name else "Hey,"
+
+    location = ", ".join([v for v in [city, state] if v])
+    trade = (trade_type or "home services").strip()
+    company = (company_name or "your business").strip()
+
+    step = min(max(sequence_step, 1), 3)
+    if step == 1:
+        subject = f"Quick question for {company}"[:60]
+        step_line = (
+            f"I work with {trade} teams and noticed {company} in {location or 'your market'}."
+        )
+        ask_line = "How fast is your team currently getting back to brand-new leads?"
+    elif step == 2:
+        subject = f"Following up with {company}"[:60]
+        step_line = (
+            f"Quick follow-up on my note to {company} about response speed on incoming leads."
+        )
+        ask_line = "Are you happy with how quickly your team reaches out to new inquiries today?"
+    else:
+        subject = f"Last note for {company}"[:60]
+        step_line = (
+            f"Last note from me about {company}, then I will close this thread on my end."
+        )
+        ask_line = "If faster lead response becomes a priority later, should I circle back?"
+
+    value_line = (
+        "Most contractors we support recover missed jobs when every lead gets a reply in under 60 seconds."
+    )
+    context_line = (
+        f"This stood out because {company} already has a strong local presence and fast follow-up usually compounds that advantage."
+    )
+    stop_line = "If this isn't relevant, just reply 'stop' and I won't reach out again."
+
+    body_parts = [
+        greeting,
+        step_line,
+        value_line,
+        context_line,
+        ask_line,
+        stop_line,
+        sender_name,
+    ]
+    body_text = "\n\n".join(body_parts)
+    body_html = "".join(f"<p>{part}</p>" for part in body_parts)
+
+    return {
+        "subject": subject,
+        "body_html": body_html,
+        "body_text": body_text,
+        "ai_cost_usd": 0.0,
+        "fallback_used": True,
+    }
+
+
 async def generate_outreach_email(
     prospect_name: str,
     company_name: str,
@@ -322,14 +388,19 @@ async def generate_outreach_email(
     )
 
     if result.get("error"):
-        logger.error("AI email generation failed: %s", result["error"])
-        return {
-            "subject": "",
-            "body_html": "",
-            "body_text": "",
-            "ai_cost_usd": result.get("cost_usd", 0.0),
-            "error": result["error"],
-        }
+        logger.warning(
+            "AI email generation failed, using deterministic fallback: %s",
+            result["error"],
+        )
+        return _build_fallback_outreach_email(
+            prospect_name=effective_name,
+            company_name=company_name,
+            trade_type=trade_type,
+            city=city,
+            state=state,
+            sequence_step=step,
+            sender_name=sender_name,
+        )
 
     # Parse JSON response
     try:
@@ -339,28 +410,32 @@ async def generate_outreach_email(
             content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         email_data = json.loads(content)
     except (json.JSONDecodeError, IndexError) as e:
-        logger.error("Failed to parse AI email response: %s", str(e))
-        return {
-            "subject": "",
-            "body_html": "",
-            "body_text": "",
-            "ai_cost_usd": result.get("cost_usd", 0.0),
-            "error": f"JSON parse error: {str(e)}",
-        }
+        logger.warning("Failed to parse AI email response, using fallback: %s", str(e))
+        return _build_fallback_outreach_email(
+            prospect_name=effective_name,
+            company_name=company_name,
+            trade_type=trade_type,
+            city=city,
+            state=state,
+            sequence_step=step,
+            sender_name=sender_name,
+        )
 
     subject = email_data.get("subject", "").strip()
     body_html = email_data.get("body_html", "").strip()
     body_text = email_data.get("body_text", "").strip()
 
     if not subject or not body_html:
-        logger.error("AI generated empty subject or body_html for step %d", step)
-        return {
-            "subject": "",
-            "body_html": "",
-            "body_text": "",
-            "ai_cost_usd": result.get("cost_usd", 0.0),
-            "error": "AI generated empty email content",
-        }
+        logger.warning("AI generated empty content for step %d, using fallback", step)
+        return _build_fallback_outreach_email(
+            prospect_name=effective_name,
+            company_name=company_name,
+            trade_type=trade_type,
+            city=city,
+            state=state,
+            sequence_step=step,
+            sender_name=sender_name,
+        )
 
     return {
         "subject": subject,

@@ -3,7 +3,9 @@ LeadLock - AI Speed-to-Lead Platform for Home Services.
 Main FastAPI application entry point.
 """
 import asyncio
+import fcntl
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,30 @@ from src.utils.logging import (
 )
 
 logger = logging.getLogger("leadlock")
+
+_WORKER_LOCK_PATH = "/tmp/leadlock.background-workers.lock"
+
+
+def _try_acquire_worker_lock() -> int | None:
+    """Acquire a non-blocking file lock so only one process runs workers."""
+    fd = os.open(_WORKER_LOCK_PATH, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.ftruncate(fd, 0)
+        os.write(fd, f"{os.getpid()}\n".encode())
+        return fd
+    except BlockingIOError:
+        os.close(fd)
+        return None
+
+
+def _release_worker_lock(fd: int | None) -> None:
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
@@ -62,8 +88,23 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Sentry initialization failed: %s", str(e))
 
-    # Start background workers (15 total after consolidation)
+    # Ensure only one process starts background workers.
+    # Gunicorn may run multiple workers; only one should own background jobs.
+    worker_lock_fd = _try_acquire_worker_lock()
     worker_tasks: list[asyncio.Task] = []
+    if worker_lock_fd is None:
+        logger.warning(
+            "Background workers already running in another process; "
+            "skipping worker startup in pid=%s",
+            os.getpid(),
+        )
+        yield
+        logger.info("LeadLock shutdown complete (no workers owned by this process)")
+        return
+
+    logger.info("Background worker lock acquired in pid=%s", os.getpid())
+
+    # Start background workers (15 total after consolidation)
 
     # --- Always-on core workers ---
 
@@ -192,6 +233,7 @@ async def lifespan(app: FastAPI):
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
+    _release_worker_lock(worker_lock_fd)
     logger.info("LeadLock shutdown complete - all %d workers stopped", len(worker_tasks))
 
 

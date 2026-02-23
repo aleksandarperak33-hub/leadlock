@@ -5,6 +5,7 @@ Extracted from outreach_sequencer.py for file size compliance.
 import logging
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import unquote
 from typing import Optional
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,20 @@ def sanitize_dashes(text: str) -> str:
         .replace("\u2010", "-")   # hyphen
         .replace("\u2011", "-")   # non-breaking hyphen
     )
+
+
+def normalize_email(raw_email: str) -> str:
+    """Normalize noisy email strings from scraping/enrichment sources."""
+    if not raw_email:
+        return ""
+
+    email = unquote(raw_email).strip().strip("\"\'<>")
+    if email.lower().startswith("mailto:"):
+        email = email[7:]
+
+    # Strip whitespace that can be URL-encoded as %20 or copied from HTML.
+    email = "".join(email.split())
+    return email.lower()
 
 
 async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
@@ -101,7 +116,17 @@ async def _pre_send_checks(
     Returns:
         None if all checks pass, or a skip reason string.
     """
-    # Validate email format
+    # Normalize and validate email format
+    normalized_email = normalize_email(prospect.prospect_email or "")
+    if normalized_email != (prospect.prospect_email or ""):
+        logger.info(
+            "Normalized prospect email for %s: %s -> %s",
+            str(prospect.id)[:8],
+            (prospect.prospect_email or "")[:32],
+            normalized_email[:32],
+        )
+    prospect.prospect_email = normalized_email
+
     email_check = await validate_email(prospect.prospect_email)
     if not email_check["valid"]:
         return f"invalid email ({email_check['reason']})"
@@ -120,7 +145,7 @@ async def _pre_send_checks(
                 prospect.prospect_email[:12],
                 verified_email[:12],
             )
-        prospect.prospect_email = verified_email
+        prospect.prospect_email = normalize_email(verified_email)
         prospect.email_verified = True
 
     # Check blacklist (email and domain)
