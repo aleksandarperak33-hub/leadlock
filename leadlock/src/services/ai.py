@@ -1,5 +1,5 @@
 """
-AI service - OpenAI mini only.
+AI service - mini tier for all requests.
 Hard 10-second timeout on ALL AI calls. Never block the SMS response path.
 Tracks cost, latency, and token usage for every call.
 """
@@ -33,13 +33,13 @@ async def generate_response(
     response_format: Optional[str] = None,
 ) -> dict:
     """
-    Generate AI response with OpenAI mini only.
+    Generate AI response with mini tier routing only.
     Hard 10-second timeout. Returns structured result with cost tracking.
 
     Args:
         system_prompt: System instructions for the AI
         user_message: The user/lead message to respond to
-        model_tier: "fast" (Haiku) or "smart" (Sonnet)
+        model_tier: Accepted for compatibility; mini routing always forces "fast"
         max_tokens: Override default max tokens
         temperature: Response randomness (0.0-1.0)
         response_format: "json" to request JSON output
@@ -56,28 +56,26 @@ async def generate_response(
             "error": str|None,
         }
     """
-    # OpenAI mini only (use fast tier for all requests by default).
+    # Enforce mini tier for all generation paths.
+    enforced_tier = "fast"
     from src.config import get_settings
     settings = get_settings()
-    if not settings.openai_api_key:
-        return {
-            "content": "",
-            "provider": "none",
-            "model": "none",
-            "latency_ms": 0,
-            "cost_usd": 0.0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "error": "OpenAI mini not configured",
-        }
 
-    try:
-        result = await _generate_openai(
-            system_prompt, user_message, "fast", max_tokens, temperature
-        )
-        return result
-    except Exception as e:
-        logger.error("OpenAI mini failed: %s", str(e))
+    if settings.openai_api_key:
+        try:
+            return await _generate_openai(
+                system_prompt, user_message, enforced_tier, max_tokens, temperature
+            )
+        except Exception as e:
+            logger.error("OpenAI mini failed: %s", str(e))
+
+    if settings.anthropic_api_key:
+        try:
+            return await _generate_anthropic(
+                system_prompt, user_message, enforced_tier, max_tokens, temperature
+            )
+        except Exception as e:
+            logger.error("Anthropic mini fallback failed: %s", str(e))
 
     return {
         "content": "",
@@ -87,7 +85,7 @@ async def generate_response(
         "cost_usd": 0.0,
         "input_tokens": 0,
         "output_tokens": 0,
-        "error": "OpenAI mini failed",
+        "error": "All AI providers failed",
     }
 
 
@@ -151,10 +149,10 @@ async def _generate_openai(
     from src.config import get_settings
     settings = get_settings()
 
-    # Enforce mini model for all paths (\"mini-max\" mode).
+    # Enforce mini model for all paths ("mini-max" mode).
     model = settings.openai_model_fast
     tokens = max_tokens or (
-        settings.anthropic_max_tokens_fast if model_tier == "fast" else settings.anthropic_max_tokens_smart
+        settings.openai_max_tokens_fast if model_tier == "fast" else settings.openai_max_tokens_smart
     )
 
     client = AsyncOpenAI(

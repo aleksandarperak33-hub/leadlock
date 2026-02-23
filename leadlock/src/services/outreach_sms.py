@@ -23,6 +23,7 @@ from src.models.outreach import Outreach
 from src.models.outreach_sms import OutreachSMS
 from src.models.sales_config import SalesEngineConfig
 from src.config import get_settings
+from src.services.ai import generate_response
 
 logger = logging.getLogger(__name__)
 
@@ -218,13 +219,7 @@ async def generate_followup_sms_body(
     Returns:
         SMS body text (without opt-out footer - caller appends it)
     """
-    settings = get_settings()
-
     try:
-        import anthropic
-
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
         prompt = (
             f"Write a brief, friendly follow-up SMS (under 160 chars) for a "
             f"{prospect.prospect_trade_type or 'home services'} company called "
@@ -235,13 +230,19 @@ async def generate_followup_sms_body(
             f"Do NOT include any greeting like 'Hi' - get straight to the point."
         )
 
-        response = await client.messages.create(
-            model=settings.anthropic_model_fast,
+        result = await generate_response(
+            system_prompt=(
+                "You write concise, compliant outreach SMS messages. "
+                "Keep responses under 160 characters."
+            ),
+            user_message=prompt,
+            model_tier="fast",
             max_tokens=100,
-            messages=[{"role": "user", "content": prompt}],
         )
 
-        return response.content[0].text.strip()
+        if result.get("content"):
+            return result["content"].strip()
+        raise RuntimeError(result.get("error") or "AI returned empty content")
 
     except Exception as e:
         logger.warning("AI SMS generation failed, using template: %s", str(e))
