@@ -1,5 +1,5 @@
 """
-AI service - Anthropic primary, OpenAI fallback.
+AI service - OpenAI mini primary, Anthropic fallback.
 Hard 10-second timeout on ALL AI calls. Never block the SMS response path.
 Tracks cost, latency, and token usage for every call.
 """
@@ -33,7 +33,7 @@ async def generate_response(
     response_format: Optional[str] = None,
 ) -> dict:
     """
-    Generate AI response with Anthropic primary + OpenAI fallback.
+    Generate AI response with OpenAI mini primary + Anthropic fallback.
     Hard 10-second timeout. Returns structured result with cost tracking.
 
     Args:
@@ -56,26 +56,27 @@ async def generate_response(
             "error": str|None,
         }
     """
-    # Try Anthropic first
-    try:
-        result = await _generate_anthropic(
-            system_prompt, user_message, model_tier, max_tokens, temperature
-        )
-        return result
-    except Exception as e:
-        logger.warning("Anthropic failed: %s. Trying OpenAI fallback...", str(e))
-
-    # Fallback to OpenAI
+    # Try OpenAI mini first (use fast tier for all requests by default).
     from src.config import get_settings
     settings = get_settings()
     if settings.openai_api_key:
         try:
             result = await _generate_openai(
-                system_prompt, user_message, model_tier, max_tokens, temperature
+                system_prompt, user_message, "fast", max_tokens, temperature
             )
             return result
         except Exception as e:
-            logger.error("OpenAI fallback also failed: %s", str(e))
+            logger.warning("OpenAI mini failed: %s. Trying Anthropic fallback...", str(e))
+
+    # Fallback to Anthropic (use fast tier to stay in low-cost mode).
+    if settings.anthropic_api_key:
+        try:
+            result = await _generate_anthropic(
+                system_prompt, user_message, "fast", max_tokens, temperature
+            )
+            return result
+        except Exception as e:
+            logger.error("Anthropic fallback also failed: %s", str(e))
 
     # Both failed - return error
     return {
@@ -145,12 +146,13 @@ async def _generate_openai(
     max_tokens: Optional[int],
     temperature: float,
 ) -> dict:
-    """Generate response using OpenAI API (fallback)."""
+    """Generate response using OpenAI API."""
     from openai import AsyncOpenAI
     from src.config import get_settings
     settings = get_settings()
 
-    model = settings.openai_model_fast if model_tier == "fast" else settings.openai_model_smart
+    # Enforce mini model for all paths (\"mini-max\" mode).
+    model = settings.openai_model_fast
     tokens = max_tokens or (
         settings.anthropic_max_tokens_fast if model_tier == "fast" else settings.anthropic_max_tokens_smart
     )
