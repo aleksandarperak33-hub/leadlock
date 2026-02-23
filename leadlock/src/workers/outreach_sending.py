@@ -141,8 +141,10 @@ async def _pre_send_checks(
     if not email_check["valid"]:
         return f"invalid email ({email_check['reason']})"
 
-    # Gate: verify unverified pattern-guessed emails before sending
-    if prospect.email_source == "pattern_guess" and not prospect.email_verified:
+    # Gate: on first touch, always attempt to replace pattern-guessed emails
+    # with a discovered real address (higher deliverability).
+    # Follow-ups can proceed without rediscovery because initial send already passed.
+    if prospect.email_source == "pattern_guess" and prospect.outreach_sequence_step <= 0:
         verified_email = await _verify_or_find_working_email(prospect)
         if verified_email is None:
             prospect.status = "no_verified_email"

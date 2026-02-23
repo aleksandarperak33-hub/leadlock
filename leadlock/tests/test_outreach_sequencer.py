@@ -3250,6 +3250,31 @@ class TestSendSequenceEmailPatternGuard:
         mock_gen.assert_not_awaited()
         mock_send.assert_not_awaited()
 
+    @patch("src.workers.outreach_sending._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
+    async def test_pattern_guess_verified_still_triggers_discovery_on_first_touch(
+        self, mock_validate, mock_gen, mock_send, mock_verify,
+    ):
+        """Even verified pattern_guess should be rediscovered before first send."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+        mock_verify.return_value = None
+
+        db = AsyncMock()
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect(outreach_sequence_step=0, status="cold")
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = True
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_verify.assert_awaited_once_with(prospect)
+        assert prospect.status == "no_verified_email"
+        mock_gen.assert_not_awaited()
+        mock_send.assert_not_awaited()
+
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
     @patch("src.workers.outreach_sending._verify_or_find_working_email", new_callable=AsyncMock)
@@ -3306,7 +3331,7 @@ class TestSendSequenceEmailPatternGuard:
     async def test_verified_email_skips_discovery(
         self, mock_validate, mock_gen, mock_send, mock_verify,
     ):
-        """Verified email does NOT trigger _verify_or_find_working_email."""
+        """Follow-up step does NOT trigger rediscovery again."""
         mock_validate.return_value = {"valid": True, "reason": None}
 
         blacklist_result = MagicMock()
@@ -3326,8 +3351,13 @@ class TestSendSequenceEmailPatternGuard:
 
         config = _make_config()
         settings = _make_settings()
-        prospect = _make_prospect()
-        # email_source is "website_deep_scrape" and email_verified=True by default
+        prospect = _make_prospect(
+            outreach_sequence_step=1,
+            status="contacted",
+            last_email_sent_at=datetime.now(timezone.utc) - timedelta(hours=72),
+        )
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = True
 
         await send_sequence_email(db, config, settings, prospect)
 
