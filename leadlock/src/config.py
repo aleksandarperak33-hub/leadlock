@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     # OpenAI (only AI provider)
     openai_api_key: str = ""
+    openai_base_url: str = ""
     openai_model_fast: str = "gpt-4o-mini"
     openai_model_smart: str = "gpt-4o-mini"
     openai_max_tokens_fast: int = 300

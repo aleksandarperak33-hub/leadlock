@@ -109,6 +109,7 @@ async def _generate_openai(
 
     client = AsyncOpenAI(
         api_key=settings.openai_api_key,
+        base_url=(settings.openai_base_url or None),
         timeout=settings.openai_timeout_seconds,
     )
 
