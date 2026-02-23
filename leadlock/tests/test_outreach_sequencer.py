@@ -21,6 +21,9 @@ from src.workers.outreach_sequencer import (
     _check_email_health,
     _calculate_cycle_cap,
     _verify_or_find_working_email,
+    _is_ai_circuit_open,
+    _trip_ai_circuit_breaker,
+    _recover_generation_failed,
     run_outreach_sequencer,
     sequence_cycle,
     _process_campaign_prospects,
@@ -2021,6 +2024,14 @@ class TestRunOutreachSequencer:
 class TestSequenceCycle:
     """Tests for sequence_cycle."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_recover(self):
+        with patch(
+            "src.workers.outreach_sequencer._recover_generation_failed",
+            new_callable=AsyncMock, return_value=0,
+        ):
+            yield
+
     async def test_returns_early_when_config_inactive(self):
         """Returns early when config is_active is False."""
         config = _make_config(is_active=False)
@@ -2662,11 +2673,16 @@ class TestSequenceCycle:
         ), patch(
             "src.services.deliverability.EMAIL_THROTTLE_FACTORS",
             {"normal": 1.0, "reduced": 0.5, "critical": 0.25},
-        ):
+        ), patch(
+            "src.workers.outreach_sequencer._trip_ai_circuit_breaker",
+            new_callable=AsyncMock,
+        ) as mock_trip:
             await sequence_cycle()
 
         # Should have stopped after 3 prospects (circuit breaker), not all 5
         assert mock_send.await_count == 3
+        # Should have tripped the persistent circuit breaker
+        mock_trip.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -3273,3 +3289,54 @@ class TestSendSequenceEmailPatternGuard:
         await send_sequence_email(db, config, settings, prospect)
 
         mock_verify.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Persistent AI circuit breaker
+# ---------------------------------------------------------------------------
+
+class TestPersistentCircuitBreaker:
+    """Tests for Redis-backed persistent circuit breaker."""
+
+    @pytest.mark.asyncio
+    async def test_circuit_open_when_key_exists(self):
+        """Circuit is open when Redis key exists."""
+        mock_redis = AsyncMock()
+        mock_redis.exists.return_value = 1
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            result = await _is_ai_circuit_open()
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_circuit_closed_when_key_missing(self):
+        """Circuit is closed when Redis key doesn't exist."""
+        mock_redis = AsyncMock()
+        mock_redis.exists.return_value = 0
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            result = await _is_ai_circuit_open()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_circuit_closed_on_redis_error(self):
+        """Circuit defaults to closed if Redis is unreachable."""
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("redis down")):
+            result = await _is_ai_circuit_open()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_trip_sets_redis_key(self):
+        """Tripping the circuit breaker sets a Redis key with TTL."""
+        mock_redis = AsyncMock()
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
+            await _trip_ai_circuit_breaker()
+
+        mock_redis.set.assert_awaited_once()
+        args, kwargs = mock_redis.set.await_args
+        assert args[0] == "leadlock:circuit:ai_generation"
+        assert kwargs.get("ex") == 7200

@@ -344,6 +344,35 @@ def _calculate_cycle_cap(
     return max(1, remaining // remaining_cycles)
 
 
+_CIRCUIT_BREAKER_KEY = "leadlock:circuit:ai_generation"
+_CIRCUIT_BREAKER_TTL = 7200  # 2 hours
+
+
+async def _is_ai_circuit_open() -> bool:
+    """Check if the AI generation circuit breaker is open (tripped)."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        return await redis.exists(_CIRCUIT_BREAKER_KEY) > 0
+    except Exception:
+        return False
+
+
+async def _trip_ai_circuit_breaker() -> None:
+    """Open the circuit breaker — skip AI generation for 2 hours."""
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        await redis.set(_CIRCUIT_BREAKER_KEY, "1", ex=_CIRCUIT_BREAKER_TTL)
+        logger.warning(
+            "AI circuit breaker TRIPPED — skipping outreach for %d minutes. "
+            "Top up API credits to resume.",
+            _CIRCUIT_BREAKER_TTL // 60,
+        )
+    except Exception as e:
+        logger.debug("Circuit breaker write failed: %s", str(e))
+
+
 async def run_outreach_sequencer():
     """Main loop - process outreach sequences every 30 minutes."""
     logger.info("Outreach sequencer started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -351,6 +380,12 @@ async def run_outreach_sequencer():
     while True:
         await _heartbeat()
         try:
+            # Persistent circuit breaker — skip cycle if AI provider is down
+            if await _is_ai_circuit_open():
+                logger.info("AI circuit breaker is open — skipping outreach cycle")
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                continue
+
             # Check if sequencer is paused
             async with async_session_factory() as db:
                 result = await db.execute(select(SalesEngineConfig).limit(1))
@@ -365,11 +400,39 @@ async def run_outreach_sequencer():
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
+async def _recover_generation_failed() -> int:
+    """
+    Reset prospects stuck in 'generation_failed' back to 'cold' so they
+    can be retried now that the AI circuit breaker has cleared.
+    Returns count of recovered prospects.
+    """
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(Outreach).where(Outreach.status == "generation_failed")
+            )
+            prospects = list(result.scalars().all())
+            if not prospects:
+                return 0
+            for p in prospects:
+                p.status = "cold"
+                p.generation_failures = 0
+            await db.commit()
+            logger.info("Recovered %d generation_failed prospects back to cold", len(prospects))
+            return len(prospects)
+    except Exception as e:
+        logger.debug("Recovery check failed: %s", str(e))
+        return 0
+
+
 async def sequence_cycle():
     """
     Execute one full outreach sequence cycle. Respects business hours gating.
     Two-pass: (1) active campaigns first, (2) unbound prospects with global config.
     """
+    # Recover prospects damaged by previous AI outage
+    await _recover_generation_failed()
+
     async with async_session_factory() as db:
         # Load config
         result = await db.execute(select(SalesEngineConfig).limit(1))
@@ -550,11 +613,7 @@ async def sequence_cycle():
                     consecutive_failures = 0
 
                 if consecutive_failures >= 3:
-                    logger.warning(
-                        "Circuit breaker: %d consecutive AI generation failures. "
-                        "Stopping batch — AI provider may be down.",
-                        consecutive_failures,
-                    )
+                    await _trip_ai_circuit_breaker()
                     break
             except Exception as e:
                 logger.error(
@@ -718,11 +777,7 @@ async def _process_campaign_prospects(
                 consecutive_failures = 0
 
             if consecutive_failures >= 3:
-                logger.warning(
-                    "Campaign %s circuit breaker: %d consecutive AI failures. "
-                    "Stopping batch.",
-                    str(campaign.id)[:8], consecutive_failures,
-                )
+                await _trip_ai_circuit_breaker()
                 break
         except Exception as e:
             logger.error(
@@ -731,11 +786,7 @@ async def _process_campaign_prospects(
             )
             consecutive_failures += 1
             if consecutive_failures >= 3:
-                logger.warning(
-                    "Campaign %s circuit breaker: %d consecutive exceptions. "
-                    "Stopping batch.",
-                    str(campaign.id)[:8], consecutive_failures,
-                )
+                await _trip_ai_circuit_breaker()
                 break
 
         if i < len(all_prospects) - 1:
