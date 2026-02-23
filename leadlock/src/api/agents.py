@@ -15,6 +15,10 @@ from src.services.agent_fleet import (
     get_task_queue,
     get_cost_breakdown,
 )
+from src.services.agent_activity import (
+    get_activity_feed,
+    get_system_map_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,25 @@ async def cost_tracker(
 ):
     """Daily cost breakdown per agent for charts."""
     data = await get_cost_breakdown(period=period)
+    return {"success": True, "data": data}
+
+
+@router.get("/activity-feed")
+async def activity_feed(
+    _admin=Depends(get_current_admin),
+    limit: int = Query(50, ge=1, le=200),
+    agent: str = Query(None),
+):
+    """Global activity feed from EventLog — real agent actions."""
+    agent_name = agent if agent and agent in AGENT_REGISTRY else None
+    data = await get_activity_feed(limit=limit, agent_name=agent_name)
+    return {"success": True, "data": {"events": data}}
+
+
+@router.get("/system-map")
+async def system_map(_admin=Depends(get_current_admin)):
+    """Aggregate counts for the system flowchart."""
+    data = await get_system_map_data()
     return {"success": True, "data": data}
 
 

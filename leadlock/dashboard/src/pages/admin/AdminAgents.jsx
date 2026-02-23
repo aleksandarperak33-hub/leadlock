@@ -9,11 +9,13 @@ import AgentDetailPanel from '../../components/agents/AgentDetailPanel';
 import useAgentFleet from '../../hooks/useAgentFleet';
 
 // Lazy-load heavier tab components
+const SystemMap = lazy(() => import('../../components/agents/SystemMap'));
 const TaskQueueMonitor = lazy(() => import('../../components/agents/TaskQueueMonitor'));
 const CostDashboard = lazy(() => import('../../components/agents/CostDashboard'));
 const ActivityTimeline = lazy(() => import('../../components/agents/ActivityTimeline'));
 
 const TABS = [
+  { id: 'map', label: 'System Map' },
   { id: 'fleet', label: 'Fleet' },
   { id: 'tasks', label: 'Task Queue' },
   { id: 'costs', label: 'Costs' },
@@ -66,12 +68,12 @@ function groupByTier(agents) {
 
 /**
  * Agent Army — mission control for the 14-agent fleet.
- * 4 tabs: Fleet (default), Task Queue, Costs, Activity.
+ * 5 tabs: System Map (default), Fleet, Task Queue, Costs, Activity.
  * Fleet tab renders agents in 3 tiers: AI Agents, Core Operations, Infrastructure.
  */
 export default function AdminAgents() {
   const { data, loading, error, refresh } = useAgentFleet();
-  const [activeTab, setActiveTab] = useState('fleet');
+  const [activeTab, setActiveTab] = useState('map');
   const [selectedAgent, setSelectedAgent] = useState(null);
 
   const agents = data?.agents ?? [];
@@ -119,6 +121,17 @@ export default function AdminAgents() {
       </div>
 
       {/* Tab content */}
+      {activeTab === 'map' && (
+        <Suspense fallback={<TabLoader />}>
+          <SystemMap
+            onSelectAgent={(name) => {
+              const agent = agents.find((a) => a.name === name);
+              if (agent) setSelectedAgent(agent);
+            }}
+          />
+        </Suspense>
+      )}
+
       {activeTab === 'fleet' && (
         <div className="animate-fade-up">
           {loading ? (
@@ -175,7 +188,7 @@ export default function AdminAgents() {
 
       {activeTab === 'activity' && (
         <Suspense fallback={<TabLoader />}>
-          <ActivityTimeline agents={agents} />
+          <ActivityTimeline />
         </Suspense>
       )}
 

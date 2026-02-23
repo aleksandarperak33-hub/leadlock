@@ -317,28 +317,13 @@ async def get_fleet_status() -> dict:
     heartbeats = await redis.mget(*heartbeat_keys)
     cost_hash = await redis.hgetall(f"leadlock:agent_costs:{today_str}") or {}
 
-    # --- PostgreSQL: today's task counts grouped by task_type ---
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # --- PostgreSQL: today's event counts from EventLog (real activity) ---
     task_counts: dict[str, int] = {}
     try:
-        async with async_session_factory() as session:
-            rows = await session.execute(
-                select(
-                    TaskQueue.task_type,
-                    func.count(TaskQueue.id),
-                ).where(
-                    and_(
-                        TaskQueue.task_type.in_(_ALL_TASK_TYPES),
-                        TaskQueue.created_at >= day_start,
-                    )
-                ).group_by(TaskQueue.task_type)
-            )
-            for task_type, count in rows:
-                agent = _TASK_TYPE_TO_AGENT.get(task_type)
-                if agent:
-                    task_counts[agent] = task_counts.get(agent, 0) + count
+        from src.services.agent_activity import get_agent_event_counts
+        task_counts = await get_agent_event_counts(days=1)
     except Exception:
-        logger.exception("Failed to query task counts for fleet status")
+        logger.exception("Failed to query event counts for fleet status")
 
     # --- Build per-agent status ---
     agents: list[dict] = []
@@ -431,71 +416,77 @@ async def get_agent_activity(name: str, limit: int = 20) -> dict:
     redis = await get_redis()
     now = datetime.now(timezone.utc)
 
-    # --- Recent tasks from PostgreSQL ---
+    # --- Recent activity + 7-day metrics ---
+    # task_processor uses TaskQueue; all others use EventLog for real activity.
     recent_tasks: list[dict] = []
     metrics_7d = {"total_tasks": 0, "success_rate": 0.0, "avg_duration_s": 0.0, "total_cost": 0.0}
-    seven_days_ago = now - timedelta(days=7)
 
-    try:
-        async with async_session_factory() as session:
-            rows = (await session.execute(
-                select(TaskQueue)
-                .where(TaskQueue.task_type.in_(task_types))
-                .order_by(TaskQueue.created_at.desc())
-                .limit(limit)
-            )).scalars().all()
+    if name == "task_processor":
+        # TaskQueue is the ground truth for task_processor
+        seven_days_ago = now - timedelta(days=7)
+        try:
+            async with async_session_factory() as session:
+                rows = (await session.execute(
+                    select(TaskQueue)
+                    .where(TaskQueue.task_type.in_(task_types))
+                    .order_by(TaskQueue.created_at.desc())
+                    .limit(limit)
+                )).scalars().all()
 
-            for t in rows:
-                duration = None
-                if t.started_at and t.completed_at:
-                    duration = (t.completed_at - t.started_at).total_seconds()
-                recent_tasks.append({
-                    "id": str(t.id),
-                    "task_type": t.task_type,
-                    "status": t.status,
-                    "priority": t.priority,
-                    "retry_count": t.retry_count,
-                    "created_at": t.created_at.isoformat() if t.created_at else None,
-                    "started_at": t.started_at.isoformat() if t.started_at else None,
-                    "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-                    "duration_s": duration,
-                    "error_message": t.error_message,
-                })
+                for t in rows:
+                    duration = None
+                    if t.started_at and t.completed_at:
+                        duration = (t.completed_at - t.started_at).total_seconds()
+                    recent_tasks.append({
+                        "id": str(t.id),
+                        "action": t.task_type,
+                        "status": t.status,
+                        "duration_ms": int(duration * 1000) if duration else None,
+                        "cost_usd": None,
+                        "created_at": t.created_at.isoformat() if t.created_at else None,
+                    })
 
-            # 7-day metrics
-            week_rows = (await session.execute(
-                select(
-                    func.count(TaskQueue.id),
-                    func.sum(case(
-                        (TaskQueue.status == "completed", 1),
-                        else_=0,
-                    )),
-                    func.avg(
-                        func.extract("epoch", TaskQueue.completed_at)
-                        - func.extract("epoch", TaskQueue.started_at)
-                    ).filter(
-                        TaskQueue.completed_at.isnot(None),
-                        TaskQueue.started_at.isnot(None),
-                    ),
-                ).where(
-                    and_(
-                        TaskQueue.task_type.in_(task_types),
-                        TaskQueue.created_at >= seven_days_ago,
+                week_rows = (await session.execute(
+                    select(
+                        func.count(TaskQueue.id),
+                        func.sum(case(
+                            (TaskQueue.status == "completed", 1),
+                            else_=0,
+                        )),
+                        func.avg(
+                            func.extract("epoch", TaskQueue.completed_at)
+                            - func.extract("epoch", TaskQueue.started_at)
+                        ).filter(
+                            TaskQueue.completed_at.isnot(None),
+                            TaskQueue.started_at.isnot(None),
+                        ),
+                    ).where(
+                        and_(
+                            TaskQueue.task_type.in_(task_types),
+                            TaskQueue.created_at >= seven_days_ago,
+                        )
                     )
-                )
-            )).one()
+                )).one()
 
-            total = week_rows[0] or 0
-            success = week_rows[1] or 0
-            avg_dur = float(week_rows[2]) if week_rows[2] else 0.0
-            metrics_7d = {
-                "total_tasks": total,
-                "success_rate": round(success / total, 4) if total else 0.0,
-                "avg_duration_s": round(avg_dur, 2),
-                "total_cost": 0.0,  # filled from Redis below
-            }
-    except Exception:
-        logger.exception("Failed to query tasks for agent %s", name)
+                total = week_rows[0] or 0
+                success = week_rows[1] or 0
+                avg_dur = float(week_rows[2]) if week_rows[2] else 0.0
+                metrics_7d = {
+                    "total_tasks": total,
+                    "success_rate": round(success / total, 4) if total else 0.0,
+                    "avg_duration_s": round(avg_dur, 2),
+                    "total_cost": 0.0,
+                }
+        except Exception:
+            logger.exception("Failed to query tasks for agent %s", name)
+    else:
+        # All other agents: use EventLog for real activity
+        try:
+            from src.services.agent_activity import get_agent_events, get_agent_event_metrics
+            recent_tasks = await get_agent_events(name, limit=limit)
+            metrics_7d = await get_agent_event_metrics(name)
+        except Exception:
+            logger.exception("Failed to query EventLog for agent %s", name)
 
     # --- Cost history from Redis (last 30 days) --- pipeline batch reads ---
     cost_history: list[dict] = []

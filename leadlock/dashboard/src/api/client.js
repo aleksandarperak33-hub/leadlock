@@ -231,4 +231,9 @@ export const api = {
     return agentsRequest(`/tasks?${qs}`);
   },
   getAgentCosts: (period = '7d') => agentsRequest(`/costs?period=${period}`),
+  getSystemMap: () => agentsRequest('/system-map'),
+  getActivityFeed: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return agentsRequest(`/activity-feed?${qs}`);
+  },
 };

@@ -1,53 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import Badge from '../ui/Badge';
 
 const DEFAULT_LIMIT = 50;
 const LOAD_MORE_INCREMENT = 50;
+const POLL_INTERVAL_MS = 30_000;
 
 const STATUS_VARIANT = {
-  completed: 'success',
+  success: 'success',
+  failure: 'danger',
   failed: 'danger',
+  error: 'danger',
+  skipped: 'neutral',
+  completed: 'success',
   pending: 'neutral',
   processing: 'info',
 };
 
 const DOT_COLOR = {
-  purple: 'bg-purple-500',
-  blue: 'bg-blue-500',
-  amber: 'bg-amber-500',
-  green: 'bg-green-500',
-  cyan: 'bg-cyan-500',
-  red: 'bg-red-500',
-  pink: 'bg-pink-500',
-  indigo: 'bg-indigo-500',
-  emerald: 'bg-emerald-500',
+  purple: 'bg-purple-500', blue: 'bg-blue-500', amber: 'bg-amber-500',
+  green: 'bg-green-500', cyan: 'bg-cyan-500', red: 'bg-red-500',
+  pink: 'bg-pink-500', indigo: 'bg-indigo-500', emerald: 'bg-emerald-500',
+  sky: 'bg-sky-500', lime: 'bg-lime-500', orange: 'bg-orange-500',
+  stone: 'bg-stone-500', violet: 'bg-violet-500', gray: 'bg-gray-500',
 };
 
 /**
- * Groups an array of tasks by their calendar date string.
+ * Groups an array of events by ISO date key (YYYY-MM-DD).
+ * Uses ISO substring instead of toLocaleDateString to avoid locale-dependent keys.
  */
-function groupByDate(tasks) {
+function groupByDate(events) {
   const groups = {};
-  for (const task of tasks) {
-    const date = new Date(task.created_at).toLocaleDateString();
+  for (const event of events) {
+    const date = event.created_at ? event.created_at.slice(0, 10) : 'unknown';
     if (!groups[date]) groups[date] = [];
-    groups[date].push(task);
+    groups[date].push(event);
   }
   return groups;
 }
 
 /**
- * Returns "Today", "Yesterday", or a formatted date label.
+ * Returns "Today", "Yesterday", or a formatted date label from ISO date key.
  */
-function formatDateLabel(dateString) {
-  const date = new Date(dateString);
+function formatDateLabel(isoDateKey) {
+  const date = new Date(isoDateKey + 'T00:00:00');
   const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = yesterday.toISOString().slice(0, 10);
 
-  if (date.toLocaleDateString() === today.toLocaleDateString()) return 'Today';
-  if (date.toLocaleDateString() === yesterday.toLocaleDateString()) return 'Yesterday';
+  if (isoDateKey === todayKey) return 'Today';
+  if (isoDateKey === yesterdayKey) return 'Yesterday';
 
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -69,35 +73,32 @@ function formatRelativeTime(timestamp) {
 }
 
 /**
- * Builds a lookup map from agent name to agent object for efficient color/name resolution.
+ * Formats a cost value for display.
  */
-function buildAgentLookup(agents) {
-  const lookup = {};
-  for (const agent of agents) {
-    lookup[agent.name] = agent;
-  }
-  return lookup;
+function formatCost(cost) {
+  if (cost == null || cost === 0) return null;
+  return `$${Number(cost).toFixed(4)}`;
 }
 
 /**
- * Vertical timeline feed showing recent agent actions grouped by date.
- * @param {{ agents: Array<object> }} props
+ * Vertical timeline feed showing real agent activity from EventLog.
  */
-export default function ActivityTimeline({ agents }) {
-  const [tasks, setTasks] = useState([]);
+export default function ActivityTimeline() {
+  const [events, setEvents] = useState([]);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchTasks() {
+    async function fetchEvents() {
       try {
-        const result = await api.getAgentTasks({ per_page: limit });
+        const result = await api.getActivityFeed({ limit: String(limit) });
         if (!cancelled) {
-          setTasks(result.data?.tasks || []);
+          setEvents(result.data?.events || []);
           setError(null);
         }
       } catch (err) {
@@ -107,12 +108,17 @@ export default function ActivityTimeline({ agents }) {
       }
     }
 
-    fetchTasks();
-    return () => { cancelled = true; };
+    fetchEvents();
+
+    // Auto-refresh every 30s
+    intervalRef.current = setInterval(fetchEvents, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalRef.current);
+    };
   }, [limit, retryCount]);
 
-  const agentLookup = buildAgentLookup(agents || []);
-  const grouped = groupByDate(tasks);
+  const grouped = groupByDate(events);
   const dateKeys = Object.keys(grouped);
 
   if (loading) {
@@ -137,7 +143,7 @@ export default function ActivityTimeline({ agents }) {
     );
   }
 
-  if (tasks.length === 0) {
+  if (events.length === 0) {
     return (
       <p className="text-sm text-gray-400 text-center py-8">No recent activity</p>
     );
@@ -146,8 +152,7 @@ export default function ActivityTimeline({ agents }) {
   return (
     <div className="space-y-6">
       {dateKeys.map((dateKey) => {
-        const firstTask = grouped[dateKey][0];
-        const label = formatDateLabel(firstTask.created_at);
+        const label = formatDateLabel(dateKey);
 
         return (
           <div key={dateKey}>
@@ -159,12 +164,12 @@ export default function ActivityTimeline({ agents }) {
               <div className="absolute left-[4.5px] top-1 bottom-1 w-px bg-gray-200" />
 
               <div className="space-y-3">
-                {grouped[dateKey].map((task, idx) => {
-                  const agent = agentLookup[task.agent] || {};
-                  const dotClass = DOT_COLOR[agent.color] || 'bg-gray-400';
+                {grouped[dateKey].map((event, idx) => {
+                  const dotClass = DOT_COLOR[event.agent_color] || 'bg-gray-400';
+                  const costStr = formatCost(event.cost_usd);
 
                   return (
-                    <div key={task.id || idx} className="relative flex items-start gap-3">
+                    <div key={event.id || idx} className="relative flex items-start gap-3">
                       {/* Colored dot */}
                       <div className={`absolute -left-5 top-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${dotClass}`} />
 
@@ -172,16 +177,22 @@ export default function ActivityTimeline({ agents }) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-gray-900">
-                            {agent.display_name || task.agent}
+                            {event.agent_display_name}
                           </span>
-                          <span className="text-sm text-gray-500">{task.task_type}</span>
-                          <Badge variant={STATUS_VARIANT[task.status] || 'neutral'} size="sm">
-                            {task.status}
+                          <span className="text-sm text-gray-500">{event.action}</span>
+                          <Badge variant={STATUS_VARIANT[event.status] || 'neutral'} size="sm">
+                            {event.status}
                           </Badge>
+                          {costStr && (
+                            <span className="text-[11px] font-mono text-gray-400">{costStr}</span>
+                          )}
                           <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">
-                            {formatRelativeTime(task.created_at)}
+                            {formatRelativeTime(event.created_at)}
                           </span>
                         </div>
+                        {event.message && (
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{event.message}</p>
+                        )}
                       </div>
                     </div>
                   );

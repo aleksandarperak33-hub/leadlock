@@ -187,10 +187,10 @@ export default function AgentDetailPanel({ agent, onClose }) {
               {metrics && (
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'Total Tasks', value: metrics.total_tasks },
+                    { label: '7d Events', value: metrics.total_tasks },
                     { label: 'Success Rate', value: `${(metrics.success_rate * 100).toFixed(1)}%` },
                     { label: 'Avg Duration', value: `${metrics.avg_duration_s.toFixed(1)}s` },
-                    { label: 'Total Cost', value: `$${metrics.total_cost.toFixed(3)}` },
+                    { label: '7d Cost', value: agent.uses_ai ? `$${metrics.total_cost.toFixed(3)}` : 'N/A' },
                   ].map((stat) => (
                     <div key={stat.label} className="glass-card p-3">
                       <div className="text-[11px] text-gray-500 mb-1">{stat.label}</div>
@@ -220,36 +220,47 @@ export default function AgentDetailPanel({ agent, onClose }) {
                 </div>
               )}
 
-              {/* Recent Tasks */}
+              {/* Recent Events / Tasks */}
               {data.recent_tasks?.length > 0 && (
                 <div className="glass-card p-3">
-                  <div className="text-[11px] text-gray-500 mb-2 font-semibold uppercase tracking-wide">Recent Tasks</div>
+                  <div className="text-[11px] text-gray-500 mb-2 font-semibold uppercase tracking-wide">
+                    {agent.name === 'task_processor' ? 'Recent Tasks' : 'Recent Events'}
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-gray-400 border-b border-gray-100">
-                          <th className="text-left pb-1.5 font-medium">Type</th>
+                          <th className="text-left pb-1.5 font-medium">Action</th>
                           <th className="text-left pb-1.5 font-medium">Status</th>
                           <th className="text-right pb-1.5 font-medium">Duration</th>
+                          <th className="text-right pb-1.5 font-medium">Cost</th>
                           <th className="text-right pb-1.5 font-medium">When</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {data.recent_tasks.slice(0, 10).map((task, idx) => (
-                          <tr key={task.id ?? idx} className="border-b border-gray-50 last:border-0">
-                            <td className="py-1.5 text-gray-700 font-medium">{task.task_type}</td>
-                            <td className="py-1.5">
-                              <span className="inline-flex items-center gap-1.5">
-                                <span className={`w-1.5 h-1.5 rounded-full ${TASK_STATUS_DOT[task.status] || 'bg-gray-400'}`} />
-                                <span className="text-gray-600">{task.status}</span>
-                              </span>
-                            </td>
-                            <td className="py-1.5 text-right text-gray-500 font-mono">
-                              {task.duration_s != null ? `${Number(task.duration_s).toFixed(1)}s` : '--'}
-                            </td>
-                            <td className="py-1.5 text-right text-gray-400">{formatRelativeTime(task.created_at)}</td>
-                          </tr>
-                        ))}
+                        {data.recent_tasks.slice(0, 10).map((task, idx) => {
+                          const durationMs = task.duration_ms;
+                          const durationStr = durationMs != null
+                            ? (durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`)
+                            : '--';
+                          const costStr = task.cost_usd != null && task.cost_usd > 0
+                            ? `$${Number(task.cost_usd).toFixed(4)}`
+                            : (agent.uses_ai ? '$0' : 'N/A');
+                          return (
+                            <tr key={task.id ?? idx} className="border-b border-gray-50 last:border-0">
+                              <td className="py-1.5 text-gray-700 font-medium">{task.action}</td>
+                              <td className="py-1.5">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${TASK_STATUS_DOT[task.status] || 'bg-gray-400'}`} />
+                                  <span className="text-gray-600">{task.status}</span>
+                                </span>
+                              </td>
+                              <td className="py-1.5 text-right text-gray-500 font-mono">{durationStr}</td>
+                              <td className="py-1.5 text-right text-gray-500 font-mono">{costStr}</td>
+                              <td className="py-1.5 text-right text-gray-400">{formatRelativeTime(task.created_at)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
