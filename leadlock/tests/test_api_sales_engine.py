@@ -445,7 +445,7 @@ class TestVerifySendgridWebhook:
 class TestInboundEmailWebhook:
     """Tests for POST /api/v1/sales/inbound-email."""
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=False)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=False)
     async def test_rejects_invalid_token(self, mock_verify, db):
         """Should raise 403 when webhook verification fails."""
         from src.api.sales_engine import inbound_email_webhook
@@ -458,7 +458,7 @@ class TestInboundEmailWebhook:
         # which is caught by the outer try/except, returning {"status": "error"}
         assert result["status"] == "error"
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_ignores_empty_from_email(self, mock_verify, db):
         """Should return ignored status when from email is empty."""
         from src.api.sales_engine import inbound_email_webhook
@@ -468,7 +468,7 @@ class TestInboundEmailWebhook:
         assert result["status"] == "ignored"
         assert result["reason"] == "no from email"
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_ignores_unknown_sender(self, mock_verify, db):
         """Should return ignored when sender is not in outreach database."""
         from src.api.sales_engine import inbound_email_webhook
@@ -484,10 +484,10 @@ class TestInboundEmailWebhook:
         assert result["status"] == "ignored"
         assert result["reason"] == "unknown sender"
 
-    @patch("src.api.sales_engine._trigger_sms_followup", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._trigger_sms_followup", new_callable=AsyncMock, return_value=True)
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_interested_reply(
         self, mock_verify, mock_signal, mock_classify, mock_sms, db
     ):
@@ -514,8 +514,8 @@ class TestInboundEmailWebhook:
         assert prospect.status == "demo_scheduled"
 
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_rejection_reply(self, mock_verify, mock_signal, mock_classify, db):
         """Should mark prospect as lost on rejection reply."""
         from src.api.sales_engine import inbound_email_webhook
@@ -539,8 +539,8 @@ class TestInboundEmailWebhook:
         assert prospect.status == "lost"
 
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_unsubscribe_reply(self, mock_verify, mock_signal, mock_classify, db):
         """Should unsubscribe prospect when reply is classified as unsubscribe."""
         from src.api.sales_engine import inbound_email_webhook
@@ -564,7 +564,7 @@ class TestInboundEmailWebhook:
         assert prospect.status == "lost"
 
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_extracts_email_from_name_angle_bracket_format(
         self, mock_verify, mock_classify, db
     ):
@@ -589,8 +589,8 @@ class TestInboundEmailWebhook:
         assert result["prospect_id"] == str(prospect.id)
 
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_does_not_mutate_campaign_counter_on_reply(
         self, mock_verify, mock_signal, mock_classify, db
     ):
@@ -626,7 +626,7 @@ class TestInboundEmailWebhook:
 class TestEmailEventsWebhook:
     """Tests for POST /api/v1/sales/email-events."""
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=False)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=False)
     async def test_rejects_invalid_token(self, mock_verify, db):
         """Should return error status when verification fails."""
         from src.api.sales_engine import email_events_webhook
@@ -635,8 +635,8 @@ class TestEmailEventsWebhook:
         result = await email_events_webhook(request, db)
         assert result["status"] == "error"
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_delivered_event(self, mock_verify, mock_signal, db):
         """Should update delivered_at on delivery event."""
         from src.api.sales_engine import email_events_webhook
@@ -655,8 +655,8 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert email.delivered_at is not None
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_open_event(self, mock_verify, mock_signal, db):
         """Should update opened_at on open event and update prospect."""
         from src.api.sales_engine import email_events_webhook
@@ -681,8 +681,8 @@ class TestEmailEventsWebhook:
         assert email.opened_at is not None
         assert prospect.last_email_opened_at is not None
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_click_event(self, mock_verify, mock_signal, db):
         """Should update clicked_at on click event."""
         from src.api.sales_engine import email_events_webhook
@@ -706,8 +706,8 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert email.clicked_at is not None
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_bounce_event_marks_prospect_lost(self, mock_verify, mock_signal, db):
         """Should mark prospect as lost and email_verified as False on hard bounce."""
         from src.api.sales_engine import email_events_webhook
@@ -735,8 +735,8 @@ class TestEmailEventsWebhook:
         assert prospect.email_verified is False
         assert prospect.status == "lost"
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_bounce_auto_blacklists_email(self, mock_verify, mock_signal, db):
         """Should auto-blacklist email address on hard bounce."""
         from src.api.sales_engine import email_events_webhook
@@ -768,7 +768,7 @@ class TestEmailEventsWebhook:
         assert bl_entry is not None
         assert bl_entry.entry_type == "email"
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_deferred_event(self, mock_verify, db):
         """Should mark email as deferred without treating it as a bounce."""
         from src.api.sales_engine import email_events_webhook
@@ -793,7 +793,7 @@ class TestEmailEventsWebhook:
         assert email.bounce_type == "deferred"
         assert email.bounced_at is None  # deferred does NOT set bounced_at
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_processes_spamreport_event(self, mock_verify, db):
         """Should mark prospect as unsubscribed on spam report."""
         from src.api.sales_engine import email_events_webhook
@@ -817,7 +817,7 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert prospect.email_unsubscribed is True
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_skips_event_when_no_email_record_found(self, mock_verify, db):
         """Should silently skip events that don't match any email record."""
         from src.api.sales_engine import email_events_webhook
@@ -829,7 +829,7 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert result["events"] == 1
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_handles_single_event_dict(self, mock_verify, db):
         """Should handle a single event dict (not wrapped in a list)."""
         from src.api.sales_engine import email_events_webhook
@@ -848,8 +848,8 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert result["events"] == 1
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_fallback_lookup_by_outreach_id_and_step(self, mock_verify, mock_signal, db):
         """Should find email by outreach_id + step if sg_message_id lookup fails."""
         from src.api.sales_engine import email_events_webhook
@@ -874,8 +874,8 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert email.delivered_at is not None
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_open_event_does_not_mutate_campaign_counter(self, mock_verify, mock_signal, db):
         """Opens should NOT increment denormalized campaign counter (calculated metrics used instead)."""
         from src.api.sales_engine import email_events_webhook
@@ -901,7 +901,7 @@ class TestEmailEventsWebhook:
         assert result["status"] == "processed"
         assert campaign.total_opened == 3  # unchanged - calculated metrics used instead
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_does_not_update_already_set_delivered_at(self, mock_verify, db):
         """Should not overwrite delivered_at if already set."""
         from src.api.sales_engine import email_events_webhook
@@ -921,8 +921,8 @@ class TestEmailEventsWebhook:
 
         assert email.delivered_at == original_time
 
-    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_protected_domain_not_blacklisted(self, mock_verify, mock_signal, db):
         """Should NOT domain-blacklist protected providers like gmail.com."""
         from src.api.sales_engine import email_events_webhook
@@ -969,7 +969,7 @@ class TestEmailEventsWebhook:
         )
         assert domain_bl.scalar_one_or_none() is None
 
-    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_deferred_marks_unreachable_not_unsubscribed(self, mock_verify, db):
         """After 3+ deferrals, prospect should be unreachable but NOT unsubscribed."""
         from src.api.sales_engine import email_events_webhook
@@ -1239,8 +1239,8 @@ class TestTriggerScrapeJob:
             )
         assert exc_info.value.status_code == 400
 
-    @patch("src.api.sales_engine._run_scrape_background", new_callable=AsyncMock)
-    @patch("src.api.sales_engine.asyncio")
+    @patch("src.api.sales_scraper._run_scrape_background", new_callable=AsyncMock)
+    @patch("src.api.sales_scraper.asyncio")
     @patch("src.config.get_settings")
     async def test_queues_scrape_successfully(self, mock_settings, mock_asyncio, mock_bg):
         """Should return queued status with job_id."""
@@ -2482,8 +2482,8 @@ class TestBuildActivityFeed:
 class TestGetCommandCenter:
     """Tests for GET /api/v1/sales/command-center."""
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_returns_full_response_structure(self, mock_redis, mock_window, mock_feed, db):
         """Should return all expected top-level keys."""
@@ -2508,8 +2508,8 @@ class TestGetCommandCenter:
         assert "activity" in result
         assert "alerts" in result
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_handles_no_config(self, mock_redis, mock_window, mock_feed, db):
         """Should handle missing config gracefully."""
@@ -2523,8 +2523,8 @@ class TestGetCommandCenter:
         result = await get_command_center(db=db, admin=MagicMock())
         assert result["system"]["engine_active"] is False
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_includes_email_pipeline_data(self, mock_redis, mock_window, mock_feed, db):
         """Should include email pipeline metrics (today and 30d)."""
@@ -2545,8 +2545,8 @@ class TestGetCommandCenter:
         result = await get_command_center(db=db, admin=MagicMock())
         assert result["email_pipeline"]["today"]["sent"] >= 1
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_includes_funnel_data(self, mock_redis, mock_window, mock_feed, db):
         """Should include funnel counts by status."""
@@ -2568,8 +2568,8 @@ class TestGetCommandCenter:
         assert result["funnel"]["demo_scheduled"] == 1
         assert result["funnel"]["won"] == 1
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, side_effect=Exception("feed error"))
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, side_effect=Exception("feed error"))
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_raises_500_on_unhandled_error(self, mock_redis, mock_window, mock_feed, db):
         """Should raise 500 when an unhandled exception occurs."""
@@ -2588,8 +2588,8 @@ class TestGetCommandCenter:
             await get_command_center(db=db, admin=MagicMock())
         assert exc_info.value.status_code == 500
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
     async def test_includes_worker_status_from_redis(self, mock_get_redis, mock_window, mock_feed, db):
         """Should include worker health data from Redis."""
@@ -2614,8 +2614,8 @@ class TestGetCommandCenter:
         assert workers["scraper"]["health"] == "healthy"
         assert workers["scraper"]["paused"] is True
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_includes_budget_data(self, mock_redis, mock_window, mock_feed, db):
         """Should include budget usage from config."""
@@ -2634,8 +2634,8 @@ class TestGetCommandCenter:
         assert budget["monthly_limit"] == 200.0
         assert budget["alert_threshold"] == 0.8
 
-    @patch("src.api.sales_engine._build_activity_feed", new_callable=AsyncMock, return_value=[])
-    @patch("src.api.sales_engine._compute_send_window_label")
+    @patch("src.api.sales_dashboard._build_activity_feed", new_callable=AsyncMock, return_value=[])
+    @patch("src.api.sales_dashboard._compute_send_window_label")
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis"))
     async def test_includes_scraper_stats(self, mock_redis, mock_window, mock_feed, db):
         """Should include scraper stats (today's new and dupes)."""
@@ -2669,7 +2669,7 @@ class TestRunScrapeBackground:
     @patch("src.workers.scraper.get_query_variants", return_value=["hvac repair", "hvac service"])
     @patch("src.workers.scraper.get_next_variant_and_offset", new_callable=AsyncMock, return_value=(0, 0))
     @patch("src.config.get_settings")
-    @patch("src.api.sales_engine.async_session_factory")
+    @patch("src.api.sales_scraper.async_session_factory")
     async def test_successful_scrape(
         self, mock_session_factory, mock_settings, mock_variant, mock_variants,
         mock_search, mock_parse, mock_phone, mock_enrich, mock_validate,
@@ -2725,7 +2725,7 @@ class TestRunScrapeBackground:
     @patch("src.workers.scraper.get_query_variants", return_value=["hvac repair"])
     @patch("src.workers.scraper.get_next_variant_and_offset", new_callable=AsyncMock, return_value=(0, 0))
     @patch("src.config.get_settings")
-    @patch("src.api.sales_engine.async_session_factory")
+    @patch("src.api.sales_scraper.async_session_factory")
     async def test_handles_search_failure(
         self, mock_session_factory, mock_settings, mock_variant, mock_variants, mock_search,
     ):
@@ -2759,7 +2759,7 @@ class TestRunScrapeBackground:
     @patch("src.workers.scraper.get_query_variants", return_value=["hvac repair"])
     @patch("src.workers.scraper.get_next_variant_and_offset", new_callable=AsyncMock, return_value=(-1, -1))
     @patch("src.config.get_settings")
-    @patch("src.api.sales_engine.async_session_factory")
+    @patch("src.api.sales_scraper.async_session_factory")
     async def test_resets_to_zero_when_variants_exhausted(
         self, mock_session_factory, mock_settings, mock_variant, mock_variants, mock_search,
     ):
