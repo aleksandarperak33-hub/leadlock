@@ -1095,7 +1095,7 @@ class TestGenerateEmailWithTemplate:
         assert "\u2013" not in result["subject"]
 
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
     async def test_ai_generated_with_instructions(self, mock_gen):
@@ -1123,7 +1123,7 @@ class TestGenerateEmailWithTemplate:
         assert call_kwargs["extra_instructions"] == "Be friendly and mention roofing."
 
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
     async def test_no_template_uses_ai(self, mock_gen):
@@ -1145,7 +1145,7 @@ class TestGenerateEmailWithTemplate:
         assert call_kwargs["extra_instructions"] is None
 
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
     async def test_ai_template_without_instructions(self, mock_gen):
@@ -1191,7 +1191,7 @@ class TestGenerateEmailWithTemplate:
         assert result["ai_cost_usd"] == 0.0
 
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
     async def test_ai_generation_with_none_fields(self, mock_gen):
@@ -1226,12 +1226,12 @@ class TestGenerateEmailWithTemplate:
 class TestSendSequenceEmail:
     """Tests for send_sequence_email."""
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_skips_invalid_email(self, mock_validate, mock_gen, mock_send):
         """Skips prospect with invalid email."""
         mock_validate.return_value = {"valid": False, "reason": "bad format"}
@@ -1246,12 +1246,12 @@ class TestSendSequenceEmail:
         mock_gen.assert_not_awaited()
         mock_send.assert_not_awaited()
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_skips_blacklisted_email(self, mock_validate, mock_gen, mock_send):
         """Skips prospect whose email or domain is blacklisted."""
         mock_validate.return_value = {"valid": True, "reason": None}
@@ -1275,12 +1275,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_successful_first_email_send(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -1324,12 +1324,12 @@ class TestSendSequenceEmail:
         assert prospect.total_emails_sent == 1
         assert prospect.status == "contacted"
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_email_generation_error(self, mock_validate, mock_gen, mock_send):
         """Stops when email generation returns an error."""
         mock_validate.return_value = {"valid": True, "reason": None}
@@ -1356,12 +1356,12 @@ class TestSendSequenceEmail:
 
         mock_send.assert_not_awaited()
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_email_send_error(self, mock_validate, mock_gen, mock_send):
         """Stops when email send returns an error."""
         mock_validate.return_value = {"valid": True, "reason": None}
@@ -1393,12 +1393,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_followup_email_threads(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -1466,12 +1466,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_campaign_counter_not_mutated(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -1513,9 +1513,9 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.validate_email",
+        "src.workers.outreach_sending.validate_email",
         new_callable=AsyncMock,
     )
     async def test_template_id_loads_template(
@@ -1560,12 +1560,12 @@ class TestSendSequenceEmail:
         # Verify the template was used (static template, ai_cost=0)
         db.get.assert_awaited()
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_template_id_load_exception_falls_back(
         self, mock_validate, mock_gen, mock_send,
     ):
@@ -1614,12 +1614,12 @@ class TestSendSequenceEmail:
         # Falls back to AI generation (may be called twice due to quality gate retry)
         assert mock_gen.await_count >= 1
 
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_record_event_failure_does_not_break_send(
         self, mock_validate, mock_gen, mock_send,
     ):
@@ -1664,12 +1664,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_followup_no_previous_email(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -1725,12 +1725,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_status_not_changed_if_already_contacted(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -1775,12 +1775,12 @@ class TestSendSequenceEmail:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
     @patch(
-        "src.workers.outreach_sequencer.generate_outreach_email",
+        "src.workers.outreach_sending.generate_outreach_email",
         new_callable=AsyncMock,
     )
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_cost_accumulation(
         self, mock_validate, mock_gen, mock_send, mock_get_redis, mock_record_event,
     ):
@@ -3182,10 +3182,10 @@ class TestVerifyOrFindWorkingEmail:
 class TestSendSequenceEmailPatternGuard:
     """Tests for the pattern_guess safety guard in send_sequence_email."""
 
-    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_pattern_guess_triggers_discovery(
         self, mock_validate, mock_gen, mock_send, mock_verify,
     ):
@@ -3209,10 +3209,10 @@ class TestSendSequenceEmailPatternGuard:
 
     @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
     @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_pattern_guess_proceeds_when_email_found(
         self, mock_validate, mock_gen, mock_send, mock_verify,
         mock_get_redis, mock_record_event,
@@ -3256,10 +3256,10 @@ class TestSendSequenceEmailPatternGuard:
         assert prospect.prospect_email == "real@acmehvac.com"
         mock_send.assert_awaited_once()
 
-    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
-    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_verified_email_skips_discovery(
         self, mock_validate, mock_gen, mock_send, mock_verify,
     ):
