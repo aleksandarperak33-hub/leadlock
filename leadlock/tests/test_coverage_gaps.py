@@ -157,37 +157,21 @@ class TestDatabase:
 
 
 # =============================================================================
-# 2. src/services/ai.py - lines 64, 76
+# 2. src/services/ai.py
 # =============================================================================
 
 class TestAIService:
-    """Cover return paths after successful Anthropic/OpenAI calls."""
-
-    @patch("src.services.ai._generate_anthropic")
-    async def test_generate_response_anthropic_success_returns(self, mock_anthropic):
-        """Line 64: return result from successful Anthropic call."""
-        expected = {"content": "Hello", "provider": "anthropic", "error": None}
-        mock_anthropic.return_value = expected
-
-        from src.services.ai import generate_response
-        result = await generate_response("system", "user")
-
-        assert result is expected
-        assert result["provider"] == "anthropic"
+    """Cover return paths for OpenAI-only routing."""
 
     @patch("src.config.get_settings")
     @patch("src.services.ai._generate_openai")
-    @patch("src.services.ai._generate_anthropic")
-    async def test_generate_response_openai_fallback_returns(
-        self, mock_anthropic, mock_openai, mock_settings
-    ):
-        """Line 76: return result from OpenAI fallback after Anthropic failure."""
-        mock_anthropic.side_effect = RuntimeError("Anthropic down")
+    async def test_generate_response_openai_success_returns(self, mock_openai, mock_settings):
+        """Successful OpenAI call returns generated payload."""
         settings = MagicMock()
         settings.openai_api_key = "sk-test"
         mock_settings.return_value = settings
 
-        expected = {"content": "Fallback", "provider": "openai", "error": None}
+        expected = {"content": "Hello", "provider": "openai", "error": None}
         mock_openai.return_value = expected
 
         from src.services.ai import generate_response
@@ -195,6 +179,21 @@ class TestAIService:
 
         assert result is expected
         assert result["provider"] == "openai"
+
+    @patch("src.config.get_settings")
+    @patch("src.services.ai._generate_openai")
+    async def test_generate_response_openai_failure_returns_error(self, mock_openai, mock_settings):
+        """OpenAI failure returns structured error dict."""
+        mock_openai.side_effect = RuntimeError("OpenAI down")
+        settings = MagicMock()
+        settings.openai_api_key = "sk-test"
+        mock_settings.return_value = settings
+
+        from src.services.ai import generate_response
+        result = await generate_response("system", "user")
+
+        assert result["provider"] == "none"
+        assert result["error"] == "OpenAI request failed"
 
 
 # =============================================================================

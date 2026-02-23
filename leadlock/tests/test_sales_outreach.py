@@ -20,8 +20,8 @@ def _mock_ai_response(content, cost=0.001, error=None):
     return {
         "content": content,
         "cost_usd": cost,
-        "provider": "anthropic",
-        "model": "claude-haiku-4-5",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
         "error": error,
     }
 

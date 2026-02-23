@@ -50,8 +50,8 @@ def mock_ai():
     with patch("src.services.ai.generate_response", new_callable=AsyncMock) as mock:
         mock.return_value = {
             "content": '{"message": "Test response", "qualification": {}, "internal_notes": "", "next_action": "continue_qualifying", "score_adjustment": 0}',
-            "provider": "anthropic",
-            "model": "claude-haiku",
+            "provider": "openai",
+            "model": "gpt-4o-mini",
             "latency_ms": 500,
             "cost_usd": 0.001,
             "input_tokens": 100,

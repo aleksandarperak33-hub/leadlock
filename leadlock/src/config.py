@@ -24,20 +24,13 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # Anthropic (fallback in mini-mode if OpenAI key is missing)
-    anthropic_api_key: str = ""
-    anthropic_model_fast: str = "claude-haiku-4-5-20251001"
-    anthropic_model_smart: str = "claude-sonnet-4-5-20250929"
-    anthropic_max_tokens_fast: int = 300
-    anthropic_max_tokens_smart: int = 500
-    anthropic_timeout_seconds: int = 10
-
-    # OpenAI (primary)
+    # OpenAI (only AI provider)
     openai_api_key: str = ""
     openai_model_fast: str = "gpt-4o-mini"
     openai_model_smart: str = "gpt-4o-mini"
     openai_max_tokens_fast: int = 300
     openai_max_tokens_smart: int = 500
+    openai_timeout_seconds: int = 10
 
     # Twilio
     twilio_account_sid: str

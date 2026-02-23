@@ -1,20 +1,12 @@
 """
-Extended tests for src/services/outreach_sms.py - covers generate_followup_sms_body
-(lines 221-249): AI success path and fallback template.
+Extended tests for src/services/outreach_sms.py - generate_followup_sms_body.
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-# ---------------------------------------------------------------------------
-# generate_followup_sms_body - AI success (lines 221-244)
-# ---------------------------------------------------------------------------
-
 class TestGenerateFollowupSmsBody:
-    """Cover generate_followup_sms_body AI generation and fallback."""
-
     def _make_prospect(self, **overrides):
-        """Build a mock Outreach prospect."""
         defaults = {
             "prospect_name": "John Smith",
             "prospect_company": "Acme HVAC",
@@ -24,91 +16,67 @@ class TestGenerateFollowupSmsBody:
         }
         defaults.update(overrides)
         prospect = MagicMock()
-        for k, v in defaults.items():
-            setattr(prospect, k, v)
+        for key, value in defaults.items():
+            setattr(prospect, key, value)
         return prospect
 
     async def test_ai_success_returns_generated_text(self):
-        """When AI call succeeds, returns the generated SMS body (lines 223-244)."""
-        mock_settings = MagicMock()
-        mock_settings.anthropic_api_key = "test-key"
-        mock_settings.anthropic_model_fast = "claude-haiku"
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            return_value={"content": "  Saw your reply - want to hop on a quick call this week?  ", "error": None},
+        ) as mock_ai:
+            from src.services.outreach_sms import generate_followup_sms_body
 
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="  Saw your reply - want to hop on a quick call this week?  ")]
+            result = await generate_followup_sms_body(self._make_prospect())
 
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        assert result == "Saw your reply - want to hop on a quick call this week?"
+        mock_ai.assert_awaited_once()
 
-        with (
-            patch("src.services.outreach_sms.get_settings", return_value=mock_settings),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
+    async def test_ai_empty_content_falls_back_to_template(self):
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            return_value={"content": "", "error": "OpenAI request failed"},
         ):
             from src.services.outreach_sms import generate_followup_sms_body
 
-            prospect = self._make_prospect()
-            result = await generate_followup_sms_body(prospect)
+            result = await generate_followup_sms_body(self._make_prospect())
 
-            assert result == "Saw your reply - want to hop on a quick call this week?"
-            mock_client.messages.create.assert_called_once()
+        assert "Thanks for your interest" in result
+        assert "Acme HVAC" in result
+        assert "15 min" in result
 
-            # Verify model used
-            call_kwargs = mock_client.messages.create.call_args[1]
-            assert call_kwargs["model"] == "claude-haiku"
-            assert call_kwargs["max_tokens"] == 100
-
-    async def test_ai_failure_falls_back_to_template(self):
-        """When AI call raises, uses fallback template (lines 246-253)."""
-        mock_settings = MagicMock()
-        mock_settings.anthropic_api_key = "test-key"
-        mock_settings.anthropic_model_fast = "claude-haiku"
-
-        with (
-            patch("src.services.outreach_sms.get_settings", return_value=mock_settings),
-            patch("anthropic.AsyncAnthropic", side_effect=Exception("API down")),
+    async def test_ai_exception_falls_back_to_template(self):
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            side_effect=Exception("API down"),
         ):
             from src.services.outreach_sms import generate_followup_sms_body
 
-            prospect = self._make_prospect()
-            result = await generate_followup_sms_body(prospect)
+            result = await generate_followup_sms_body(self._make_prospect())
 
-            assert "Thanks for your interest" in result
-            assert "Acme HVAC" in result
-            assert "15 min" in result
+        assert "Thanks for your interest" in result
 
     async def test_fallback_uses_prospect_name_when_no_company(self):
-        """Fallback template uses prospect_name when company is None (line 248)."""
-        mock_settings = MagicMock()
-        mock_settings.anthropic_api_key = "test-key"
-        mock_settings.anthropic_model_fast = "claude-haiku"
-
-        with (
-            patch("src.services.outreach_sms.get_settings", return_value=mock_settings),
-            patch("anthropic.AsyncAnthropic", side_effect=Exception("API error")),
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            return_value={"content": "", "error": "OpenAI API key not configured"},
         ):
             from src.services.outreach_sms import generate_followup_sms_body
 
-            prospect = self._make_prospect(prospect_company=None)
-            result = await generate_followup_sms_body(prospect)
+            result = await generate_followup_sms_body(self._make_prospect(prospect_company=None))
 
-            assert "John Smith" in result
+        assert "John Smith" in result
 
-    async def test_ai_prompt_includes_prospect_details(self):
-        """The prompt sent to AI includes prospect trade type, company, and location."""
-        mock_settings = MagicMock()
-        mock_settings.anthropic_api_key = "test-key"
-        mock_settings.anthropic_model_fast = "claude-haiku"
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Quick call about your leads?")]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-        with (
-            patch("src.services.outreach_sms.get_settings", return_value=mock_settings),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
-        ):
+    async def test_prompt_includes_prospect_details(self):
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            return_value={"content": "Quick call about your leads?", "error": None},
+        ) as mock_ai:
             from src.services.outreach_sms import generate_followup_sms_body
 
             prospect = self._make_prospect(
@@ -119,29 +87,19 @@ class TestGenerateFollowupSmsBody:
             )
             await generate_followup_sms_body(prospect)
 
-            # Verify prompt content
-            call_kwargs = mock_client.messages.create.call_args[1]
-            prompt = call_kwargs["messages"][0]["content"]
-            assert "plumbing" in prompt
-            assert "Fix-It Plumbing" in prompt
-            assert "Dallas" in prompt
+        kwargs = mock_ai.call_args.kwargs
+        assert kwargs["system_prompt"].startswith("You write concise")
+        prompt = kwargs["user_message"]
+        assert "plumbing" in prompt
+        assert "Fix-It Plumbing" in prompt
+        assert "Dallas" in prompt
 
-    async def test_ai_prompt_handles_missing_fields(self):
-        """The prompt handles None trade type, city, state (lines 229-231)."""
-        mock_settings = MagicMock()
-        mock_settings.anthropic_api_key = "test-key"
-        mock_settings.anthropic_model_fast = "claude-haiku"
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Let's chat about leads.")]
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-        with (
-            patch("src.services.outreach_sms.get_settings", return_value=mock_settings),
-            patch("anthropic.AsyncAnthropic", return_value=mock_client),
-        ):
+    async def test_prompt_handles_missing_fields(self):
+        with patch(
+            "src.services.outreach_sms.generate_response",
+            new_callable=AsyncMock,
+            return_value={"content": "Let's chat about leads.", "error": None},
+        ) as mock_ai:
             from src.services.outreach_sms import generate_followup_sms_body
 
             prospect = self._make_prospect(
@@ -152,4 +110,9 @@ class TestGenerateFollowupSmsBody:
                 state_code=None,
             )
             result = await generate_followup_sms_body(prospect)
-            assert result == "Let's chat about leads."
+
+        assert result == "Let's chat about leads."
+        prompt = mock_ai.call_args.kwargs["user_message"]
+        assert "home services" in prompt
+        assert "Jane Doe" in prompt
+        assert "their area" in prompt
