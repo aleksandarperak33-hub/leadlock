@@ -4,6 +4,7 @@ Hard 10-second timeout on ALL AI calls. Never block the SMS response path.
 Tracks cost, latency, and token usage for every call.
 """
 import logging
+import re
 import time
 from typing import Optional
 logger = logging.getLogger(__name__)
@@ -19,6 +20,14 @@ def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Calculate cost in USD for a given model and token count."""
     costs = COST_TABLE.get(model, {"input": 1.0, "output": 5.0})
     return (input_tokens * costs["input"] + output_tokens * costs["output"]) / 1_000_000
+
+
+def _sanitize_output_text(text: str) -> str:
+    """Remove hidden reasoning blocks returned by some OpenAI-compatible providers."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
 
 
 async def generate_response(
@@ -126,6 +135,7 @@ async def _generate_openai(
     latency_ms = int((time.monotonic() - start) * 1000)
 
     content = response.choices[0].message.content if response.choices else ""
+    content = _sanitize_output_text(content)
     input_tokens = response.usage.prompt_tokens if response.usage else 0
     output_tokens = response.usage.completion_tokens if response.usage else 0
 

@@ -144,3 +144,20 @@ class TestGenerateResponse:
 
         kwargs = mock_openai_client.chat.completions.create.call_args.kwargs
         assert kwargs["max_tokens"] == 123
+
+    @pytest.mark.asyncio
+    async def test_generate_openai_strips_think_blocks(self):
+        mock_settings = _make_mock_settings()
+        openai_resp = _make_openai_response("<think>internal</think>\n\nok")
+
+        mock_openai_client = MagicMock()
+        mock_openai_client.chat.completions.create = AsyncMock(return_value=openai_resp)
+
+        with (
+            patch("src.config.get_settings", return_value=mock_settings),
+            patch("openai.AsyncOpenAI", return_value=mock_openai_client),
+        ):
+            from src.services.ai import _generate_openai
+            result = await _generate_openai("system", "user", "fast", None, 0.3)
+
+        assert result["content"] == "ok"
