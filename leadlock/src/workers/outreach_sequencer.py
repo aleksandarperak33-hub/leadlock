@@ -20,6 +20,10 @@ from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
 from src.models.campaign import Campaign
 from src.config import get_settings
+from src.services.outreach_timing import (
+    MIN_FOLLOWUP_DELAY_HOURS,
+    followup_readiness,
+)
 
 # Re-exports for backward compatibility
 from src.workers.outreach_sending import (  # noqa: F401
@@ -141,6 +145,17 @@ async def _check_smart_timing(prospect, config) -> bool:
         if delay_seconds > 86400:
             return False
 
+        # Avoid duplicate deferred tasks for the same prospect/time window.
+        dedupe_key = f"leadlock:smart_timing:queued:{prospect.id}"
+        redis = None
+        try:
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            if await redis.exists(dedupe_key):
+                return True
+        except Exception:
+            redis = None
+
         # Create delayed task
         from src.services.task_dispatch import enqueue_task
 
@@ -152,6 +167,11 @@ async def _check_smart_timing(prospect, config) -> bool:
             priority=5,
             delay_seconds=delay_seconds,
         )
+        if redis:
+            try:
+                await redis.set(dedupe_key, "1", ex=max(1800, delay_seconds + 900))
+            except Exception:
+                pass
 
         logger.info(
             "Smart timing: deferred prospect %s from %s to %s (delay=%ds)",
@@ -274,18 +294,37 @@ async def _check_email_health() -> tuple[bool, str]:
             )
             return False, "paused"
 
-        if reputation["throttle"] == "critical":
+        throttle = reputation["throttle"]
+        metrics = reputation.get("metrics", {})
+        sent = metrics.get("sent", 0)
+        open_rate = metrics.get("open_rate", 0.0)
+
+        # If opens are weak at meaningful volume, pace down proactively.
+        if sent >= 100 and open_rate < 0.05 and throttle in ("normal", "reduced"):
+            throttle = "critical"
+            logger.warning(
+                "Email open rate CRITICAL (%.2f%% over %d sends) - pacing at 25%% capacity",
+                open_rate * 100, sent,
+            )
+        elif sent >= 50 and open_rate < 0.08 and throttle == "normal":
+            throttle = "reduced"
+            logger.warning(
+                "Email open rate LOW (%.2f%% over %d sends) - pacing at 50%% capacity",
+                open_rate * 100, sent,
+            )
+
+        if throttle == "critical":
             logger.warning(
                 "Email reputation POOR (%.1f) - sending at 25%% capacity",
                 reputation["score"],
             )
-        elif reputation["throttle"] == "reduced":
+        elif throttle == "reduced":
             logger.warning(
                 "Email reputation WARNING (%.1f) - sending at 50%% capacity",
                 reputation["score"],
             )
 
-        return True, reputation["throttle"]
+        return True, throttle
 
     except Exception as e:
         logger.warning("Email health check failed: %s - continuing with caution", str(e))
@@ -522,7 +561,7 @@ async def sequence_cycle():
         )
 
         # Find prospects ready for next step
-        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
+        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
 
         # Step 0: never contacted, has email, not unsubscribed, NOT campaign-bound
         step_0_query = select(Outreach).where(
@@ -567,7 +606,19 @@ async def sequence_cycle():
         step_0_prospects = step_0_result.scalars().all()
 
         followup_result = await db.execute(followup_query)
-        followup_prospects = followup_result.scalars().all()
+        followup_prospects_raw = followup_result.scalars().all()
+        followup_prospects = []
+        for p in followup_prospects_raw:
+            is_due, required_delay, remaining_seconds = followup_readiness(
+                p, base_delay_hours=config.sequence_delay_hours
+            )
+            if is_due:
+                followup_prospects.append(p)
+            else:
+                logger.debug(
+                    "Prospect %s follow-up not due yet (required=%dh remaining=%ds)",
+                    str(p.id)[:8], required_delay, remaining_seconds,
+                )
 
         # Combine: follow-ups FIRST (they've already been waiting 48h+),
         # then new contacts fill remaining slots
@@ -700,7 +751,7 @@ async def _process_campaign_prospects(
             ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
         else:
             # Follow-up steps: at previous step, delay elapsed
-            delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=delay_hours)
+            delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
             query = select(Outreach).where(
                 and_(
                     Outreach.campaign_id == campaign.id,
@@ -722,6 +773,16 @@ async def _process_campaign_prospects(
         result = await db.execute(query)
         prospects = result.scalars().all()
         for p in prospects:
+            if step_num > 1:
+                is_due, required_delay, remaining_seconds = followup_readiness(
+                    p, base_delay_hours=delay_hours
+                )
+                if not is_due:
+                    logger.debug(
+                        "Campaign %s prospect %s step %d not due (required=%dh remaining=%ds)",
+                        str(campaign.id)[:8], str(p.id)[:8], step_num, required_delay, remaining_seconds,
+                    )
+                    continue
             all_prospects.append((p, template_id))
 
     # Deduplicate by prospect ID (a prospect may appear in multiple step queries)

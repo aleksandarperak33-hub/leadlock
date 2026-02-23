@@ -18,6 +18,7 @@ from src.models.campaign import Campaign
 from src.models.sales_config import SalesEngineConfig
 from src.agents.sales_outreach import generate_outreach_email
 from src.services.cold_email import send_cold_email
+from src.services.outreach_timing import followup_readiness
 from src.utils.email_validation import validate_email
 
 logger = logging.getLogger(__name__)
@@ -307,6 +308,20 @@ async def send_sequence_email(
     campaign: Optional[Campaign] = None,
 ):
     """Generate and send a single outreach email for a prospect."""
+    next_step = prospect.outreach_sequence_step + 1
+
+    # Cadence guardrail - never send follow-ups too soon.
+    if next_step > 1:
+        is_due, required_delay, remaining_seconds = followup_readiness(
+            prospect, base_delay_hours=config.sequence_delay_hours
+        )
+        if not is_due:
+            logger.info(
+                "Skipping prospect %s - follow-up not due (required=%dh remaining=%ds)",
+                str(prospect.id)[:8], required_delay, remaining_seconds,
+            )
+            return
+
     # Pre-send validation (email, blacklist, dedup)
     skip_reason = await _pre_send_checks(db, prospect)
     if skip_reason:
@@ -315,8 +330,6 @@ async def send_sequence_email(
             str(prospect.id)[:8], skip_reason,
         )
         return
-
-    next_step = prospect.outreach_sequence_step + 1
 
     # Load template if specified
     template = None
@@ -425,6 +438,8 @@ async def _run_quality_gate(
             body_text=email_result["body_text"],
             prospect_name=prospect.prospect_name,
             company_name=prospect.prospect_company,
+            city=prospect.city,
+            trade_type=prospect.prospect_trade_type,
         )
         if not quality["passed"]:
             logger.info(
@@ -450,6 +465,8 @@ async def _run_quality_gate(
                     body_text=retry_result["body_text"],
                     prospect_name=prospect.prospect_name,
                     company_name=prospect.prospect_company,
+                    city=prospect.city,
+                    trade_type=prospect.prospect_trade_type,
                 )
                 if retry_quality["passed"]:
                     return retry_result

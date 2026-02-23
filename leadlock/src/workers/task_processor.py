@@ -307,6 +307,7 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
     from src.models.outreach import Outreach
     from src.models.outreach_email import OutreachEmail
     from src.models.sales_config import SalesEngineConfig
+    from src.services.outreach_timing import followup_readiness
     from src.workers.outreach_sequencer import send_sequence_email, is_within_send_window
     from src.config import get_settings
 
@@ -376,6 +377,25 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
                 daily_limit, outreach_id[:8],
             )
             return {"status": "re-queued", "reason": "daily limit reached"}
+
+        # Follow-up timing guardrail for deferred tasks.
+        is_due, required_delay, remaining_seconds = followup_readiness(
+            prospect, base_delay_hours=getattr(config, "sequence_delay_hours", 48)
+        )
+        if not is_due:
+            from src.services.task_dispatch import enqueue_task
+
+            await enqueue_task(
+                task_type="send_sequence_email",
+                payload={"outreach_id": outreach_id},
+                priority=5,
+                delay_seconds=max(900, remaining_seconds),
+            )
+            logger.info(
+                "Deferred follow-up not due yet (required=%dh, remaining=%ds) for %s - re-queued",
+                required_delay, remaining_seconds, outreach_id[:8],
+            )
+            return {"status": "re-queued", "reason": "followup not due"}
 
         settings = get_settings()
         await send_sequence_email(db, config, settings, prospect)

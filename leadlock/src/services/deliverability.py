@@ -395,6 +395,12 @@ async def get_email_reputation(redis_client) -> dict:
     # Open rate bonus (minor)
     if open_rate > 0.15:
         score += min(5, (open_rate - 0.15) * 50)
+    # Low open-rate penalty at meaningful volume.
+    if sent >= 50:
+        if open_rate < 0.05:
+            score -= 20
+        elif open_rate < 0.08:
+            score -= 10
 
     score = max(0.0, min(100.0, score))
 
@@ -420,6 +426,10 @@ async def get_email_reputation(redis_client) -> dict:
     elif bounce_rate >= BOUNCE_RATE_CRITICAL and sent >= MIN_GUARDRAIL_SAMPLE and throttle == "normal":
         score = min(score, 45.0)
         status, throttle = "poor", "critical"
+    elif open_rate < 0.05 and sent >= 100 and throttle in ("normal", "reduced"):
+        # Protect sender reputation when opens collapse at scale.
+        score = min(score, 55.0)
+        status, throttle = "warning", "reduced"
 
     return {
         "score": round(score, 1),

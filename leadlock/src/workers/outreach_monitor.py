@@ -25,8 +25,8 @@ CLEANUP_EVERY_N_CYCLES = 16  # ~4 hours
 # Alert thresholds
 ZERO_SENDS_HOURS = 4
 BOUNCE_RATE_THRESHOLD = 0.10
-OPEN_RATE_THRESHOLD = 0.05
-OPEN_RATE_MIN_SAMPLE = 20
+OPEN_RATE_THRESHOLD = 0.12
+OPEN_RATE_MIN_SAMPLE = 30
 OPEN_RATE_WINDOW_HOURS = 48
 HEARTBEAT_STALE_MINUTES = 45
 
@@ -171,7 +171,7 @@ async def _check_bounce_rate(db, now: datetime) -> None:
 
 
 async def _check_open_rate(db, now: datetime) -> None:
-    """Alert if open rate is below 5% over 48 hours with sufficient sample size."""
+    """Alert if open rate is below threshold over 48 hours with sufficient sample size."""
     cutoff = now - timedelta(hours=OPEN_RATE_WINDOW_HOURS)
 
     sent_result = await db.execute(

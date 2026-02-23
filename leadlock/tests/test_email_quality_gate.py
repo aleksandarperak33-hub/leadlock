@@ -161,3 +161,25 @@ class TestOverallResult:
         )
         assert result["passed"] is False
         assert len(result["issues"]) >= 2
+
+
+class TestAdvancedGuardrails:
+    def test_subject_needs_personalization_token(self):
+        result = check_email_quality(
+            subject="Quick question",
+            body_text="Hey Mike, " + "word " * 65 + "\nAlek",
+            prospect_name="Mike",
+            company_name="Cool Air HVAC",
+            city="Austin",
+            trade_type="hvac",
+        )
+        assert any("Subject lacks personalization" in issue for issue in result["issues"])
+
+    def test_generic_hey_there_is_flagged(self):
+        result = check_email_quality(
+            subject="Question for Mike",
+            body_text="Hey there, " + "word " * 65 + "\nAlek",
+            prospect_name="Mike",
+            company_name="Cool Air HVAC",
+        )
+        assert any("generic greeting" in issue.lower() for issue in result["issues"])

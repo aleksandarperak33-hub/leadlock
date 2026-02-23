@@ -773,6 +773,38 @@ class TestHandleSendSequenceEmail:
 
         assert result == {"status": "re-queued", "reason": "daily limit reached"}
 
+    async def test_followup_not_due_requeues(self):
+        """Deferred follow-up task should not send before cadence window."""
+        prospect = self._make_outreach_mock(
+            outreach_sequence_step=1,
+            last_email_sent_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        config = self._make_config_mock(daily_email_limit=50, sequence_delay_hours=48)
+        factory_cls, mock_db = _mock_async_session_factory()
+        mock_db.get = AsyncMock(return_value=prospect)
+
+        mock_config_result = MagicMock()
+        mock_config_result.scalar_one_or_none.return_value = config
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 1  # Under daily limit
+
+        mock_db.execute = AsyncMock(side_effect=[mock_config_result, mock_count_result])
+
+        with (
+            patch("src.workers.task_processor.async_session_factory", return_value=factory_cls()),
+            patch("src.workers.outreach_sequencer.is_within_send_window", return_value=True),
+            patch("src.services.task_dispatch.enqueue_task", new_callable=AsyncMock) as mock_enqueue,
+            patch("src.workers.outreach_sequencer.send_sequence_email", new_callable=AsyncMock) as mock_send,
+        ):
+            result = await _handle_send_sequence_email({"outreach_id": str(uuid.uuid4())})
+
+        assert result == {"status": "re-queued", "reason": "followup not due"}
+        mock_send.assert_not_awaited()
+        mock_enqueue.assert_awaited_once()
+        assert mock_enqueue.call_args.kwargs["task_type"] == "send_sequence_email"
+        assert mock_enqueue.call_args.kwargs["delay_seconds"] >= 900
+
     async def test_successful_email_send(self):
         """Successful email send returns sent status with prospect_id."""
         prospect = self._make_outreach_mock()

@@ -41,6 +41,8 @@ def check_email_quality(
     body_text: str,
     prospect_name: Optional[str] = None,
     company_name: Optional[str] = None,
+    city: Optional[str] = None,
+    trade_type: Optional[str] = None,
 ) -> dict:
     """
     Validate email quality before sending.
@@ -74,21 +76,48 @@ def check_email_quality(
             f"Body too long: {word_count} words (max {MAX_BODY_WORDS})"
         )
 
-    # Personalization check - body should mention prospect or company name
+    # Personalization check - body should mention prospect, company, city, or trade.
     if prospect_name or company_name:
         body_lower = body_text.lower() if body_text else ""
+        subject_lower = subject.lower() if subject else ""
+        first_name = prospect_name.split()[0].lower() if prospect_name else ""
         has_prospect = (
             prospect_name
-            and prospect_name.lower() in body_lower
+            and (
+                prospect_name.lower() in body_lower
+                or (first_name and first_name in body_lower)
+            )
         )
         has_company = (
             company_name
             and company_name.lower() in body_lower
         )
-        if not has_prospect and not has_company:
+        has_city = city and city.lower() in body_lower
+        has_trade = trade_type and trade_type.lower() in body_lower
+        if not has_prospect and not has_company and not has_city and not has_trade:
             issues.append(
-                "Body doesn't mention prospect name or company name"
+                "Body doesn't mention prospect/company or local context (city/trade)"
             )
+
+        # Subject should carry at least one personalization token.
+        subject_tokens = []
+        if first_name and len(first_name) >= 3:
+            subject_tokens.append(first_name)
+        if company_name:
+            subject_tokens.extend(
+                [w for w in company_name.lower().split() if len(w) >= 4]
+            )
+        if city and len(city) >= 3:
+            subject_tokens.append(city.lower())
+        if trade_type and len(trade_type) >= 3:
+            subject_tokens.append(trade_type.lower())
+        if subject_tokens and not any(tok in subject_lower for tok in subject_tokens):
+            issues.append("Subject lacks personalization (name/company/city/trade)")
+
+    # Generic mass-blast phrasing checks
+    combined_text = f"{(subject or '').lower()} {(body_text or '').lower()}"
+    if "hey there" in combined_text:
+        issues.append("Contains generic greeting: 'Hey there'")
 
     # Forbidden words check
     body_lower = body_text.lower() if body_text else ""
