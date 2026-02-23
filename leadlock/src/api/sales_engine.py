@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/sales", tags=["sales-engine"])
 
+# Common email provider domains that should NEVER be domain-blacklisted.
+# Individual emails at these domains CAN still be blacklisted.
+_PROTECTED_DOMAINS = frozenset({
+    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com",
+    "live.com", "msn.com", "yahoo.com", "aol.com", "icloud.com",
+    "me.com", "mac.com", "mail.com", "protonmail.com", "zoho.com",
+    "yandex.com", "comcast.net", "att.net", "sbcglobal.net",
+    "verizon.net", "cox.net", "charter.net", "earthlink.net",
+})
+
 
 async def _record_email_signal(
     signal_type: str,
@@ -566,35 +576,42 @@ async def email_events_webhook(
                                                 )
 
                                             # Blacklist domain only after 3+ distinct bounced emails
-                                            existing_domain = await db.execute(
-                                                select(EmailBlacklist).where(
-                                                    and_(
-                                                        EmailBlacklist.entry_type == "domain",
-                                                        EmailBlacklist.value == domain,
-                                                    )
-                                                ).limit(1)
-                                            )
-                                            if not existing_domain.scalar_one_or_none():
-                                                bounce_count_result = await db.execute(
-                                                    select(func.count()).select_from(EmailBlacklist).where(
+                                            # Never blacklist common email providers (gmail, outlook, etc.)
+                                            if domain in _PROTECTED_DOMAINS:
+                                                logger.debug(
+                                                    "Skipping domain blacklist for protected provider %s",
+                                                    domain,
+                                                )
+                                            else:
+                                                existing_domain = await db.execute(
+                                                    select(EmailBlacklist).where(
                                                         and_(
-                                                            EmailBlacklist.entry_type == "email",
-                                                            EmailBlacklist.value.like(f"%@{domain}"),
+                                                            EmailBlacklist.entry_type == "domain",
+                                                            EmailBlacklist.value == domain,
+                                                        )
+                                                    ).limit(1)
+                                                )
+                                                if not existing_domain.scalar_one_or_none():
+                                                    bounce_count_result = await db.execute(
+                                                        select(func.count()).select_from(EmailBlacklist).where(
+                                                            and_(
+                                                                EmailBlacklist.entry_type == "email",
+                                                                EmailBlacklist.value.like(f"%@{domain}"),
+                                                            )
                                                         )
                                                     )
-                                                )
-                                                bounce_count = bounce_count_result.scalar() or 0
-                                                if bounce_count >= 3:
-                                                    domain_blacklist_entry = EmailBlacklist(
-                                                        entry_type="domain",
-                                                        value=domain,
-                                                        reason=f"3+ hard bounces at domain",
-                                                    )
-                                                    db.add(domain_blacklist_entry)
-                                                    logger.info(
-                                                        "Auto-blacklisted domain %s after %d bounces",
-                                                        domain, bounce_count,
-                                                    )
+                                                    bounce_count = bounce_count_result.scalar() or 0
+                                                    if bounce_count >= 3:
+                                                        domain_blacklist_entry = EmailBlacklist(
+                                                            entry_type="domain",
+                                                            value=domain,
+                                                            reason="3+ hard bounces at domain",
+                                                        )
+                                                        db.add(domain_blacklist_entry)
+                                                        logger.info(
+                                                            "Auto-blacklisted domain %s after %d bounces",
+                                                            domain, bounce_count,
+                                                        )
                                 except Exception as bl_err:
                                     logger.warning(
                                         "Failed to auto-blacklist email/domain: %s", str(bl_err)
@@ -623,7 +640,7 @@ async def email_events_webhook(
                             deferral_count = deferral_count_result.scalar() or 0
                             if deferral_count >= 3:
                                 prospect.status = "unreachable"
-                                prospect.email_unsubscribed = True
+                                prospect.email_verified = False
                                 prospect.updated_at = timestamp
                                 logger.warning(
                                     "Prospect %s marked unreachable after %d soft bounces",

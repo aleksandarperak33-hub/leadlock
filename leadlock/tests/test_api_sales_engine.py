@@ -10,6 +10,8 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from sqlalchemy import and_, func
+
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.scrape_job import ScrapeJob
@@ -918,6 +920,89 @@ class TestEmailEventsWebhook:
             result = await email_events_webhook(request, db)
 
         assert email.delivered_at == original_time
+
+    @patch("src.api.sales_engine._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    async def test_protected_domain_not_blacklisted(self, mock_verify, mock_signal, db):
+        """Should NOT domain-blacklist protected providers like gmail.com."""
+        from src.api.sales_engine import email_events_webhook
+        from sqlalchemy import select
+
+        # Create 4 prospects at gmail.com and bounce them all
+        for i in range(4):
+            p = _make_prospect(db, prospect_email=f"user{i}@gmail.com")
+            await db.flush()
+            e = _make_email(db, p.id, sendgrid_message_id=f"sg_gmail_bounce_{i}")
+            await db.flush()
+
+            events = [{
+                "event": "bounce",
+                "sg_message_id": f"sg_gmail_bounce_{i}",
+                "outreach_id": str(p.id),
+                "type": "bounce",
+                "reason": "Unknown user",
+                "timestamp": 1700000000 + i,
+            }]
+            request = _mock_request(json_data=events)
+            with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis")):
+                await email_events_webhook(request, db)
+
+        # Individual emails should be blacklisted
+        email_bl = await db.execute(
+            select(func.count()).select_from(EmailBlacklist).where(
+                and_(
+                    EmailBlacklist.entry_type == "email",
+                    EmailBlacklist.value.like("%@gmail.com"),
+                )
+            )
+        )
+        assert email_bl.scalar() == 4
+
+        # Domain should NOT be blacklisted (protected)
+        domain_bl = await db.execute(
+            select(EmailBlacklist).where(
+                and_(
+                    EmailBlacklist.entry_type == "domain",
+                    EmailBlacklist.value == "gmail.com",
+                )
+            )
+        )
+        assert domain_bl.scalar_one_or_none() is None
+
+    @patch("src.api.sales_engine._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    async def test_deferred_marks_unreachable_not_unsubscribed(self, mock_verify, db):
+        """After 3+ deferrals, prospect should be unreachable but NOT unsubscribed."""
+        from src.api.sales_engine import email_events_webhook
+
+        prospect = _make_prospect(db, prospect_email="slow@flaky.com")
+        await db.flush()
+
+        # Create 3 deferred emails (to reach the threshold)
+        for i in range(3):
+            e = _make_email(db, prospect.id, sendgrid_message_id=f"sg_defer_{i}")
+            e.bounce_type = "deferred"
+            await db.flush()
+
+        # Send the 4th deferred event (triggers the check)
+        fourth = _make_email(db, prospect.id, sendgrid_message_id="sg_defer_3")
+        await db.flush()
+
+        events = [{
+            "event": "deferred",
+            "sg_message_id": "sg_defer_3",
+            "outreach_id": str(prospect.id),
+            "reason": "Server busy",
+            "timestamp": 1700000000,
+        }]
+        request = _mock_request(json_data=events)
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, side_effect=Exception("no redis")):
+            await email_events_webhook(request, db)
+
+        assert prospect.status == "unreachable"
+        assert prospect.email_verified is False
+        # Should NOT be marked as unsubscribed (they didn't opt out)
+        assert prospect.email_unsubscribed is False
 
 
 # ── Unsubscribe ───────────────────────────────────────────────────────────
