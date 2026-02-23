@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # Dashboard
     dashboard_jwt_secret: str = ""
     dashboard_jwt_expiry_hours: int = 24
+    dashboard_base_url: str = "https://leadlock.org"
+    allowed_origins: str = ""  # Comma-separated CORS origins (auto-includes localhost in dev)
 
     # Sales Engine
     brave_api_key: str = ""

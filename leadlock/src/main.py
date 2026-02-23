@@ -210,13 +210,20 @@ def create_app() -> FastAPI:
     )
 
     # CORS - allow dashboard origin
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
+    cors_origins = []
+    if settings.allowed_origins:
+        cors_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if not cors_origins:
+        # Defaults: localhost dev servers + app base URL + dashboard
+        cors_origins = [
             "http://localhost:3000",
             "http://localhost:5173",
             settings.app_base_url,
-        ],
+            settings.dashboard_base_url,
+        ]
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=[

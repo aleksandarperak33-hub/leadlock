@@ -166,7 +166,7 @@ async def send_welcome_email(email: str, business_name: str) -> dict:
         <li>Provision a phone number &mdash; get your dedicated SMS line</li>
       </ol>
       <div style="text-align: center; margin: 32px 0;">
-        <a href="https://leadlock.org/dashboard" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+        <a href="{get_settings().dashboard_base_url}/dashboard" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
           Go to Dashboard
         </a>
       </div>
@@ -182,7 +182,7 @@ async def send_welcome_email(email: str, business_name: str) -> dict:
         "1. Complete onboarding - set up your AI persona and business hours\n"
         "2. Connect your CRM - ServiceTitan, Housecall Pro, Jobber, or GoHighLevel\n"
         "3. Provision a phone number - get your dedicated SMS line\n\n"
-        "Go to your dashboard: https://leadlock.org/dashboard\n\n"
+        f"Go to your dashboard: {get_settings().dashboard_base_url}/dashboard\n\n"
         "-- LeadLock"
     )
 
@@ -210,7 +210,7 @@ async def send_subscription_confirmation(
         You now have full access to all {plan_name} features. Manage your subscription anytime from your dashboard.
       </p>
       <div style="text-align: center; margin: 32px 0;">
-        <a href="https://leadlock.org/billing" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+        <a href="{get_settings().dashboard_base_url}/billing" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
           Manage Billing
         </a>
       </div>
@@ -224,7 +224,7 @@ async def send_subscription_confirmation(
         f"Your {plan_name} plan is now active at {amount}/month.\n\n"
         f"You now have full access to all {plan_name} features. "
         "Manage your subscription anytime from your dashboard.\n\n"
-        "Manage billing: https://leadlock.org/billing\n\n"
+        "Manage billing: {get_settings().dashboard_base_url}/billing\n\n"
         "-- LeadLock"
     )
 
@@ -245,7 +245,7 @@ async def send_payment_failed(email: str, business_name: str) -> dict:
         Hi {business_name}, we were unable to process your latest payment. Please update your payment method to avoid service interruption.
       </p>
       <div style="text-align: center; margin: 32px 0;">
-        <a href="https://leadlock.org/billing" style="background: #ef4444; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+        <a href="{get_settings().dashboard_base_url}/billing" style="background: #ef4444; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
           Update Payment Method
         </a>
       </div>
@@ -261,7 +261,7 @@ async def send_payment_failed(email: str, business_name: str) -> dict:
         "Payment Failed\n\n"
         f"Hi {business_name}, we were unable to process your latest payment. "
         "Please update your payment method to avoid service interruption.\n\n"
-        "Update payment: https://leadlock.org/billing\n\n"
+        "Update payment: {get_settings().dashboard_base_url}/billing\n\n"
         "If your payment is not updated within 7 days, your account will be "
         "paused and lead response will stop.\n\n"
         "-- LeadLock"

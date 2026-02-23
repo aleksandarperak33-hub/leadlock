@@ -75,7 +75,7 @@ CREATE_PROFILE_PATCH = "src.services.twilio_registration.create_customer_profile
 SUBMIT_PROFILE_PATCH = "src.services.twilio_registration.submit_customer_profile"
 IS_TOLLFREE_PATCH = "src.services.twilio_registration.is_tollfree"
 ENCRYPT_PATCH = "src.utils.encryption.encrypt_value"
-METRICS_PATCH = "src.api.dashboard.get_dashboard_metrics"
+METRICS_PATCH = "src.api.dash_reports.get_dashboard_metrics"
 
 JWT_SECRET = "a]v9$kLm!Qw2xR7nP4uY8bT1cF5dG6h"  # >= 32 bytes for HS256
 
