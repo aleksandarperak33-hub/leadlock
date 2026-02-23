@@ -339,11 +339,34 @@ async def get_email_reputation(redis_client) -> dict:
     if sent == 0:
         return {"score": 100, "status": "no_data", "throttle": "normal", "metrics": values}
 
-    # Require minimum sample size before penalizing. With < 20 events,
-    # a couple of bounces cause wild rate swings (2/5 = 40% bounce rate).
-    # During warmup, trust the process and don't auto-pause on noise.
+    # Guardrails for small samples: still allow warmup, but pause hard if we see
+    # unmistakably bad early signals. This protects sender reputation immediately.
     MIN_SAMPLE_SIZE = 20
+    MIN_GUARDRAIL_SAMPLE = 10
+    BOUNCE_RATE_CRITICAL = 0.08  # 8% = severe throttle
+    BOUNCE_RATE_PAUSE = 0.12     # 12% = immediate pause
+    COMPLAINT_RATE_PAUSE = 0.005  # 0.5% spam complaint rate = immediate pause
+
+    warmup_bounce_rate = values["bounced"] / sent if sent > 0 else 0.0
+    warmup_complaint_rate = values["complained"] / sent if sent > 0 else 0.0
+
     if sent < MIN_SAMPLE_SIZE:
+        if sent >= MIN_GUARDRAIL_SAMPLE and (
+            warmup_bounce_rate >= BOUNCE_RATE_PAUSE
+            or warmup_complaint_rate >= COMPLAINT_RATE_PAUSE
+        ):
+            return {
+                "score": 25.0,
+                "status": "critical",
+                "throttle": "paused",
+                "metrics": {
+                    **values,
+                    "delivery_rate": round((values["delivered"] / sent) if sent > 0 else 0.0, 4),
+                    "bounce_rate": round(warmup_bounce_rate, 4),
+                    "complaint_rate": round(warmup_complaint_rate, 4),
+                    "open_rate": 0.0,
+                },
+            }
         return {"score": 100, "status": "warmup", "throttle": "normal", "metrics": values}
 
     # If "delivered" events aren't being reported by SendGrid webhook but we have
@@ -386,6 +409,17 @@ async def get_email_reputation(redis_client) -> dict:
         status, throttle = "poor", "critical"  # 25% of limit
     else:
         status, throttle = "critical", "paused"  # STOP sending
+
+    # Hard guardrails override score-based throttling.
+    if complaint_rate >= COMPLAINT_RATE_PAUSE:
+        score = min(score, 20.0)
+        status, throttle = "critical", "paused"
+    elif bounce_rate >= BOUNCE_RATE_PAUSE and sent >= MIN_GUARDRAIL_SAMPLE:
+        score = min(score, 30.0)
+        status, throttle = "critical", "paused"
+    elif bounce_rate >= BOUNCE_RATE_CRITICAL and sent >= MIN_GUARDRAIL_SAMPLE and throttle == "normal":
+        score = min(score, 45.0)
+        status, throttle = "poor", "critical"
 
     return {
         "score": round(score, 1),

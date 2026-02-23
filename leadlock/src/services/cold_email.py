@@ -63,6 +63,25 @@ async def send_cold_email(
         {"message_id": str, "status": str, "cost_usd": float}
     """
     settings = get_settings()
+
+    # Normalize recipient to avoid sending to malformed scraped addresses.
+    normalized_to_email = "".join((to_email or "").strip().split()).lower()
+    if normalized_to_email != (to_email or ""):
+        logger.info(
+            "Normalized outbound recipient email: %s -> %s",
+            (to_email or "")[:32],
+            normalized_to_email[:32],
+        )
+    to_email = normalized_to_email
+
+    if not to_email or "@" not in to_email:
+        return {
+            "message_id": None,
+            "status": "error",
+            "cost_usd": 0.0,
+            "error": "invalid recipient email",
+        }
+
     if not settings.sendgrid_api_key:
         logger.error("SendGrid API key not configured")
         return {"message_id": None, "status": "error", "cost_usd": 0.0, "error": "SendGrid not configured"}

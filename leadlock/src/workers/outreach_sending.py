@@ -159,6 +159,18 @@ async def _pre_send_checks(
     if blacklist_check.scalar_one_or_none():
         return "blacklisted"
 
+    # Temporary domain cooldown after repeated bounce events.
+    if domain:
+        try:
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            cooldown_key = f"leadlock:email_domain_cooldown:{domain}"
+            ttl = await redis.ttl(cooldown_key)
+            if ttl and ttl > 0:
+                return f"domain cooldown active ({ttl}s remaining)"
+        except Exception as e:
+            logger.debug("Domain cooldown check unavailable: %s", str(e))
+
     # Dedup: skip if another record with same email was already contacted
     if prospect.prospect_email:
         dupe_check = await db.execute(

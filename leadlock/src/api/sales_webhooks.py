@@ -34,6 +34,26 @@ _PROTECTED_DOMAINS = frozenset({
 })
 
 
+def _safe_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
+    """Parse UUID safely for webhook payloads that may contain bad IDs."""
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value).strip())
+    except Exception:
+        return None
+
+
+def _safe_event_timestamp(raw_ts) -> datetime:
+    """Parse event timestamp safely, falling back to current UTC time."""
+    try:
+        if raw_ts is None:
+            raise ValueError("missing")
+        return datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
 async def _record_email_signal(
     signal_type: str,
     prospect: Outreach,
@@ -443,7 +463,8 @@ async def email_events_webhook(
                 event_type = event.get("event", "")
                 sg_message_id = event.get("sg_message_id", "").split(".")[0]
                 outreach_id = event.get("outreach_id")
-                timestamp = datetime.fromtimestamp(event.get("timestamp", 0), tz=timezone.utc)
+                outreach_uuid = _safe_uuid(outreach_id)
+                timestamp = _safe_event_timestamp(event.get("timestamp"))
 
                 # Find email record
                 email_record = None
@@ -455,15 +476,19 @@ async def email_events_webhook(
                     )
                     email_record = result.scalar_one_or_none()
 
-                if not email_record and outreach_id:
+                if not email_record and outreach_uuid:
                     # Fallback: find by outreach_id + step
                     step = event.get("step")
-                    if step:
+                    try:
+                        step_int = int(step) if step is not None else None
+                    except (TypeError, ValueError):
+                        step_int = None
+                    if step_int is not None:
                         result = await db.execute(
                             select(OutreachEmail).where(
                                 and_(
-                                    OutreachEmail.outreach_id == uuid.UUID(outreach_id),
-                                    OutreachEmail.sequence_step == int(step),
+                                    OutreachEmail.outreach_id == outreach_uuid,
+                                    OutreachEmail.sequence_step == step_int,
                                 )
                             ).limit(1)
                         )
@@ -499,8 +524,8 @@ async def email_events_webhook(
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Also update prospect
-                    if outreach_id:
-                        prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                    if outreach_uuid:
+                        prospect = await db.get(Outreach, outreach_uuid)
                         if prospect:
                             prospect.last_email_opened_at = timestamp
                             # Record learning signal
@@ -515,8 +540,8 @@ async def email_events_webhook(
                             await record_email_event(redis, "clicked")
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
-                    if outreach_id:
-                        prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                    if outreach_uuid:
+                        prospect = await db.get(Outreach, outreach_uuid)
                         if prospect:
                             prospect.last_email_clicked_at = timestamp
                             await _record_email_signal(
@@ -609,6 +634,26 @@ async def email_events_webhook(
                                                             "Auto-blacklisted domain %s after %d bounces",
                                                             domain, bounce_count,
                                                         )
+
+                                            # Temporary domain cooldown after repeated recent bounces.
+                                            if redis and domain not in _PROTECTED_DOMAINS:
+                                                recent_bounces_result = await db.execute(
+                                                    select(func.count()).select_from(OutreachEmail).where(
+                                                        and_(
+                                                            OutreachEmail.to_email.ilike(f"%@{domain}"),
+                                                            OutreachEmail.bounced_at.isnot(None),
+                                                            OutreachEmail.bounced_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                                                        )
+                                                    )
+                                                )
+                                                recent_bounces = recent_bounces_result.scalar() or 0
+                                                if recent_bounces >= 2:
+                                                    cooldown_key = f"leadlock:email_domain_cooldown:{domain}"
+                                                    await redis.set(cooldown_key, "1", ex=86400)
+                                                    logger.warning(
+                                                        "Domain cooldown enabled for %s after %d bounces in 24h",
+                                                        domain, recent_bounces,
+                                                    )
                                 except Exception as bl_err:
                                     logger.warning(
                                         "Failed to auto-blacklist email/domain: %s", str(bl_err)
@@ -623,8 +668,8 @@ async def email_events_webhook(
                         event.get("reason", "unknown"),
                     )
                     # Track soft bounces - mark unreachable after 3+ deferrals
-                    if outreach_id:
-                        prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                    if outreach_uuid:
+                        prospect = await db.get(Outreach, outreach_uuid)
                         if prospect and prospect.prospect_email:
                             deferral_count_result = await db.execute(
                                 select(func.count()).select_from(OutreachEmail).where(
@@ -651,8 +696,8 @@ async def email_events_webhook(
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Treat spam report as unsubscribe
-                    if outreach_id:
-                        prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                    if outreach_uuid:
+                        prospect = await db.get(Outreach, outreach_uuid)
                         if prospect:
                             prospect.email_unsubscribed = True
                             prospect.unsubscribed_at = timestamp
@@ -680,14 +725,17 @@ async def unsubscribe(
 ):
     """CAN-SPAM one-click unsubscribe. Public endpoint."""
     try:
-        pid = uuid.UUID(prospect_id)
-        prospect = await db.get(Outreach, pid)
-        if prospect:
-            prospect.email_unsubscribed = True
-            prospect.unsubscribed_at = datetime.now(timezone.utc)
-            prospect.updated_at = datetime.now(timezone.utc)
-            await db.commit()
-            logger.info("Prospect %s unsubscribed", prospect_id[:8])
+        pid = _safe_uuid(prospect_id)
+        if not pid:
+            logger.info("Unsubscribe called with invalid prospect id: %s", prospect_id[:16])
+        else:
+            prospect = await db.get(Outreach, pid)
+            if prospect:
+                prospect.email_unsubscribed = True
+                prospect.unsubscribed_at = datetime.now(timezone.utc)
+                prospect.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+                logger.info("Prospect %s unsubscribed", str(pid)[:8])
     except Exception as e:
         logger.error("Unsubscribe error: %s", str(e))
 
