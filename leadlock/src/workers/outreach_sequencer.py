@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, not_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
@@ -483,6 +483,11 @@ async def sequence_cycle():
                 Outreach.email_unsubscribed == False,
                 Outreach.status.in_(["cold"]),
                 Outreach.last_email_replied_at.is_(None),
+                # Skip unverified pattern guesses — wait for email_finder
+                not_(and_(
+                    Outreach.email_source == "pattern_guess",
+                    Outreach.email_verified == False,  # noqa: E712
+                )),
             )
         ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
 
@@ -498,6 +503,11 @@ async def sequence_cycle():
                 Outreach.status.in_(["cold", "contacted"]),
                 Outreach.last_email_replied_at.is_(None),
                 Outreach.last_email_sent_at <= delay_cutoff,
+                # Skip unverified pattern guesses — wait for email_finder
+                not_(and_(
+                    Outreach.email_source == "pattern_guess",
+                    Outreach.email_verified == False,  # noqa: E712
+                )),
             )
         ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
@@ -609,6 +619,11 @@ async def _process_campaign_prospects(
                     Outreach.email_unsubscribed == False,
                     Outreach.status.in_(["cold"]),
                     Outreach.last_email_replied_at.is_(None),
+                    # Skip unverified pattern guesses — wait for email_finder
+                    not_(and_(
+                        Outreach.email_source == "pattern_guess",
+                        Outreach.email_verified == False,  # noqa: E712
+                    )),
                 )
             ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
         else:
@@ -624,6 +639,11 @@ async def _process_campaign_prospects(
                     Outreach.status.in_(["cold", "contacted"]),
                     Outreach.last_email_replied_at.is_(None),
                     Outreach.last_email_sent_at <= delay_cutoff,
+                    # Skip unverified pattern guesses — wait for email_finder
+                    not_(and_(
+                        Outreach.email_source == "pattern_guess",
+                        Outreach.email_verified == False,  # noqa: E712
+                    )),
                 )
             ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
@@ -789,59 +809,55 @@ async def _generate_email_with_template(
 
 async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
     """
-    SMTP-verify a pattern-guessed email. If the current email is rejected,
-    try alternate patterns (contact@, hello@, service@, sales@) until one
-    is accepted or all are exhausted.
+    Discover a real email for a pattern-guessed prospect using deep web
+    scraping and Brave Search (replaces broken SMTP verification —
+    port 25 blocked on VPS).
 
     Returns:
-        Verified email address, or None if no pattern passed SMTP check.
+        Discovered email address, or None if no real email found.
     """
-    from src.utils.email_validation import verify_smtp_mailbox
-    from src.services.enrichment import extract_domain, guess_email_patterns
+    from src.services.email_discovery import discover_email
 
-    current_email = prospect.prospect_email.strip().lower()
-    is_first_send = (prospect.total_emails_sent or 0) == 0
-    inconclusive_fallback: Optional[str] = None
-
-    # Try current email first
-    result = await verify_smtp_mailbox(current_email)
-    if result["exists"] is True:
-        return current_email
-    if result["exists"] is None:
-        inconclusive_fallback = current_email
-    # If rejected (exists=False), fall through to try alternatives
-
-    # Try alternate patterns (only if current was rejected or we want a confirmed hit)
-    domain = extract_domain(prospect.website or "")
-    if not domain:
-        domain = current_email.split("@")[1] if "@" in current_email else None
-    if not domain:
-        # No domain — return inconclusive fallback for first send
-        if is_first_send and inconclusive_fallback:
-            return inconclusive_fallback
+    try:
+        discovery = await discover_email(
+            website=prospect.website or "",
+            company_name=prospect.prospect_company or prospect.prospect_name,
+            enrichment_data=prospect.enrichment_data,
+        )
+    except Exception as e:
+        logger.warning(
+            "Email discovery failed for prospect %s: %s",
+            str(prospect.id)[:8], str(e),
+        )
         return None
 
-    patterns = guess_email_patterns(domain, prospect.prospect_name)
-    for alt_email in patterns:
-        if alt_email == current_email:
-            continue  # Already tried this one
-        alt_result = await verify_smtp_mailbox(alt_email)
-        if alt_result["exists"] is True:
-            return alt_email
-        if alt_result["exists"] is None and inconclusive_fallback is None:
-            inconclusive_fallback = alt_email
-        # If rejected, continue to next pattern
+    email = discovery.get("email")
+    source = discovery.get("source")
+    confidence = discovery.get("confidence")
 
-    # Return inconclusive fallback for first send only
-    if is_first_send and inconclusive_fallback:
-        return inconclusive_fallback
+    if not email:
+        logger.info(
+            "No email found for prospect %s via discovery",
+            str(prospect.id)[:8],
+        )
+        return None
 
-    # All patterns rejected or inconclusive on non-first send
-    logger.info(
-        "All email patterns rejected for prospect %s (%s)",
-        str(prospect.id)[:8], domain,
-    )
-    return None
+    # Only accept non-pattern-guess results
+    if source == "pattern_guess":
+        logger.info(
+            "Only pattern guess available for prospect %s, skipping",
+            str(prospect.id)[:8],
+        )
+        return None
+
+    # Update source metadata on the prospect
+    prospect.email_source = source
+    prospect.email_verified = confidence == "high"
+    cost = discovery.get("cost_usd", 0.0)
+    if cost > 0:
+        prospect.total_cost_usd = (prospect.total_cost_usd or 0) + cost
+
+    return email
 
 
 async def send_sequence_email(

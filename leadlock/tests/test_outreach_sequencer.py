@@ -20,6 +20,7 @@ from src.workers.outreach_sequencer import (
     _get_warmup_limit,
     _check_email_health,
     _calculate_cycle_cap,
+    _verify_or_find_working_email,
     run_outreach_sequencer,
     sequence_cycle,
     _process_campaign_prospects,
@@ -110,6 +111,9 @@ def _make_prospect(
     prospect.google_rating = google_rating
     prospect.review_count = review_count
     prospect.website = website
+    prospect.email_source = "website_deep_scrape"
+    prospect.email_verified = True
+    prospect.enrichment_data = None
     prospect.created_at = datetime.now(timezone.utc)
     prospect.updated_at = datetime.now(timezone.utc)
     return prospect
@@ -2958,3 +2962,227 @@ class TestConstants:
         """Warmup schedule entries are in chronological order."""
         for i in range(1, len(EMAIL_WARMUP_SCHEDULE)):
             assert EMAIL_WARMUP_SCHEDULE[i][0] > EMAIL_WARMUP_SCHEDULE[i - 1][0]
+
+
+# ---------------------------------------------------------------------------
+# _verify_or_find_working_email (discover_email-based)
+# ---------------------------------------------------------------------------
+
+class TestVerifyOrFindWorkingEmail:
+    """Tests for _verify_or_find_working_email using discover_email."""
+
+    async def test_returns_discovered_email(self):
+        """Returns email found via deep scrape."""
+        prospect = _make_prospect()
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "real@acmehvac.com",
+                "source": "website_deep_scrape",
+                "confidence": "high",
+                "cost_usd": 0.0,
+            },
+        ):
+            result = await _verify_or_find_working_email(prospect)
+
+        assert result == "real@acmehvac.com"
+        assert prospect.email_source == "website_deep_scrape"
+        assert prospect.email_verified is True
+
+    async def test_returns_none_when_no_email_found(self):
+        """Returns None when discovery finds nothing."""
+        prospect = _make_prospect()
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": None,
+                "source": None,
+                "confidence": None,
+                "cost_usd": 0.0,
+            },
+        ):
+            result = await _verify_or_find_working_email(prospect)
+
+        assert result is None
+
+    async def test_rejects_pattern_guess_only_result(self):
+        """Returns None when discovery only produces another pattern guess."""
+        prospect = _make_prospect()
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "info@acmehvac.com",
+                "source": "pattern_guess",
+                "confidence": "low",
+                "cost_usd": 0.0,
+            },
+        ):
+            result = await _verify_or_find_working_email(prospect)
+
+        assert result is None
+
+    async def test_handles_discovery_exception(self):
+        """Returns None when discover_email raises."""
+        prospect = _make_prospect()
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            side_effect=Exception("Network error"),
+        ):
+            result = await _verify_or_find_working_email(prospect)
+
+        assert result is None
+
+    async def test_tracks_discovery_cost(self):
+        """Adds discovery cost to prospect total_cost_usd."""
+        prospect = _make_prospect(total_cost_usd=0.01)
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "found@acmehvac.com",
+                "source": "brave_search",
+                "confidence": "medium",
+                "cost_usd": 0.005,
+            },
+        ):
+            result = await _verify_or_find_working_email(prospect)
+
+        assert result == "found@acmehvac.com"
+        assert prospect.total_cost_usd == pytest.approx(0.015)
+        assert prospect.email_source == "brave_search"
+        assert prospect.email_verified is False  # medium != high
+
+
+# ---------------------------------------------------------------------------
+# send_sequence_email — pattern_guess guard
+# ---------------------------------------------------------------------------
+
+class TestSendSequenceEmailPatternGuard:
+    """Tests for the pattern_guess safety guard in send_sequence_email."""
+
+    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    async def test_pattern_guess_triggers_discovery(
+        self, mock_validate, mock_gen, mock_send, mock_verify,
+    ):
+        """Pattern guess + unverified triggers _verify_or_find_working_email."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+        mock_verify.return_value = None  # No email found
+
+        db = AsyncMock()
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect()
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_verify.assert_awaited_once_with(prospect)
+        assert prospect.status == "no_verified_email"
+        mock_gen.assert_not_awaited()
+        mock_send.assert_not_awaited()
+
+    @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
+    @patch("src.utils.dedup.get_redis", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    async def test_pattern_guess_proceeds_when_email_found(
+        self, mock_validate, mock_gen, mock_send, mock_verify,
+        mock_get_redis, mock_record_event,
+    ):
+        """Pattern guess proceeds to send when discovery finds a real email."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+        mock_verify.return_value = "real@acmehvac.com"
+
+        blacklist_result = MagicMock()
+        blacklist_result.scalar_one_or_none.return_value = None
+
+        mock_gen.return_value = {
+            "subject": "Test",
+            "body_html": "<p>Hi</p>",
+            "body_text": "Hi",
+            "ai_cost_usd": 0.001,
+        }
+        mock_send.return_value = {
+            "message_id": "msg_456",
+            "cost_usd": 0.001,
+            "error": None,
+        }
+
+        mock_redis = AsyncMock()
+        mock_get_redis.return_value = mock_redis
+
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=blacklist_result)
+        db.get = AsyncMock(return_value=None)
+        db.add = MagicMock()
+
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect(outreach_sequence_step=0, status="cold")
+        prospect.email_source = "pattern_guess"
+        prospect.email_verified = False
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_verify.assert_awaited_once_with(prospect)
+        assert prospect.prospect_email == "real@acmehvac.com"
+        mock_send.assert_awaited_once()
+
+    @patch("src.workers.outreach_sequencer._verify_or_find_working_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.send_cold_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.generate_outreach_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.validate_email", new_callable=AsyncMock)
+    async def test_verified_email_skips_discovery(
+        self, mock_validate, mock_gen, mock_send, mock_verify,
+    ):
+        """Verified email does NOT trigger _verify_or_find_working_email."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+
+        blacklist_result = MagicMock()
+        blacklist_result.scalar_one_or_none.return_value = None
+
+        mock_gen.return_value = {
+            "subject": "Sub",
+            "body_html": "<p>B</p>",
+            "body_text": "B",
+            "ai_cost_usd": 0.001,
+        }
+        mock_send.return_value = {"error": "test"}
+
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=blacklist_result)
+        db.get = AsyncMock(return_value=None)
+
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect()
+        # email_source is "website_deep_scrape" and email_verified=True by default
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_verify.assert_not_awaited()
