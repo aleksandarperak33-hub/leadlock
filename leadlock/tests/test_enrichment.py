@@ -277,142 +277,132 @@ class TestScrapeContactEmails:
 
 
 # ---------------------------------------------------------------------------
-# enrich_prospect_email - SMTP-verified enrichment
+# enrich_prospect_email — delegates to discover_email
 # ---------------------------------------------------------------------------
 
 class TestEnrichProspectEmail:
     @pytest.mark.asyncio
-    async def test_scraped_email_smtp_verified(self):
-        """Scraped email that passes SMTP verification returns verified=True."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=["contact@hvacpro.com"],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                return_value={"exists": True, "reason": "smtp_accepted"},
-            ),
+    async def test_deep_scrape_returns_verified(self):
+        """Deep scrape with high confidence → verified=True."""
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "contact@hvacpro.com",
+                "source": "website_deep_scrape",
+                "confidence": "high",
+                "cost_usd": 0.0,
+            },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
         assert result["email"] == "contact@hvacpro.com"
-        assert result["source"] == "website_scrape"
+        assert result["source"] == "website_deep_scrape"
         assert result["verified"] is True
 
     @pytest.mark.asyncio
-    async def test_scraped_email_smtp_inconclusive(self):
-        """Scraped email with inconclusive SMTP returns verified=False but email is present."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=["contact@hvacpro.com"],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                return_value={"exists": None, "reason": "all_mx_unreachable"},
-            ),
+    async def test_brave_search_returns_unverified(self):
+        """Brave search with medium confidence → verified=False."""
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "info@hvacpro.com",
+                "source": "brave_search",
+                "confidence": "medium",
+                "cost_usd": 0.005,
+            },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
-        assert result["email"] == "contact@hvacpro.com"
+        assert result["email"] == "info@hvacpro.com"
+        assert result["source"] == "brave_search"
         assert result["verified"] is False
+        assert result["cost_usd"] == 0.005
 
     @pytest.mark.asyncio
-    async def test_scraped_email_rejected_falls_through(self):
-        """If scraped email is SMTP-rejected, try alternatives then fall to pattern guessing."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=["noreply-scraped@hvacpro.com"],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                side_effect=[
-                    # First scraped email rejected
-                    {"exists": False, "reason": "smtp_rejected_550"},
-                    # Pattern guess: info@ accepted
-                    {"exists": True, "reason": "smtp_accepted"},
-                ],
-            ),
+    async def test_pattern_guess_returns_unverified(self):
+        """Pattern guess with low confidence → verified=False."""
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "info@hvacpro.com",
+                "source": "pattern_guess",
+                "confidence": "low",
+                "cost_usd": 0.0,
+            },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
         assert result["email"] == "info@hvacpro.com"
         assert result["source"] == "pattern_guess"
-        assert result["verified"] is True
+        assert result["verified"] is False
 
     @pytest.mark.asyncio
-    async def test_pattern_guess_first_rejected_second_accepted(self):
-        """Pattern guessing tries multiple patterns until one is SMTP-verified."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                side_effect=[
-                    # info@ rejected
-                    {"exists": False, "reason": "smtp_rejected_550"},
-                    # contact@ accepted
-                    {"exists": True, "reason": "smtp_accepted"},
-                ],
-            ),
-        ):
-            result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
-
-        assert result["email"] == "contact@hvacpro.com"
-        assert result["source"] == "pattern_guess"
-        assert result["verified"] is True
-
-    @pytest.mark.asyncio
-    async def test_all_patterns_rejected_returns_none(self):
-        """If all patterns are SMTP-rejected, return email=None."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                return_value={"exists": False, "reason": "smtp_rejected_550"},
-            ),
+    async def test_no_email_found_returns_none(self):
+        """When discover_email finds nothing → email=None."""
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": None,
+                "source": None,
+                "confidence": None,
+                "cost_usd": 0.0,
+            },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
         assert result["email"] is None
-        assert result["source"] == "pattern_guess_all_rejected"
+        assert result["source"] is None
+        assert result["verified"] is False
 
     @pytest.mark.asyncio
-    async def test_pattern_guess_inconclusive_returns_first(self):
-        """If SMTP is inconclusive (timeout), return first pattern unverified."""
-        with (
-            patch(
-                "src.services.enrichment.scrape_contact_emails",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "src.utils.email_validation.verify_smtp_mailbox",
-                new_callable=AsyncMock,
-                return_value={"exists": None, "reason": "all_mx_unreachable"},
-            ),
+    async def test_enrichment_candidate_returns_medium_confidence(self):
+        """Enrichment candidate email → verified=False (medium, not high)."""
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "john@hvacpro.com",
+                "source": "enrichment_candidate",
+                "confidence": "medium",
+                "cost_usd": 0.0,
+            },
         ):
-            result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
+            result = await enrich_prospect_email(
+                "https://hvacpro.com", "HVAC Pro",
+                enrichment_data={"email_candidates": ["john@hvacpro.com"]},
+            )
 
-        assert result["email"] == "info@hvacpro.com"
+        assert result["email"] == "john@hvacpro.com"
         assert result["verified"] is False
+
+    @pytest.mark.asyncio
+    async def test_passes_enrichment_data_to_discover(self):
+        """enrichment_data parameter is forwarded to discover_email."""
+        enrichment_data = {"email_candidates": ["owner@biz.com"]}
+        with patch(
+            "src.services.email_discovery.discover_email",
+            new_callable=AsyncMock,
+            return_value={
+                "email": "owner@biz.com",
+                "source": "enrichment_candidate",
+                "confidence": "medium",
+                "cost_usd": 0.0,
+            },
+        ) as mock_discover:
+            await enrich_prospect_email(
+                "https://biz.com", "Biz Co",
+                enrichment_data=enrichment_data,
+            )
+
+        mock_discover.assert_called_once_with(
+            website="https://biz.com",
+            company_name="Biz Co",
+            enrichment_data=enrichment_data,
+        )
 
     @pytest.mark.asyncio
     async def test_no_website_no_domain_returns_none(self):

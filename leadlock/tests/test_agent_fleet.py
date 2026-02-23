@@ -49,9 +49,9 @@ def _utc_iso(seconds_ago: float = 0) -> str:
 # ---------------------------------------------------------------------------
 
 class TestAgentRegistry:
-    def test_registry_has_fourteen_agents(self):
+    def test_registry_has_fifteen_agents(self):
         from src.services.agent_fleet import AGENT_REGISTRY
-        assert len(AGENT_REGISTRY) == 14
+        assert len(AGENT_REGISTRY) == 15
 
     def test_every_agent_has_required_fields(self):
         from src.services.agent_fleet import AGENT_REGISTRY
@@ -92,13 +92,13 @@ class TestAgentRegistry:
             assert name not in AGENT_REGISTRY, f"Old worker {name} should be removed from registry"
 
     def test_tier_distribution(self):
-        """5 AI + 5 Core Ops + 4 Infra = 14."""
+        """5 AI + 6 Core Ops + 4 Infra = 15."""
         from src.services.agent_fleet import AGENT_REGISTRY, TIER_AI, TIER_CORE_OPS, TIER_INFRA
         counts = {TIER_AI: 0, TIER_CORE_OPS: 0, TIER_INFRA: 0}
         for meta in AGENT_REGISTRY.values():
             counts[meta["tier"]] += 1
         assert counts[TIER_AI] == 5
-        assert counts[TIER_CORE_OPS] == 5
+        assert counts[TIER_CORE_OPS] == 6
         assert counts[TIER_INFRA] == 4
 
     def test_reflection_agent_is_daily(self):
@@ -172,8 +172,8 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         # No cache hit
         mock_redis.get.return_value = None
-        # All 14 heartbeats — recent timestamps
-        mock_redis.mget.return_value = [_utc_iso(60)] * 14
+        # All 15 heartbeats — recent timestamps
+        mock_redis.mget.return_value = [_utc_iso(60)] * 15
         # Cost hash for today
         mock_redis.hgetall.return_value = {"ab_test_engine": "0.001", "winback_agent": "0.002"}
         mock_redis.set.return_value = True
@@ -192,8 +192,8 @@ class TestGetFleetStatus:
 
         assert "fleet_summary" in result
         assert "agents" in result
-        assert len(result["agents"]) == 14
-        assert result["fleet_summary"]["total_agents"] == 14
+        assert len(result["agents"]) == 15
+        assert result["fleet_summary"]["total_agents"] == 15
 
     @pytest.mark.asyncio
     async def test_uses_cache_when_available(self):
@@ -216,7 +216,7 @@ class TestGetFleetStatus:
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
         # All heartbeats are None (no data)
-        mock_redis.mget.return_value = [None] * 14
+        mock_redis.mget.return_value = [None] * 15
         mock_redis.hgetall.return_value = {}
         mock_redis.set.return_value = True
 
@@ -246,7 +246,7 @@ class TestGetFleetStatus:
 
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
-        mock_redis.mget.return_value = [_utc_iso(60)] * 14
+        mock_redis.mget.return_value = [_utc_iso(60)] * 15
         mock_redis.hgetall.return_value = {}
         mock_redis.set.return_value = True
 

@@ -40,6 +40,7 @@ AGENT_ACTION_PREFIXES: dict[str, list[str]] = {
     "retry_worker": ["retry_", "task_retried"],
     "registration_poller": ["registration_poll", "a2p_"],
     "referral_agent": ["referral_"],
+    "email_finder": ["email_finder_", "email_found", "email_replaced", "email_confirmed"],
     "task_processor": ["task_processed", "task_failed"],
 }
 

@@ -285,118 +285,36 @@ async def scrape_contact_emails(website: str) -> list[str]:
 async def enrich_prospect_email(
     website: str,
     company_name: str,
+    enrichment_data: Optional[dict] = None,
 ) -> dict:
     """
-    Find a business email through website scraping with SMTP-verified pattern guess fallback.
+    Find a business email through multi-source discovery.
 
-    Strategy:
-    1. Scrape website contact pages for emails → SMTP verify the best one
-    2. Fall back to pattern guessing → SMTP verify each pattern until one passes
-    3. If all patterns are rejected, return email=None (prospect won't be emailed)
+    Delegates to email_discovery.discover_email() which uses:
+    1. Deep website scrape (15+ paths, JSON-LD, footer, internal links)
+    2. Brave Search for "@domain" mentions
+    3. Enrichment candidate emails from prospect research
+    4. Pattern guessing as last resort
 
     Args:
         website: Business website URL
         company_name: Company name for context
+        enrichment_data: Optional enrichment data with email_candidates
 
     Returns:
-        {"email": str|None, "source": str, "verified": bool, "cost_usd": 0.0}
+        {"email": str|None, "source": str, "verified": bool, "cost_usd": float}
     """
-    from src.utils.email_validation import verify_smtp_mailbox
+    from src.services.email_discovery import discover_email
 
-    domain = extract_domain(website)
-
-    # Strategy 1: Website scraping
-    if website:
-        try:
-            scraped = await scrape_contact_emails(website)
-            if scraped:
-                # SMTP-verify the scraped email
-                smtp_result = await verify_smtp_mailbox(scraped[0])
-                verified = smtp_result["exists"] is True
-                if smtp_result["exists"] is False:
-                    # Scraped email explicitly rejected — try others or skip
-                    logger.info(
-                        "Scraped email %s***@*** rejected by SMTP",
-                        scraped[0].split("@")[0][:6],
-                    )
-                    # Try remaining scraped emails
-                    for alt_email in scraped[1:]:
-                        alt_result = await verify_smtp_mailbox(alt_email)
-                        if alt_result["exists"] is not False:
-                            return {
-                                "email": alt_email,
-                                "source": "website_scrape",
-                                "verified": alt_result["exists"] is True,
-                                "cost_usd": 0.0,
-                            }
-                    # All scraped emails rejected — fall through to pattern guessing
-                else:
-                    return {
-                        "email": scraped[0],
-                        "source": "website_scrape",
-                        "verified": verified,
-                        "cost_usd": 0.0,
-                    }
-        except Exception as e:
-            logger.warning("Website scrape failed for %s: %s", website, str(e))
-
-    # Strategy 2: Pattern guessing with SMTP verification
-    # Try all patterns; prefer confirmed, fall back to first inconclusive
-    if domain:
-        patterns = guess_email_patterns(domain)
-        inconclusive_fallback: Optional[str] = None
-        for pattern_email in patterns:
-            try:
-                smtp_result = await verify_smtp_mailbox(pattern_email)
-
-                if smtp_result["exists"] is True:
-                    logger.info(
-                        "Pattern guess %s***@*** SMTP verified for %s",
-                        pattern_email.split("@")[0][:6], domain,
-                    )
-                    return {
-                        "email": pattern_email,
-                        "source": "pattern_guess",
-                        "verified": True,
-                        "cost_usd": 0.0,
-                    }
-
-                if smtp_result["exists"] is False:
-                    logger.debug(
-                        "Pattern %s***@*** rejected",
-                        pattern_email.split("@")[0][:6],
-                    )
-                    continue
-
-                # Inconclusive — save as fallback but keep searching
-                if inconclusive_fallback is None:
-                    inconclusive_fallback = pattern_email
-
-            except Exception as e:
-                logger.debug("SMTP verify error for pattern: %s", str(e))
-                continue
-
-        # Return first inconclusive fallback if no confirmed hit
-        if inconclusive_fallback is not None:
-            return {
-                "email": inconclusive_fallback,
-                "source": "pattern_guess",
-                "verified": False,
-                "cost_usd": 0.0,
-            }
-
-        # All patterns explicitly rejected — no valid email found
-        logger.info("All email patterns rejected for %s — no valid email", domain)
-        return {
-            "email": None,
-            "source": "pattern_guess_all_rejected",
-            "verified": False,
-            "cost_usd": 0.0,
-        }
+    discovery = await discover_email(
+        website=website,
+        company_name=company_name,
+        enrichment_data=enrichment_data,
+    )
 
     return {
-        "email": None,
-        "source": None,
-        "verified": False,
-        "cost_usd": 0.0,
+        "email": discovery.get("email"),
+        "source": discovery.get("source"),
+        "verified": discovery.get("confidence") == "high",
+        "cost_usd": discovery.get("cost_usd", 0.0),
     }

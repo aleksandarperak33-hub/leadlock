@@ -198,7 +198,7 @@ class TestGetAgentEventCounts:
 
         # All agents should have 0 counts
         assert all(v == 0 for v in result.values())
-        assert len(result) == 14
+        assert len(result) == 15
 
 
 # ---------------------------------------------------------------------------

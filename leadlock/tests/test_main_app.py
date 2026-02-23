@@ -402,6 +402,7 @@ class TestLifespan:
             "src.workers.outreach_sequencer.run_outreach_sequencer",
             "src.workers.outreach_monitor.run_outreach_monitor",
             "src.workers.task_processor.run_task_processor",
+            "src.workers.email_finder.run_email_finder",
             "src.workers.ab_test_engine.run_ab_test_engine",
             "src.workers.winback_agent.run_winback_agent",
             "src.workers.referral_agent.run_referral_agent",
@@ -420,8 +421,8 @@ class TestLifespan:
             async with lifespan(mock_app):
                 pass
 
-        # 6 core + 4 sales engine + 4 flagged agents = 14 workers
-        assert len(task_count) == 14
+        # 6 core + 5 sales engine (incl email_finder) + 4 flagged agents = 15 workers
+        assert len(task_count) == 15
 
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_cancels_workers(self):

@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Sentry initialization failed: %s", str(e))
 
-    # Start background workers (14 total after consolidation)
+    # Start background workers (15 total after consolidation)
     worker_tasks: list[asyncio.Task] = []
 
     # --- Always-on core workers ---
@@ -143,11 +143,14 @@ async def lifespan(app: FastAPI):
         from src.workers.outreach_monitor import run_outreach_monitor
         from src.workers.task_processor import run_task_processor
 
+        from src.workers.email_finder import run_email_finder
+
         worker_tasks.append(asyncio.create_task(run_scraper()))
         worker_tasks.append(asyncio.create_task(run_outreach_sequencer()))
         worker_tasks.append(asyncio.create_task(run_outreach_monitor()))
         worker_tasks.append(asyncio.create_task(run_task_processor()))
-        logger.info("Sales engine core workers started (scraper, sequencer, outreach_monitor, task_processor)")
+        worker_tasks.append(asyncio.create_task(run_email_finder()))
+        logger.info("Sales engine core workers started (scraper, sequencer, outreach_monitor, task_processor, email_finder)")
 
         # Feature-flagged agents — toggle via env vars without code deploys
         _FLAGGED_AGENTS = {
