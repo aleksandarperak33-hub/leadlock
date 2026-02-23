@@ -15,7 +15,6 @@ from sqlalchemy import func, select, and_, case, literal_column
 
 from src.database import async_session_factory
 from src.models.event_log import EventLog
-from src.models.lead import Lead
 from src.services.agent_fleet import AGENT_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -174,76 +173,101 @@ async def get_agent_event_counts(days: int = 1) -> dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
-# get_system_map_data — aggregate counts for the system flowchart
+# get_system_map_data — aggregate counts for the sales distribution pipeline
 # ---------------------------------------------------------------------------
 
-# Lead states by stage (from CLAUDE.md lifecycle)
-_INBOUND_STATES = ("new",)
-_PROCESSING_STATES = ("intake_sent", "qualifying", "qualified", "booking")
-_OUTCOME_STATES = ("booked", "completed", "cold", "dead", "opted_out")
+# Outreach prospect statuses by pipeline stage
+_PROSPECT_PIPELINE = ("cold", "contacted", "demo_scheduled", "demo_completed", "proposal_sent")
+_PROSPECT_WON_LOST = ("won", "lost")
 
 async def get_system_map_data() -> dict[str, Any]:
     """
-    Aggregate counts for the system flowchart.
+    Aggregate counts for the sales distribution system map.
+
+    Focuses on the B2B outreach pipeline: how LeadLock finds and converts
+    new customers (prospects → campaigns → email sequences → demos → won).
 
     Returns dict with:
-        - lead_counts: dict of state → count for active leads
-        - sms_sent_today: int
-        - bookings_today: int
+        - prospect_counts: dict of status → count
+        - campaign_counts: dict of status → count
         - emails_sent_today: int
-        - active_prospects: int
+        - emails_opened_today: int
+        - emails_replied_today: int
+        - total_prospects: int
+        - active_sequences: int (prospects in contacted state)
+        - ab_tests_today: int
     """
+    from src.models.outreach import Outreach
+    from src.models.campaign import Campaign
+    from src.models.outreach_email import OutreachEmail
+
     now = datetime.now(timezone.utc)
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     result: dict[str, Any] = {
-        "lead_counts": {},
-        "sms_sent_today": 0,
-        "bookings_today": 0,
+        "prospect_counts": {},
+        "campaign_counts": {},
         "emails_sent_today": 0,
-        "active_prospects": 0,
+        "emails_opened_today": 0,
+        "emails_replied_today": 0,
+        "total_prospects": 0,
+        "active_sequences": 0,
+        "ab_tests_today": 0,
     }
 
     try:
         async with async_session_factory() as session:
-            # Lead counts by state
-            lead_rows = (await session.execute(
-                select(Lead.state, func.count(Lead.id))
-                .group_by(Lead.state)
+            # Prospect counts by status
+            prospect_rows = (await session.execute(
+                select(Outreach.status, func.count(Outreach.id))
+                .group_by(Outreach.status)
             )).all()
 
-            for state_val, cnt in lead_rows:
-                result["lead_counts"][state_val] = cnt
+            for status_val, cnt in prospect_rows:
+                result["prospect_counts"][status_val] = cnt
+            result["total_prospects"] = sum(result["prospect_counts"].values())
+            result["active_sequences"] = result["prospect_counts"].get("contacted", 0)
 
-            # Today's event counts using conditional aggregation
-            event_agg = (await session.execute(
+            # Campaign counts by status
+            campaign_rows = (await session.execute(
+                select(Campaign.status, func.count(Campaign.id))
+                .group_by(Campaign.status)
+            )).all()
+
+            for status_val, cnt in campaign_rows:
+                result["campaign_counts"][status_val] = cnt
+
+            # Today's email metrics using conditional aggregation
+            email_agg = (await session.execute(
                 select(
-                    func.sum(case(
-                        (EventLog.action.startswith("sms_"), 1),
-                        (EventLog.action.startswith("followup_"), 1),
-                        (EventLog.action.startswith("booking_reminder_"), 1),
-                        else_=0,
-                    )).label("sms_count"),
-                    func.sum(case(
-                        (EventLog.action.in_(["booking_confirmed", "booking_created"]), 1),
-                        else_=0,
-                    )).label("booking_count"),
-                    func.sum(case(
-                        (EventLog.action.startswith("outreach_email_"), 1),
-                        else_=0,
-                    )).label("email_count"),
-                ).where(EventLog.created_at >= day_start)
+                    func.count(OutreachEmail.id).filter(
+                        OutreachEmail.direction == "outbound",
+                        OutreachEmail.sent_at >= day_start,
+                    ).label("sent_count"),
+                    func.count(OutreachEmail.id).filter(
+                        OutreachEmail.opened_at >= day_start,
+                    ).label("opened_count"),
+                    func.count(OutreachEmail.id).filter(
+                        OutreachEmail.direction == "inbound",
+                        OutreachEmail.created_at >= day_start,
+                    ).label("replied_count"),
+                )
             )).one()
 
-            result["sms_sent_today"] = int(event_agg.sms_count or 0)
-            result["bookings_today"] = int(event_agg.booking_count or 0)
-            result["emails_sent_today"] = int(event_agg.email_count or 0)
+            result["emails_sent_today"] = int(email_agg.sent_count or 0)
+            result["emails_opened_today"] = int(email_agg.opened_count or 0)
+            result["emails_replied_today"] = int(email_agg.replied_count or 0)
 
-            # Active prospects (leads in processing states)
-            result["active_prospects"] = sum(
-                result["lead_counts"].get(s, 0)
-                for s in _PROCESSING_STATES
-            )
+            # A/B tests run today from EventLog
+            ab_count = (await session.execute(
+                select(func.count(EventLog.id))
+                .where(and_(
+                    EventLog.action.startswith("ab_test_"),
+                    EventLog.created_at >= day_start,
+                ))
+            )).scalar() or 0
+
+            result["ab_tests_today"] = int(ab_count)
 
     except Exception:
         logger.exception("Failed to build system map data")

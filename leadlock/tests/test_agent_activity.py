@@ -207,49 +207,70 @@ class TestGetAgentEventCounts:
 
 class TestGetSystemMapData:
     @pytest.mark.asyncio
-    async def test_returns_system_map_structure(self):
+    async def test_returns_sales_pipeline_structure(self):
         from src.services.agent_activity import get_system_map_data
 
-        lead_rows = [
-            ("new", 10),
-            ("qualifying", 5),
-            ("qualified", 3),
-            ("booking", 2),
-            ("booked", 15),
-            ("completed", 50),
-            ("cold", 20),
-            ("opted_out", 5),
+        prospect_rows = [
+            ("cold", 100),
+            ("contacted", 45),
+            ("demo_scheduled", 8),
+            ("demo_completed", 5),
+            ("proposal_sent", 3),
+            ("won", 12),
+            ("lost", 20),
+        ]
+
+        campaign_rows = [
+            ("draft", 2),
+            ("active", 3),
+            ("paused", 1),
+            ("completed", 5),
         ]
 
         mock_session = AsyncMock()
 
-        # Lead counts query
-        mock_lead_result = MagicMock()
-        mock_lead_result.all.return_value = lead_rows
+        # Prospect counts query
+        mock_prospect_result = MagicMock()
+        mock_prospect_result.all.return_value = prospect_rows
 
-        # Event aggregation query
-        mock_event_agg = MagicMock()
-        mock_event_agg.sms_count = 42
-        mock_event_agg.booking_count = 3
-        mock_event_agg.email_count = 15
-        mock_event_result = MagicMock()
-        mock_event_result.one.return_value = mock_event_agg
+        # Campaign counts query
+        mock_campaign_result = MagicMock()
+        mock_campaign_result.all.return_value = campaign_rows
 
-        mock_session.execute.side_effect = [mock_lead_result, mock_event_result]
+        # Email aggregation query
+        mock_email_agg = MagicMock()
+        mock_email_agg.sent_count = 42
+        mock_email_agg.opened_count = 18
+        mock_email_agg.replied_count = 5
+        mock_email_result = MagicMock()
+        mock_email_result.one.return_value = mock_email_agg
+
+        # A/B test count query
+        mock_ab_result = MagicMock()
+        mock_ab_result.scalar.return_value = 3
+
+        mock_session.execute.side_effect = [
+            mock_prospect_result,
+            mock_campaign_result,
+            mock_email_result,
+            mock_ab_result,
+        ]
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch("src.services.agent_activity.async_session_factory", return_value=mock_session):
             result = await get_system_map_data()
 
-        assert result["lead_counts"]["new"] == 10
-        assert result["lead_counts"]["qualifying"] == 5
-        assert result["lead_counts"]["booked"] == 15
-        assert result["sms_sent_today"] == 42
-        assert result["bookings_today"] == 3
-        assert result["emails_sent_today"] == 15
-        # active_prospects = qualifying(5) + qualified(3) + booking(2) + intake_sent(0)
-        assert result["active_prospects"] == 10
+        assert result["prospect_counts"]["cold"] == 100
+        assert result["prospect_counts"]["contacted"] == 45
+        assert result["prospect_counts"]["won"] == 12
+        assert result["campaign_counts"]["active"] == 3
+        assert result["total_prospects"] == 193
+        assert result["active_sequences"] == 45
+        assert result["emails_sent_today"] == 42
+        assert result["emails_opened_today"] == 18
+        assert result["emails_replied_today"] == 5
+        assert result["ab_tests_today"] == 3
 
     @pytest.mark.asyncio
     async def test_returns_defaults_on_error(self):
@@ -262,9 +283,9 @@ class TestGetSystemMapData:
         with patch("src.services.agent_activity.async_session_factory", return_value=mock_session):
             result = await get_system_map_data()
 
-        assert result["lead_counts"] == {}
-        assert result["sms_sent_today"] == 0
-        assert result["bookings_today"] == 0
+        assert result["prospect_counts"] == {}
+        assert result["emails_sent_today"] == 0
+        assert result["total_prospects"] == 0
 
 
 # ---------------------------------------------------------------------------
