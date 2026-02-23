@@ -787,6 +787,63 @@ async def _generate_email_with_template(
     return result
 
 
+async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
+    """
+    SMTP-verify a pattern-guessed email. If the current email is rejected,
+    try alternate patterns (contact@, hello@, service@, sales@) until one
+    is accepted or all are exhausted.
+
+    Returns:
+        Verified email address, or None if no pattern passed SMTP check.
+    """
+    from src.utils.email_validation import verify_smtp_mailbox
+    from src.services.enrichment import extract_domain, guess_email_patterns
+
+    current_email = prospect.prospect_email.strip().lower()
+    is_first_send = (prospect.total_emails_sent or 0) == 0
+    inconclusive_fallback: Optional[str] = None
+
+    # Try current email first
+    result = await verify_smtp_mailbox(current_email)
+    if result["exists"] is True:
+        return current_email
+    if result["exists"] is None:
+        inconclusive_fallback = current_email
+    # If rejected (exists=False), fall through to try alternatives
+
+    # Try alternate patterns (only if current was rejected or we want a confirmed hit)
+    domain = extract_domain(prospect.website or "")
+    if not domain:
+        domain = current_email.split("@")[1] if "@" in current_email else None
+    if not domain:
+        # No domain — return inconclusive fallback for first send
+        if is_first_send and inconclusive_fallback:
+            return inconclusive_fallback
+        return None
+
+    patterns = guess_email_patterns(domain, prospect.prospect_name)
+    for alt_email in patterns:
+        if alt_email == current_email:
+            continue  # Already tried this one
+        alt_result = await verify_smtp_mailbox(alt_email)
+        if alt_result["exists"] is True:
+            return alt_email
+        if alt_result["exists"] is None and inconclusive_fallback is None:
+            inconclusive_fallback = alt_email
+        # If rejected, continue to next pattern
+
+    # Return inconclusive fallback for first send only
+    if is_first_send and inconclusive_fallback:
+        return inconclusive_fallback
+
+    # All patterns rejected or inconclusive on non-first send
+    logger.info(
+        "All email patterns rejected for prospect %s (%s)",
+        str(prospect.id)[:8], domain,
+    )
+    return None
+
+
 async def send_sequence_email(
     db: AsyncSession,
     config: SalesEngineConfig,
@@ -804,6 +861,27 @@ async def send_sequence_email(
             str(prospect.id)[:8], email_check["reason"],
         )
         return
+
+    # Gate: SMTP-verify unverified pattern-guessed emails before sending
+    if prospect.email_source == "pattern_guess" and not prospect.email_verified:
+        verified_email = await _verify_or_find_working_email(prospect)
+        if verified_email is None:
+            logger.info(
+                "Skipping prospect %s - no verified email found",
+                str(prospect.id)[:8],
+            )
+            prospect.status = "no_verified_email"
+            return
+        # Update prospect with the (possibly different) verified email
+        if verified_email != prospect.prospect_email:
+            logger.info(
+                "Prospect %s: swapped email from %s*** to %s***",
+                str(prospect.id)[:8],
+                prospect.prospect_email[:12],
+                verified_email[:12],
+            )
+        prospect.prospect_email = verified_email
+        prospect.email_verified = True
 
     # Check blacklist (email and domain)
     email_lower = prospect.prospect_email.lower().strip()

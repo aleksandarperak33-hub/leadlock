@@ -372,10 +372,17 @@ class TestEnrichProspectEmail:
     @pytest.mark.asyncio
     async def test_returns_scraped_email_when_found(self):
         """When website scraping finds an email, it is returned with source='website_scrape'."""
-        with patch(
-            "src.services.enrichment.scrape_contact_emails",
-            new_callable=AsyncMock,
-            return_value=["contact@hvacpro.com"],
+        with (
+            patch(
+                "src.services.enrichment.scrape_contact_emails",
+                new_callable=AsyncMock,
+                return_value=["contact@hvacpro.com"],
+            ),
+            patch(
+                "src.utils.email_validation.verify_smtp_mailbox",
+                new_callable=AsyncMock,
+                return_value={"exists": None, "reason": "all_mx_unreachable"},
+            ),
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
@@ -387,10 +394,17 @@ class TestEnrichProspectEmail:
     @pytest.mark.asyncio
     async def test_falls_back_to_pattern_guess_when_scrape_empty(self):
         """When scraping returns no emails, pattern guessing is used."""
-        with patch(
-            "src.services.enrichment.scrape_contact_emails",
-            new_callable=AsyncMock,
-            return_value=[],
+        with (
+            patch(
+                "src.services.enrichment.scrape_contact_emails",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "src.utils.email_validation.verify_smtp_mailbox",
+                new_callable=AsyncMock,
+                return_value={"exists": None, "reason": "all_mx_unreachable"},
+            ),
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
@@ -402,10 +416,17 @@ class TestEnrichProspectEmail:
     @pytest.mark.asyncio
     async def test_falls_back_to_pattern_guess_when_scrape_raises(self):
         """When website scraping throws an exception, pattern guessing is used."""
-        with patch(
-            "src.services.enrichment.scrape_contact_emails",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("scrape failed"),
+        with (
+            patch(
+                "src.services.enrichment.scrape_contact_emails",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("scrape failed"),
+            ),
+            patch(
+                "src.utils.email_validation.verify_smtp_mailbox",
+                new_callable=AsyncMock,
+                return_value={"exists": None, "reason": "all_mx_unreachable"},
+            ),
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
