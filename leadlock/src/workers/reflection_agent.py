@@ -64,7 +64,8 @@ async def _should_run_today() -> bool:
         date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         ran_key = f"leadlock:reflection:ran:{date_key}"
         return await redis.get(ran_key) is None
-    except Exception:
+    except Exception as e:
+        logger.debug("Reflection schedule check failed: %s", str(e))
         return True
 
 

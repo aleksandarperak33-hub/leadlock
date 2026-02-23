@@ -3,8 +3,11 @@ SMS template engine - all message templates with A/B variants.
 CRITICAL: First messages MUST include "Reply STOP to opt out" and business name.
 Templates use {variable} substitution. Never use URL shorteners.
 """
+import logging
 import random
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # === INTAKE TEMPLATES (first response) ===
 # Every first message includes business name + STOP language
@@ -218,7 +221,8 @@ def render_template(
     # Substitute variables, using empty string for missing vars
     try:
         return text.format_map(SafeDict(kwargs))
-    except Exception:
+    except Exception as e:
+        logger.debug("Template rendering failed for key substitution: %s", str(e))
         return text
 
 

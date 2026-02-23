@@ -77,7 +77,7 @@ async def _load_soul_summary(agent_name: str) -> str:
     except FileNotFoundError:
         logger.warning("SOUL.md not found for %s at %s", agent_name, path)
         return ""
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to load SOUL.md for %s", agent_name)
         return ""
 
@@ -334,7 +334,7 @@ async def get_fleet_status() -> dict:
     try:
         from src.services.agent_activity import get_agent_event_counts
         task_counts = await get_agent_event_counts(days=1)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to query event counts for fleet status")
 
     # --- Build per-agent status ---
@@ -409,7 +409,7 @@ async def get_fleet_status() -> dict:
     # Cache for 30 seconds
     try:
         await redis.set(_FLEET_CACHE_KEY, json.dumps(result), ex=_FLEET_CACHE_TTL)
-    except Exception:
+    except Exception as e:
         logger.warning("Failed to cache fleet status in Redis")
 
     return result
@@ -489,7 +489,7 @@ async def get_agent_activity(name: str, limit: int = 20) -> dict:
                     "avg_duration_s": round(avg_dur, 2),
                     "total_cost": 0.0,
                 }
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to query tasks for agent %s", name)
     else:
         # All other agents: use EventLog for real activity
@@ -497,7 +497,7 @@ async def get_agent_activity(name: str, limit: int = 20) -> dict:
             from src.services.agent_activity import get_agent_events, get_agent_event_metrics
             recent_tasks = await get_agent_events(name, limit=limit)
             metrics_7d = await get_agent_event_metrics(name)
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to query EventLog for agent %s", name)
 
     # --- Cost history from Redis (last 30 days) --- pipeline batch reads ---
@@ -522,7 +522,7 @@ async def get_agent_activity(name: str, limit: int = 20) -> dict:
             cost_history.append({"date": day, "cost": cost})
             if idx < 7:
                 cost_7d_total += cost
-    except Exception:
+    except Exception as e:
         # Fallback to individual reads if pipeline fails
         for offset in range(30):
             day = (now - timedelta(days=offset)).strftime("%Y-%m-%d")
@@ -601,7 +601,7 @@ async def get_task_queue(
                 .group_by(TaskQueue.status)
             )
             status_counts = {s: c for s, c in status_rows}
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to query task queue")
         return {
             "tasks": [],

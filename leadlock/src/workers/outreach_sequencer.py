@@ -354,7 +354,7 @@ async def _is_ai_circuit_open() -> bool:
         from src.utils.dedup import get_redis
         redis = await get_redis()
         return await redis.exists(_CIRCUIT_BREAKER_KEY) > 0
-    except Exception:
+    except Exception as e:
         return False
 
 
@@ -882,8 +882,8 @@ async def _generate_email_with_template(
             )
             if patterns:
                 extra_instructions = patterns
-        except Exception:
-            pass  # Patterns are a bonus, not critical path
+        except Exception as e:
+            logger.debug("Winning patterns lookup failed: %s", str(e))
 
     result = await generate_outreach_email(
         prospect_name=prospect.prospect_name,
@@ -1037,7 +1037,7 @@ async def send_sequence_email(
     if template_id:
         try:
             template = await db.get(EmailTemplate, uuid.UUID(template_id))
-        except Exception:
+        except Exception as e:
             logger.warning(
                 "Template %s not found for prospect %s",
                 template_id, str(prospect.id)[:8],

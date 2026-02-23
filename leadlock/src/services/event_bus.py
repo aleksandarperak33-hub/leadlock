@@ -44,7 +44,7 @@ async def publish_event(event_type: str, data: Optional[dict[str, Any]] = None) 
         await redis.ltrim(EVENT_LIST_KEY, 0, EVENT_LIST_MAX - 1)
 
         logger.debug("Event published: %s", event_type)
-    except Exception:
+    except Exception as e:
         logger.warning("Failed to publish event: %s", event_type)
 
 
@@ -68,7 +68,7 @@ async def drain_events(max_events: int = 50) -> list[dict[str, Any]]:
                 events.append(json.loads(payload))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 continue
-    except Exception:
+    except Exception as e:
         logger.warning("Failed to drain events from bus")
 
     return events

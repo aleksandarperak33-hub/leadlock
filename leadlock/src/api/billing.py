@@ -95,7 +95,7 @@ async def create_checkout(
     """Create a Stripe Checkout session for subscription."""
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     price_id = (payload.get("price_id") or "").strip()

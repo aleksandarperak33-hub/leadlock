@@ -186,7 +186,8 @@ async def _get_round_robin_position(total_combos: int) -> int:
         redis = await get_redis()
         position = await redis.incr("leadlock:scraper:position")
         return (position - 1) % total_combos
-    except Exception:
+    except Exception as e:
+        logger.debug("Round-robin position read failed: %s", str(e))
         return 0
 
 

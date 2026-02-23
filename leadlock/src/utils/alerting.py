@@ -102,8 +102,9 @@ async def _acquire_cooldown(alert_type: str) -> bool:
         # SET NX EX: only sets if key doesn't exist, with TTL — atomic check+record
         acquired = await redis.set(cooldown_key, "1", nx=True, ex=ALERT_COOLDOWN_SECONDS)
         return bool(acquired)
-    except Exception:
+    except Exception as e:
         # Redis down — use in-memory fallback to prevent alert storms
+        logger.debug("Alert cooldown Redis check failed, using in-memory fallback: %s", str(e))
         now = time.monotonic()
         expiry = _local_cooldowns.get(alert_type, 0)
         if now < expiry:

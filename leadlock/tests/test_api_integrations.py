@@ -249,14 +249,15 @@ class TestConnectIntegration:
 
     @pytest.mark.asyncio
     async def test_successful_connect(self):
-        """Successful CRM connection sets client properties."""
+        """Successful CRM connection sets client properties with encryption."""
         request = _make_mock_request(
             json_data={"crm_type": "jobber", "api_key": "new_key_123", "tenant_id": "t_1"}
         )
         mock_db = AsyncMock()
         mock_client = _make_mock_client(tier="pro", crm_type=None)
 
-        with patch("src.api.integrations.get_crm_integration_limit", return_value=None):
+        with patch("src.api.integrations.get_crm_integration_limit", return_value=None), \
+             patch("src.utils.encryption.encrypt_value", return_value="encrypted_new_key_123") as mock_encrypt:
             result = await connect_integration(
                 request=request, db=mock_db, client=mock_client
             )
@@ -264,7 +265,8 @@ class TestConnectIntegration:
         assert result["status"] == "connected"
         assert result["crm_type"] == "jobber"
         assert mock_client.crm_type == "jobber"
-        assert mock_client.crm_api_key_encrypted == "new_key_123"
+        mock_encrypt.assert_called_once_with("new_key_123")
+        assert mock_client.crm_api_key_encrypted == "encrypted_new_key_123"
         assert mock_client.crm_tenant_id == "t_1"
         mock_db.flush.assert_awaited_once()
 

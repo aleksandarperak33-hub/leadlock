@@ -39,7 +39,7 @@ async def run_email_finder():
         except asyncio.CancelledError:
             logger.info("Email finder shutting down")
             return
-        except Exception:
+        except Exception as e:
             logger.exception("Email finder cycle failed")
 
         # Heartbeat

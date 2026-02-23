@@ -133,7 +133,7 @@ async def signup(
 
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     business_name = (payload.get("business_name") or "").strip()
@@ -274,7 +274,7 @@ async def forgot_password(
     """Generate password reset token and send reset email."""
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     email = (payload.get("email") or "").strip().lower()
@@ -314,7 +314,7 @@ async def reset_password(
     """Validate reset token and update password."""
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     token = (payload.get("token") or "").strip()
@@ -484,7 +484,7 @@ async def provision_number(
 
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     phone_number = (payload.get("phone_number") or "").strip()
@@ -598,7 +598,7 @@ async def submit_business_registration(
     """
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     # Validate required fields

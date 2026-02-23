@@ -54,8 +54,9 @@ async def run_task_processor():
                 # Drain any additional notifications to avoid stacking
                 while await redis.rpop(TASK_NOTIFY_KEY):
                     pass
-        except Exception:
+        except Exception as e:
             # If Redis is unavailable, fall back to sleep
+            logger.debug("Redis BRPOP unavailable, falling back to sleep: %s", str(e))
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

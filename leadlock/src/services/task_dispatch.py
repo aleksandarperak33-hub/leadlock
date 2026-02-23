@@ -65,7 +65,7 @@ async def enqueue_task(
             from src.utils.dedup import get_redis
             redis = await get_redis()
             await redis.lpush(TASK_NOTIFY_KEY, task_id)
-        except Exception:
-            pass  # Task processor will pick it up on next DB poll anyway
+        except Exception as e:
+            logger.debug("Failed to notify task processor: %s", str(e))
 
     return task_id

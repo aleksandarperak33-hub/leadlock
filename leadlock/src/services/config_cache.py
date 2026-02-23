@@ -42,7 +42,7 @@ async def get_sales_config() -> Optional[dict[str, Any]]:
     try:
         value = json.dumps(config_dict) if config_dict else ""
         await redis.set(CACHE_KEY, value, ex=CACHE_TTL)
-    except Exception:
+    except Exception as e:
         logger.warning("Failed to cache SalesEngineConfig in Redis")
 
     return config_dict
@@ -54,7 +54,7 @@ async def invalidate_sales_config() -> None:
         redis = await get_redis()
         await redis.delete(CACHE_KEY)
         logger.info("SalesEngineConfig cache invalidated")
-    except Exception:
+    except Exception as e:
         logger.warning("Failed to invalidate SalesEngineConfig cache")
 
 
@@ -102,6 +102,6 @@ async def _load_from_db() -> Optional[dict[str, Any]]:
                 "monthly_budget_usd": getattr(config, "monthly_budget_usd", None),
                 "budget_alert_threshold": getattr(config, "budget_alert_threshold", 0.8),
             }
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to load SalesEngineConfig from database")
         return None

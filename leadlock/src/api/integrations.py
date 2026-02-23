@@ -44,7 +44,7 @@ async def test_integration(
     """Test a CRM connection with provided credentials."""
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     crm_type = (payload.get("crm_type") or "").strip().lower()
@@ -97,7 +97,7 @@ async def connect_integration(
     """Save CRM credentials and mark as connected."""
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     crm_type = (payload.get("crm_type") or "").strip().lower()
@@ -124,7 +124,8 @@ async def connect_integration(
 
     client.crm_type = crm_type
     if api_key:
-        client.crm_api_key_encrypted = api_key
+        from src.utils.encryption import encrypt_value
+        client.crm_api_key_encrypted = encrypt_value(api_key)
     if tenant_id:
         client.crm_tenant_id = tenant_id
 

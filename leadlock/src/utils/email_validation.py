@@ -94,7 +94,7 @@ async def has_mx_record(domain: str) -> bool:
                 try:
                     dns.resolver.resolve(domain, "A")
                     return True
-                except Exception:
+                except Exception as e:
                     return False
             except dns.resolver.NXDOMAIN:
                 return False

@@ -56,6 +56,7 @@ def decrypt_value(encrypted: str) -> Optional[str]:
 
     try:
         return fernet.decrypt(encrypted.encode()).decode()
-    except Exception:
+    except Exception as e:
         # Value may be legacy plaintext - return as-is
+        logger.debug("Decryption failed (may be legacy plaintext): %s", str(e))
         return encrypted

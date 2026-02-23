@@ -95,7 +95,8 @@ async def _is_safe_url(url: str) -> bool:
                 return False
 
         return True
-    except Exception:
+    except Exception as e:
+        logger.debug("URL safety check failed for input: %s", str(e))
         return False
 
 
@@ -120,7 +121,8 @@ def extract_domain(url: str) -> Optional[str]:
         if domain.startswith("www."):
             domain = domain[4:]
         return domain.lower() if domain else None
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to extract domain from URL: %s", str(e))
         return None
 
 

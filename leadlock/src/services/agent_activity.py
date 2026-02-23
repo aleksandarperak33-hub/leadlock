@@ -132,7 +132,7 @@ async def get_activity_feed(
                 })
 
             return events
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to fetch activity feed")
         return []
 
@@ -167,7 +167,7 @@ async def get_agent_event_counts(days: int = 1) -> dict[str, int]:
                 if resolved and resolved in counts:
                     counts[resolved] += cnt
 
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to count agent events")
 
     return counts
@@ -270,7 +270,7 @@ async def get_system_map_data() -> dict[str, Any]:
 
             result["ab_tests_today"] = int(ab_count)
 
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to build system map data")
 
     return result
@@ -312,7 +312,7 @@ async def get_agent_events(
                 }
                 for row in rows
             ]
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to fetch events for agent %s", agent_name)
         return []
 
@@ -363,7 +363,7 @@ async def get_agent_event_metrics(agent_name: str) -> dict[str, Any]:
                 "avg_duration_s": round(avg_ms / 1000, 2),
                 "total_cost": round(float(row.total_cost or 0), 4),
             }
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to compute event metrics for agent %s", agent_name)
 
     return metrics
