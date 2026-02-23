@@ -526,6 +526,7 @@ async def sequence_cycle():
         if all_prospects:
             logger.info("Processing %d unbound prospects for outreach", len(all_prospects))
 
+        consecutive_failures = 0
         for i, prospect in enumerate(all_prospects):
             try:
                 # Smart send timing: check if now is the optimal time bucket
@@ -537,13 +538,37 @@ async def sequence_cycle():
                     )
                     continue
 
+                prev_failures = prospect.generation_failures or 0
                 await send_sequence_email(db, config, settings, prospect)
                 await db.flush()
+
+                # Circuit breaker: if generation failed, track consecutive failures
+                new_failures = prospect.generation_failures or 0
+                if new_failures > prev_failures:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
+
+                if consecutive_failures >= 3:
+                    logger.warning(
+                        "Circuit breaker: %d consecutive AI generation failures. "
+                        "Stopping batch — AI provider may be down.",
+                        consecutive_failures,
+                    )
+                    break
             except Exception as e:
                 logger.error(
                     "Failed to send outreach to %s: %s",
                     str(prospect.id)[:8], str(e),
                 )
+                consecutive_failures += 1
+                if consecutive_failures >= 3:
+                    logger.warning(
+                        "Circuit breaker: %d consecutive exceptions. "
+                        "Stopping batch.",
+                        consecutive_failures,
+                    )
+                    break
 
             # Rate limit with jitter: spread sends across the cycle window
             if i < len(all_prospects) - 1:
@@ -672,22 +697,46 @@ async def _process_campaign_prospects(
         str(campaign.id)[:8], len(all_prospects),
     )
 
+    consecutive_failures = 0
     for i, (prospect, template_id) in enumerate(all_prospects):
         try:
             deferred = await _check_smart_timing(prospect, config)
             if deferred:
                 continue
 
+            prev_failures = prospect.generation_failures or 0
             await send_sequence_email(
                 db, config, settings, prospect,
                 template_id=template_id, campaign=campaign,
             )
             await db.flush()
+
+            new_failures = prospect.generation_failures or 0
+            if new_failures > prev_failures:
+                consecutive_failures += 1
+            else:
+                consecutive_failures = 0
+
+            if consecutive_failures >= 3:
+                logger.warning(
+                    "Campaign %s circuit breaker: %d consecutive AI failures. "
+                    "Stopping batch.",
+                    str(campaign.id)[:8], consecutive_failures,
+                )
+                break
         except Exception as e:
             logger.error(
                 "Campaign %s: failed to send to %s: %s",
                 str(campaign.id)[:8], str(prospect.id)[:8], str(e),
             )
+            consecutive_failures += 1
+            if consecutive_failures >= 3:
+                logger.warning(
+                    "Campaign %s circuit breaker: %d consecutive exceptions. "
+                    "Stopping batch.",
+                    str(campaign.id)[:8], consecutive_failures,
+                )
+                break
 
         if i < len(all_prospects) - 1:
             jitter = random.uniform(60, 120)

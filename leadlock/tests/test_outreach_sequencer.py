@@ -2581,6 +2581,93 @@ class TestSequenceCycle:
             # Should not raise
             await sequence_cycle()
 
+    @patch("src.workers.outreach_sequencer.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.send_sequence_email", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer._check_smart_timing", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer._calculate_cycle_cap", return_value=10)
+    @patch("src.workers.outreach_sequencer._get_warmup_limit", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer._check_email_health", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.is_within_send_window", return_value=True)
+    @patch("src.workers.outreach_sequencer._process_campaign_prospects", new_callable=AsyncMock)
+    @patch("src.workers.outreach_sequencer.get_settings")
+    async def test_circuit_breaker_stops_after_3_failures(
+        self, mock_settings, mock_campaign_proc, mock_window, mock_health,
+        mock_warmup, mock_cycle_cap, mock_smart, mock_send, mock_sleep,
+    ):
+        """Circuit breaker stops batch after 3 consecutive AI generation failures."""
+        mock_settings.return_value = _make_settings()
+        mock_health.return_value = (True, "normal")
+        mock_warmup.return_value = 50
+        mock_smart.return_value = False
+
+        config = _make_config(is_active=True)
+        # Create 5 prospects — circuit breaker should stop after 3
+        prospects = [_make_prospect() for _ in range(5)]
+
+        # Simulate AI generation failure by incrementing generation_failures
+        async def mock_send_fn(db, cfg, settings, prospect, **kwargs):
+            prospect.generation_failures = (prospect.generation_failures or 0) + 1
+
+        mock_send.side_effect = mock_send_fn
+
+        config_result = MagicMock()
+        config_result.scalar_one_or_none.return_value = config
+
+        campaigns_result = MagicMock()
+        scalars = MagicMock()
+        scalars.all.return_value = []
+        campaigns_result.scalars.return_value = scalars
+
+        sent_count_result = MagicMock()
+        sent_count_result.scalar.return_value = 0
+
+        step0_scalars = MagicMock()
+        step0_scalars.all.return_value = prospects
+        step0_result = MagicMock()
+        step0_result.scalars.return_value = step0_scalars
+
+        followup_scalars = MagicMock()
+        followup_scalars.all.return_value = []
+        followup_result = MagicMock()
+        followup_result.scalars.return_value = followup_scalars
+
+        call_count = 0
+
+        async def mock_execute(query):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return config_result
+            elif call_count == 2:
+                return campaigns_result
+            elif call_count == 3:
+                return sent_count_result
+            elif call_count == 4:
+                return step0_result
+            elif call_count == 5:
+                return followup_result
+            return MagicMock()
+
+        @asynccontextmanager
+        async def mock_session_factory():
+            db = AsyncMock()
+            db.execute = AsyncMock(side_effect=mock_execute)
+            db.commit = AsyncMock()
+            db.flush = AsyncMock()
+            yield db
+
+        with patch(
+            "src.workers.outreach_sequencer.async_session_factory",
+            side_effect=mock_session_factory,
+        ), patch(
+            "src.services.deliverability.EMAIL_THROTTLE_FACTORS",
+            {"normal": 1.0, "reduced": 0.5, "critical": 0.25},
+        ):
+            await sequence_cycle()
+
+        # Should have stopped after 3 prospects (circuit breaker), not all 5
+        assert mock_send.await_count == 3
+
 
 # ---------------------------------------------------------------------------
 # _process_campaign_prospects
