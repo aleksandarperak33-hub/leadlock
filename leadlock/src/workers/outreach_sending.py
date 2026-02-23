@@ -128,6 +128,15 @@ async def _pre_send_checks(
         )
     prospect.prospect_email = normalized_email
 
+    # Lifecycle safety: never send to unsubscribed/replied/terminal leads.
+    if prospect.email_unsubscribed:
+        return "unsubscribed"
+    if prospect.last_email_replied_at is not None:
+        return "already replied"
+    current_status = (prospect.status or "").strip().lower()
+    if current_status and current_status not in {"cold", "contacted"}:
+        return f"status not send-eligible ({current_status})"
+
     email_check = await validate_email(prospect.prospect_email)
     if not email_check["valid"]:
         return f"invalid email ({email_check['reason']})"

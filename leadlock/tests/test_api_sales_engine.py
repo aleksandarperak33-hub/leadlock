@@ -735,6 +735,50 @@ class TestEmailEventsWebhook:
         assert prospect.email_verified is False
         assert prospect.status == "lost"
 
+    @patch("src.services.deliverability.record_email_event", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    async def test_dedupes_duplicate_sendgrid_event(self, mock_verify, mock_signal, mock_record_event, db):
+        """Duplicate sg_event_id should be processed once (idempotent webhook handling)."""
+        from src.api.sales_engine import email_events_webhook
+
+        prospect = _make_prospect(db, prospect_email="dup@bounce.com")
+        await db.flush()
+        email = _make_email(db, prospect.id, sendgrid_message_id="sg_dupe_bounce")
+        await db.flush()
+
+        events = [
+            {
+                "event": "bounce",
+                "sg_event_id": "evt_123",
+                "sg_message_id": "sg_dupe_bounce",
+                "outreach_id": str(prospect.id),
+                "type": "bounce",
+                "reason": "550 User unknown",
+                "timestamp": 1700000000,
+            },
+            {
+                "event": "bounce",
+                "sg_event_id": "evt_123",
+                "sg_message_id": "sg_dupe_bounce",
+                "outreach_id": str(prospect.id),
+                "type": "bounce",
+                "reason": "550 User unknown",
+                "timestamp": 1700000000,
+            },
+        ]
+        request = _mock_request(json_data=events)
+
+        redis = AsyncMock()
+        redis.set = AsyncMock(side_effect=[True, None])  # seen once, then duplicate
+
+        with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=redis):
+            result = await email_events_webhook(request, db)
+
+        assert result["status"] == "processed"
+        assert email.bounced_at is not None
+        assert mock_record_event.await_count == 1
+
     @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
     @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_bounce_auto_blacklists_email(self, mock_verify, mock_signal, db):

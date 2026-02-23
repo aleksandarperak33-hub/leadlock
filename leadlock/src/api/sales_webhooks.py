@@ -3,6 +3,7 @@ Sales Engine — Webhook endpoints (inbound email, email events, unsubscribe).
 Public endpoints that don't require admin auth.
 """
 import hmac
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -52,6 +53,35 @@ def _safe_event_timestamp(raw_ts) -> datetime:
         return datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
     except Exception:
         return datetime.now(timezone.utc)
+
+
+async def _is_duplicate_email_event(redis_client, event: dict) -> bool:
+    """
+    Best-effort dedupe for SendGrid events.
+    Uses sg_event_id/event_id when present; falls back to a stable fingerprint.
+    """
+    try:
+        raw_id = event.get("sg_event_id") or event.get("event_id")
+        if raw_id:
+            event_id = str(raw_id).strip()
+        else:
+            # Fallback fingerprint when provider event ID is missing.
+            parts = [
+                str(event.get("event", "")).strip().lower(),
+                str(event.get("sg_message_id", "")).strip(),
+                str(event.get("outreach_id", "")).strip(),
+                str(event.get("step", "")).strip(),
+                str(event.get("timestamp", "")).strip(),
+            ]
+            event_id = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+        dedupe_key = f"leadlock:email_event_seen:{event_id}"
+        was_set = await redis_client.set(dedupe_key, "1", ex=172800, nx=True)
+        # NX set returns falsy when key already exists.
+        return not bool(was_set)
+    except Exception as e:
+        logger.debug("Email event dedupe unavailable: %s", str(e))
+        return False
 
 
 async def _record_email_signal(
@@ -506,6 +536,13 @@ async def email_events_webhook(
                     logger.debug("Redis unavailable for email reputation: %s", str(redis_err))
                     redis = None
 
+                if redis and await _is_duplicate_email_event(redis, event):
+                    logger.debug(
+                        "Skipping duplicate email event: type=%s sg_message_id=%s",
+                        event_type, sg_message_id,
+                    )
+                    continue
+
                 # Update email record based on event type
                 if event_type == "delivered" and not email_record.delivered_at:
                     email_record.delivered_at = timestamp
@@ -548,6 +585,13 @@ async def email_events_webhook(
                                 "email_clicked", prospect, email_record, 1.0,
                             )
                 elif event_type in ("bounce", "blocked"):
+                    if email_record.bounced_at:
+                        logger.debug(
+                            "Skipping duplicate bounce/blocked for email %s",
+                            str(email_record.id)[:8],
+                        )
+                        continue
+
                     # Hard bounce or block - count as real bounce
                     email_record.bounced_at = timestamp
                     email_record.bounce_type = event.get("type", event_type)
@@ -560,8 +604,8 @@ async def email_events_webhook(
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Hard bounce -> mark prospect as lost, flag email invalid
                     if event.get("type") == "bounce" or event_type == "bounce":
-                        if outreach_id:
-                            prospect = await db.get(Outreach, uuid.UUID(outreach_id))
+                        if outreach_uuid:
+                            prospect = await db.get(Outreach, outreach_uuid)
                             if prospect:
                                 prospect.email_verified = False
                                 prospect.status = "lost"

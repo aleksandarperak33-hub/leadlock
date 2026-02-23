@@ -1252,6 +1252,49 @@ class TestSendSequenceEmail:
         new_callable=AsyncMock,
     )
     @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
+    async def test_skips_already_replied_prospect(self, mock_validate, mock_gen, mock_send):
+        """Skips prospect that already replied (queued/deferred safety)."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+
+        db = AsyncMock()
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect(
+            last_email_replied_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            status="contacted",
+        )
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_gen.assert_not_awaited()
+        mock_send.assert_not_awaited()
+
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch(
+        "src.workers.outreach_sending.generate_outreach_email",
+        new_callable=AsyncMock,
+    )
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
+    async def test_skips_terminal_status_prospect(self, mock_validate, mock_gen, mock_send):
+        """Skips prospect in a non-send-eligible status."""
+        mock_validate.return_value = {"valid": True, "reason": None}
+
+        db = AsyncMock()
+        config = _make_config()
+        settings = _make_settings()
+        prospect = _make_prospect(status="lost")
+
+        await send_sequence_email(db, config, settings, prospect)
+
+        mock_gen.assert_not_awaited()
+        mock_send.assert_not_awaited()
+
+    @patch("src.workers.outreach_sending.send_cold_email", new_callable=AsyncMock)
+    @patch(
+        "src.workers.outreach_sending.generate_outreach_email",
+        new_callable=AsyncMock,
+    )
+    @patch("src.workers.outreach_sending.validate_email", new_callable=AsyncMock)
     async def test_skips_blacklisted_email(self, mock_validate, mock_gen, mock_send):
         """Skips prospect whose email or domain is blacklisted."""
         mock_validate.return_value = {"valid": True, "reason": None}

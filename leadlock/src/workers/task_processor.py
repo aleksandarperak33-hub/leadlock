@@ -326,6 +326,13 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
         if not prospect.prospect_email:
             return {"status": "skipped", "reason": "no email"}
 
+        if getattr(prospect, "last_email_replied_at", None):
+            return {"status": "skipped", "reason": "already replied"}
+
+        status = (getattr(prospect, "status", "") or "").strip().lower()
+        if status and status not in {"cold", "contacted"}:
+            return {"status": "skipped", "reason": f"status {status} not eligible"}
+
         result = await db.execute(
             select(SalesEngineConfig).limit(1)
         )

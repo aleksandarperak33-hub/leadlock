@@ -599,6 +599,8 @@ class TestHandleSendSequenceEmail:
             "id": uuid.uuid4(),
             "prospect_email": "test@example.com",
             "email_unsubscribed": False,
+            "status": "cold",
+            "last_email_replied_at": None,
         }
         defaults.update(overrides)
         mock = MagicMock()
@@ -654,6 +656,30 @@ class TestHandleSendSequenceEmail:
             result = await _handle_send_sequence_email({"outreach_id": str(uuid.uuid4())})
 
         assert result == {"status": "skipped", "reason": "no email"}
+
+    async def test_replied_returns_skipped(self):
+        """Prospect with prior reply should never get another deferred send."""
+        prospect = self._make_outreach_mock(
+            last_email_replied_at=datetime.now(timezone.utc),
+        )
+        factory_cls, mock_db = _mock_async_session_factory()
+        mock_db.get = AsyncMock(return_value=prospect)
+
+        with patch("src.workers.task_processor.async_session_factory", return_value=factory_cls()):
+            result = await _handle_send_sequence_email({"outreach_id": str(uuid.uuid4())})
+
+        assert result == {"status": "skipped", "reason": "already replied"}
+
+    async def test_terminal_status_returns_skipped(self):
+        """Prospect in terminal lifecycle state should not be emailed."""
+        prospect = self._make_outreach_mock(status="lost")
+        factory_cls, mock_db = _mock_async_session_factory()
+        mock_db.get = AsyncMock(return_value=prospect)
+
+        with patch("src.workers.task_processor.async_session_factory", return_value=factory_cls()):
+            result = await _handle_send_sequence_email({"outreach_id": str(uuid.uuid4())})
+
+        assert result == {"status": "skipped", "reason": "status lost not eligible"}
 
     async def test_empty_email_returns_skipped(self):
         """Prospect with empty string email returns skip."""
