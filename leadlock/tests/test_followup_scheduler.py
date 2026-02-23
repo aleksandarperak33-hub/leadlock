@@ -24,6 +24,17 @@ from src.schemas.agent_responses import FollowupResponse
 from src.services.compliance import ComplianceResult
 
 
+@pytest.fixture(autouse=True)
+def _mock_sales_config():
+    """Auto-mock config cache so cold_nurture tests don't hit Redis."""
+    with patch(
+        "src.services.config_cache.get_sales_config",
+        new_callable=AsyncMock,
+        return_value={"is_active": True},
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

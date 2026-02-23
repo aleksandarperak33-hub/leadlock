@@ -77,7 +77,6 @@ class Settings(BaseSettings):
 
     # Agent feature flags (toggle without code deploys)
     agent_ab_test_engine: bool = True
-    agent_warmup_optimizer: bool = True
     agent_winback_agent: bool = True
     agent_referral_agent: bool = False      # Disabled: crash bugs, needs fix
     agent_reflection_agent: bool = False    # Disabled: writes to unread table

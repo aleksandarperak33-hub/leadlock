@@ -21,7 +21,8 @@ async def get_sales_config() -> Optional[dict[str, Any]]:
     """
     Return the SalesEngineConfig as a dict, cached in Redis for 60s.
 
-    Returns None when no config row exists or is_active is False.
+    Returns None when no config row exists. Always includes the is_active
+    field; callers are responsible for checking it.
     """
     redis = await get_redis()
 

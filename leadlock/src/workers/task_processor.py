@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 30  # Fallback DB poll interval
 MAX_TASKS_PER_CYCLE = 10
 BRPOP_TIMEOUT = 30  # seconds to wait for Redis notification
-TASK_NOTIFY_KEY = "leadlock:task_notify"
+from src.services.task_dispatch import TASK_NOTIFY_KEY  # noqa: F401 — single source of truth
 
 
 async def _heartbeat():

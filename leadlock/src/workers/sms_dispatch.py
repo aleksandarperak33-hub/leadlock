@@ -7,6 +7,7 @@ Phase 2: Send booking reminders (from booking_reminder)
 """
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone, date, timedelta
 
 from sqlalchemy import select, and_
@@ -29,6 +30,13 @@ from src.services.plan_limits import is_cold_followup_enabled
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 60
+
+_PHONE_RE = re.compile(r'\+?\d[\d\-.\s]{7,}\d')
+
+
+def _sanitize_error(msg: str) -> str:
+    """Mask phone numbers in error messages to comply with PII logging standard."""
+    return _PHONE_RE.sub(lambda m: m.group()[:6] + '***', msg)
 
 
 async def _heartbeat():
@@ -160,7 +168,7 @@ async def _process_due_followups():
                     str(task.id)[:8], str(e),
                 )
                 task.attempt_count += 1
-                task.last_error = str(e)
+                task.last_error = _sanitize_error(str(e))
                 if task.attempt_count >= task.max_attempts:
                     task.status = "failed"
 
@@ -181,6 +189,15 @@ async def _execute_followup_task(db: AsyncSession, task: FollowupTask):
         task.status = "skipped"
         task.skip_reason = f"Lead state: {lead.state}"
         return
+
+    # Global kill-switch: skip cold outreach when sales engine is disabled
+    if task.task_type == "cold_nurture":
+        from src.services.config_cache import get_sales_config
+        config_data = await get_sales_config()
+        if config_data and not config_data.get("is_active", True):
+            task.status = "skipped"
+            task.skip_reason = "Sales engine disabled"
+            return
 
     if task.task_type == "cold_nurture" and not is_cold_followup_enabled(client.tier):
         task.status = "skipped"

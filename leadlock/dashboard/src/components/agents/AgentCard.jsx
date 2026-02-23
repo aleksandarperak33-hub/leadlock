@@ -118,7 +118,7 @@ export default function AgentCard({ agent, tier, selected, onClick }) {
       </div>
 
       {/* Name + schedule */}
-      <div className={`font-semibold text-gray-900 leading-tight mb-0.5 ${isAI ? 'text-sm' : 'text-sm'}`}>
+      <div className={`font-semibold text-gray-900 leading-tight mb-0.5 ${isAI ? 'text-base' : 'text-sm'}`}>
         {agent.display_name}
       </div>
       <div className="text-xs text-gray-500 mb-3">{agent.schedule}</div>
