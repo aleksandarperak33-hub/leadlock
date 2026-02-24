@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Optional
 from src.services.ai import generate_response
+from src.prompts.humanizer import EMAIL_HUMANIZER
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
 body_html: simple <p> tags only. No complex HTML.
-body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. End with {sender_name} on its own line."""
+body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. End with {sender_name} on its own line.
+
+""" + EMAIL_HUMANIZER
 
 async def _get_reply_rate_by_trade(trade_type: str) -> float:
     """Query learning signals for email_replied rate by trade."""
@@ -214,6 +217,67 @@ def _extract_first_name(full_name: str) -> str:
     return first.capitalize()
 
 
+GENERIC_EMAIL_PREFIXES = frozenset({
+    "info", "contact", "admin", "support", "sales", "hello", "help",
+    "team", "office", "service", "billing", "marketing", "hr", "careers",
+    "jobs", "noreply", "no-reply", "webmaster", "customer", "general",
+    "enquiries", "inquiries", "solutions", "hvac", "plumbing", "roofing",
+    "electrical", "solar", "dispatch", "accounts", "bookings", "booking",
+    "mail", "payments", "operations", "ops", "quotes", "estimate",
+    "estimates", "scheduling", "repairs", "maintenance", "install",
+})
+
+
+def _extract_name_from_email(email: str) -> str:
+    """
+    Extract a first name from the local part of an email address.
+
+    Common patterns:
+        tracy@domain.com → "Tracy"
+        joeochoa@domain.com → "Joeochoa" (no splitting on concatenated names)
+        joe.ochoa@domain.com → "Joe"
+        j.smith@domain.com → "" (single initial, ambiguous)
+        info@domain.com → "" (generic prefix)
+
+    Returns:
+        Capitalized first name, or empty string if extraction fails.
+    """
+    if not email or "@" not in email:
+        return ""
+
+    local_part = email.split("@")[0].lower().strip()
+    if not local_part:
+        return ""
+
+    # Strip plus-alias suffix (e.g. mike+leadgen@ → mike@)
+    local_part = local_part.split("+")[0]
+
+    # Skip if the entire local part is a generic prefix
+    if local_part in GENERIC_EMAIL_PREFIXES:
+        return ""
+
+    # Split on common separators: . - _
+    parts = [p for p in local_part.replace("-", ".").replace("_", ".").split(".") if p]
+    if not parts:
+        return ""
+
+    candidate = parts[0]
+
+    # Skip generic prefixes even when followed by separators (e.g. info.smith@)
+    if candidate in GENERIC_EMAIL_PREFIXES:
+        return ""
+
+    # Skip if too short (1-2 chars = likely an initial like "j" or "ms")
+    if len(candidate) < 3:
+        return ""
+
+    # Must be all alpha (no digits, no special chars)
+    if not candidate.isalpha():
+        return ""
+
+    return candidate.capitalize()
+
+
 def _build_fallback_outreach_email(
     prospect_name: str,
     company_name: str,
@@ -293,6 +357,7 @@ async def generate_outreach_email(
     extra_instructions: Optional[str] = None,
     sender_name: str = "Alek",
     enrichment_data: Optional[dict] = None,
+    prospect_email: Optional[str] = None,
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -309,6 +374,7 @@ async def generate_outreach_email(
         sequence_step: 1, 2, or 3
         sender_name: Human first name for sign-off (default "Alek")
         enrichment_data: Prospect research data from enrichment pipeline (optional)
+        prospect_email: Prospect email address, used as last-resort name source (optional)
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
@@ -327,6 +393,16 @@ async def generate_outreach_email(
         effective_name = decision_maker_name
 
     first_name = _extract_first_name(effective_name)
+
+    # Last resort: extract first name from email address
+    if not first_name and prospect_email:
+        email_name = _extract_name_from_email(prospect_email)
+        if email_name:
+            first_name = email_name
+            # Only replace effective_name if decision_maker_name was absent,
+            # to avoid misattributing email-derived names in the AI prompt
+            if not decision_maker_name:
+                effective_name = email_name
 
     prospect_details = f"""Prospect details:
 - First name: {first_name or '(no first name available - use company name in greeting)'}
@@ -513,7 +589,9 @@ JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
 body_html: simple <p> tags only. Booking link as <a href="...">booking_link_text</a>.
-body_text: plain text version with raw URL. End with {sender_name} on its own line."""
+body_text: plain text version with raw URL. End with {sender_name} on its own line.
+
+""" + EMAIL_HUMANIZER
 
 
 async def generate_booking_reply(

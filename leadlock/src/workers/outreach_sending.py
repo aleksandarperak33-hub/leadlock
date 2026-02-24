@@ -301,6 +301,7 @@ async def _generate_email_with_template(
         extra_instructions=extra_instructions,
         sender_name=sender_name,
         enrichment_data=enrichment_data,
+        prospect_email=prospect.prospect_email,
     )
 
     # Attach A/B variant info for tracking

@@ -579,7 +579,11 @@ async def sequence_cycle():
                     Outreach.email_verified == False,  # noqa: E712
                 )),
             )
-        ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
+        ).order_by(
+            # Prioritize enriched prospects (they produce better personalized emails)
+            Outreach.enrichment_data.is_(None).asc(),
+            Outreach.created_at,
+        ).limit(remaining).with_for_update(skip_locked=True)
 
         # Steps 1-2: contacted but no reply, delay elapsed, NOT campaign-bound
         followup_query = select(Outreach).where(

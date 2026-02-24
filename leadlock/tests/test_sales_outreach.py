@@ -10,6 +10,7 @@ from src.agents.sales_outreach import (
     generate_outreach_email,
     classify_reply,
     _extract_first_name,
+    _extract_name_from_email,
     STEP_INSTRUCTIONS,
     VALID_CLASSIFICATIONS,
 )
@@ -85,6 +86,85 @@ class TestExtractFirstName:
         assert _extract_first_name("  Sarah Connor  ") == "Sarah"
 
 
+class TestExtractNameFromEmail:
+    """Test first name extraction from email addresses."""
+
+    def test_simple_first_name(self):
+        assert _extract_name_from_email("tracy@hooperplumbing.com") == "Tracy"
+
+    def test_first_last_dot_separated(self):
+        assert _extract_name_from_email("joe.ochoa@ochoaroofing.com") == "Joe"
+
+    def test_first_last_underscore(self):
+        assert _extract_name_from_email("ashley_jones@plumbingoutfitters.com") == "Ashley"
+
+    def test_first_last_hyphen(self):
+        assert _extract_name_from_email("mike-smith@company.com") == "Mike"
+
+    def test_concatenated_firstlast(self):
+        """joeochoa@ — first segment is the full local part, 'joeochoa' is valid."""
+        assert _extract_name_from_email("joeochoa@ochoaroofing.com") == "Joeochoa"
+
+    def test_single_initial_skip(self):
+        """Single initial + last name — too ambiguous, skip."""
+        assert _extract_name_from_email("j.smith@domain.com") == ""
+
+    def test_two_char_initial_skip(self):
+        """Two-char prefix like 'ms' — ambiguous, skip."""
+        assert _extract_name_from_email("ms.jones@domain.com") == ""
+
+    def test_generic_info(self):
+        assert _extract_name_from_email("info@company.com") == ""
+
+    def test_generic_contact(self):
+        assert _extract_name_from_email("contact@company.com") == ""
+
+    def test_generic_admin(self):
+        assert _extract_name_from_email("admin@company.com") == ""
+
+    def test_generic_support(self):
+        assert _extract_name_from_email("support@company.com") == ""
+
+    def test_generic_sales(self):
+        assert _extract_name_from_email("sales@company.com") == ""
+
+    def test_generic_hello(self):
+        assert _extract_name_from_email("hello@company.com") == ""
+
+    def test_generic_noreply(self):
+        assert _extract_name_from_email("noreply@company.com") == ""
+
+    def test_generic_hvac(self):
+        assert _extract_name_from_email("hvac@company.com") == ""
+
+    def test_generic_with_separator(self):
+        """Generic prefix even with separator should be skipped."""
+        assert _extract_name_from_email("info.main@company.com") == ""
+
+    def test_empty_string(self):
+        assert _extract_name_from_email("") == ""
+
+    def test_none_input(self):
+        assert _extract_name_from_email(None) == ""
+
+    def test_no_at_sign(self):
+        assert _extract_name_from_email("notanemail") == ""
+
+    def test_digits_in_local(self):
+        """Email with digits in first part should be skipped."""
+        assert _extract_name_from_email("123abc@domain.com") == ""
+
+    def test_uppercase_preserved(self):
+        """Output should always be capitalized regardless of input case."""
+        assert _extract_name_from_email("TRACY@domain.com") == "Tracy"
+
+    def test_dispatch_generic(self):
+        assert _extract_name_from_email("dispatch@company.com") == ""
+
+    def test_scheduling_generic(self):
+        assert _extract_name_from_email("scheduling@company.com") == ""
+
+
 class TestStepInstructions:
     """Verify step instruction configuration."""
 
@@ -135,7 +215,7 @@ class TestGenerateOutreachEmail:
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_ai_error_returns_error(self, mock_ai, mock_learning):
-        """AI error should return empty fields with error message."""
+        """AI error should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response("", error="Rate limited")
 
@@ -147,14 +227,15 @@ class TestGenerateOutreachEmail:
             state="TX",
         )
 
-        assert result["subject"] == ""
-        assert result["body_html"] == ""
-        assert result["error"] == "Rate limited"
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
+        assert result["body_html"] != ""
+        assert result["ai_cost_usd"] == 0.0
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_invalid_json_returns_error(self, mock_ai, mock_learning):
-        """Malformed JSON from AI should return parse error."""
+        """Malformed JSON from AI should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response("This is not JSON at all")
 
@@ -166,8 +247,9 @@ class TestGenerateOutreachEmail:
             state="TX",
         )
 
-        assert result["subject"] == ""
-        assert "JSON parse error" in result["error"]
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
+        assert result["body_html"] != ""
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
@@ -190,7 +272,7 @@ class TestGenerateOutreachEmail:
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_empty_subject_returns_error(self, mock_ai, mock_learning):
-        """Empty subject from AI should return error."""
+        """Empty subject from AI should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response(
             json.dumps({"subject": "", "body_html": "<p>Hi</p>", "body_text": "Hi"})
@@ -204,7 +286,8 @@ class TestGenerateOutreachEmail:
             state="TX",
         )
 
-        assert "error" in result
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
@@ -256,6 +339,63 @@ class TestGenerateOutreachEmail:
         user_msg = mock_ai.call_args.kwargs.get("user_message", "")
         assert "4.8" in user_msg
         assert "125" in user_msg
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_email_name_extraction_in_prompt(self, mock_ai, mock_learning):
+        """When prospect_name is a company, email-extracted name should appear in prompt."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="Lighthouse Solar",
+            company_name="Lighthouse Solar",
+            trade_type="solar",
+            city="Phoenix",
+            state="AZ",
+            prospect_email="tracy@lighthousesolar.com",
+        )
+
+        user_msg = mock_ai.call_args.kwargs.get("user_message", "")
+        assert "Tracy" in user_msg
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_email_name_used_in_fallback(self, mock_ai, mock_learning):
+        """Fallback email should use email-extracted name in greeting."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response("", error="Rate limited")
+
+        result = await generate_outreach_email(
+            prospect_name="Hooper Plumbing",
+            company_name="Hooper Plumbing",
+            trade_type="plumbing",
+            city="Dallas",
+            state="TX",
+            prospect_email="tracy@hooperplumbing.com",
+        )
+
+        assert result["fallback_used"] is True
+        assert "Hey Tracy," in result["body_text"]
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_generic_email_no_name_in_prompt(self, mock_ai, mock_learning):
+        """Generic email like info@ should NOT produce a first name."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="Some Solar LLC",
+            company_name="Some Solar LLC",
+            trade_type="solar",
+            city="Phoenix",
+            state="AZ",
+            prospect_email="info@somesolar.com",
+        )
+
+        user_msg = mock_ai.call_args.kwargs.get("user_message", "")
+        assert "no first name available" in user_msg
 
 
 class TestClassifyReply:
