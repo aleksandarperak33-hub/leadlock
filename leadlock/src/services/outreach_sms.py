@@ -24,6 +24,7 @@ from src.models.outreach_sms import OutreachSMS
 from src.models.sales_config import SalesEngineConfig
 from src.config import get_settings
 from src.services.ai import generate_response
+from src.prompts.humanizer import SMS_HUMANIZER
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +234,8 @@ async def generate_followup_sms_body(
         result = await generate_response(
             system_prompt=(
                 "You write concise, compliant outreach SMS messages. "
-                "Keep responses under 160 characters."
+                "Keep responses under 160 characters.\n\n"
+                + SMS_HUMANIZER
             ),
             user_message=prompt,
             model_tier="fast",

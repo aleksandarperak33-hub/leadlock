@@ -9,6 +9,7 @@ from typing import Optional
 from src.services.ai import generate_response
 from src.services.scheduling import generate_available_slots
 from src.schemas.agent_responses import BookResponse
+from src.prompts.humanizer import SMS_HUMANIZER
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ RULES:
 - If they need a time we don't have, set needs_human_handoff to true.
 - Include the technician name if assigned.
 - Use context from the conversation history - don't re-ask things the customer already told you.
+
+""" + SMS_HUMANIZER + """
 
 Respond with JSON:
 {{

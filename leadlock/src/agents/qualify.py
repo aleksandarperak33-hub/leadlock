@@ -14,6 +14,7 @@ import logging
 from typing import Optional
 from src.services.ai import generate_response
 from src.schemas.agent_responses import QualifyResponse, QualificationData
+from src.prompts.humanizer import SMS_HUMANIZER
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ RULES:
 - If they seem unresponsive or uninterested after 2+ exchanges, set next_action to "mark_cold".
 - NEVER mention that you're an AI unless directly asked.
 - NEVER discuss pricing - say "our team will provide a detailed estimate on-site."
+
+""" + SMS_HUMANIZER + """
 
 SERVICES OFFERED:
 Primary: {primary_services}
