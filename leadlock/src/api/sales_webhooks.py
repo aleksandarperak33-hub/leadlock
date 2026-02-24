@@ -617,7 +617,8 @@ async def email_events_webhook(
                                 # blacklist domain only after 3+ distinct email bounces
                                 try:
                                     if prospect.prospect_email and "@" in prospect.prospect_email:
-                                        email_addr = prospect.prospect_email.lower().strip()
+                                        from src.workers.outreach_sending import normalize_email
+                                        email_addr = normalize_email(prospect.prospect_email)
                                         domain = email_addr.split("@")[1]
                                         if domain:
                                             # Blacklist the individual email address first

@@ -341,8 +341,8 @@ async def get_email_reputation(redis_client) -> dict:
 
     # Guardrails for small samples: still allow warmup, but pause hard if we see
     # unmistakably bad early signals. This protects sender reputation immediately.
-    MIN_SAMPLE_SIZE = 20
-    MIN_GUARDRAIL_SAMPLE = 10
+    MIN_SAMPLE_SIZE = 50
+    MIN_GUARDRAIL_SAMPLE = 20
     BOUNCE_RATE_CRITICAL = 0.08  # 8% = severe throttle
     BOUNCE_RATE_PAUSE = 0.12     # 12% = immediate pause
     COMPLAINT_RATE_PAUSE = 0.005  # 0.5% spam complaint rate = immediate pause
@@ -386,7 +386,10 @@ async def get_email_reputation(redis_client) -> dict:
     # Weighted score (0-100)
     score = 100.0
     # Bounce penalty: -5 per 1% bounce rate (heavy penalty)
-    score -= bounce_rate * 500
+    # Scale down at low volume (50-100 sends) to prevent a few bounces from
+    # tanking the score — each bounce shifts the rate by several % at low N.
+    confidence = min(1.0, sent / 100)
+    score -= bounce_rate * 500 * confidence
     # Complaint penalty: -20 per 0.1% complaint rate (CRITICAL)
     score -= complaint_rate * 20000
     # Low delivery bonus/penalty
