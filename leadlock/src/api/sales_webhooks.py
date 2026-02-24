@@ -5,6 +5,7 @@ Public endpoints that don't require admin auth.
 import hmac
 import hashlib
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -19,6 +20,14 @@ from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
 from src.models.email_blacklist import EmailBlacklist
+from src.services.sales_tenancy import (
+    get_sales_config_for_tenant,
+    resolve_tenant_ids_for_mailboxes,
+)
+from src.services.sender_mailboxes import (
+    find_sender_profile_for_address,
+    get_primary_sender_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +42,35 @@ _PROTECTED_DOMAINS = frozenset({
     "yandex.com", "comcast.net", "att.net", "sbcglobal.net",
     "verizon.net", "cox.net", "charter.net", "earthlink.net",
 })
+
+_EMAIL_REGEX = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.IGNORECASE)
+
+
+def _normalize_email(raw: str) -> str:
+    """Normalize a raw email-ish string to lowercase without surrounding spaces."""
+    return str(raw or "").strip().lower()
+
+
+def _extract_email_candidates(raw_value: str) -> list[str]:
+    """
+    Extract one or more email addresses from a header-like string.
+    Handles values like:
+      - "Name <user@example.com>"
+      - "one@example.com, two@example.com"
+    """
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return []
+    matches = _EMAIL_REGEX.findall(raw)
+    if not matches:
+        normalized = _normalize_email(raw)
+        return [normalized] if "@" in normalized else []
+    deduped: list[str] = []
+    for email in matches:
+        normalized = _normalize_email(email)
+        if normalized and normalized not in deduped:
+            deduped.append(normalized)
+    return deduped
 
 
 def _safe_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
@@ -122,6 +160,7 @@ async def _send_booking_reply(
     config: Optional[SalesEngineConfig],
     original_subject: str = "",
     reply_text: str = "",
+    reply_mailbox: Optional[str] = None,
 ) -> bool:
     """
     Send auto-reply email with booking link to an interested prospect.
@@ -134,7 +173,12 @@ async def _send_booking_reply(
         )
         return False
 
-    if not config.from_email:
+    sender_profile = (
+        find_sender_profile_for_address(config, reply_mailbox)
+        if reply_mailbox
+        else None
+    ) or get_primary_sender_profile(config)
+    if not sender_profile:
         return False
 
     from src.agents.sales_outreach import generate_booking_reply
@@ -146,7 +190,7 @@ async def _send_booking_reply(
         trade_type=prospect.prospect_trade_type or "",
         city=prospect.city or "",
         booking_url=config.booking_url,
-        sender_name=config.sender_name or "Alek",
+        sender_name=sender_profile["sender_name"],
         original_subject=original_subject,
         reply_text=reply_text,
         enrichment_data=prospect.enrichment_data,
@@ -168,9 +212,9 @@ async def _send_booking_reply(
         to_name=prospect.prospect_name or "",
         subject=reply["subject"],
         body_html=reply["body_html"],
-        from_email=config.from_email,
-        from_name=config.from_name or "Alek from LeadLock",
-        reply_to=config.reply_to_email or config.from_email,
+        from_email=sender_profile["from_email"],
+        from_name=sender_profile["from_name"] or "Alek from LeadLock",
+        reply_to=sender_profile["reply_to_email"] or sender_profile["from_email"],
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
         body_text=reply.get("body_text", ""),
@@ -192,7 +236,7 @@ async def _send_booking_reply(
         subject=reply["subject"],
         body_html=reply["body_html"],
         body_text=reply.get("body_text", ""),
-        from_email=config.from_email,
+        from_email=sender_profile["from_email"],
         to_email=prospect.prospect_email,
         sequence_step=prospect.outreach_sequence_step,
         sent_at=now,
@@ -220,8 +264,8 @@ async def _trigger_sms_followup(
 
     Returns True if SMS was sent or queued, False otherwise.
     """
-    result = await db.execute(select(SalesEngineConfig).limit(1))
-    config = result.scalar_one_or_none()
+    tenant_id = getattr(prospect, "tenant_id", None)
+    config = await get_sales_config_for_tenant(db, tenant_id)
 
     if not config:
         return False
@@ -334,34 +378,86 @@ async def inbound_email_webhook(
             raise HTTPException(status_code=403, detail="Invalid webhook token")
 
         form = await request.form()
-        from_email = form.get("from", "")
-        to_email = form.get("to", "")
+        from_email_raw = str(form.get("from", "") or "")
+        to_email_raw = str(form.get("to", "") or "")
         subject = form.get("subject", "")
         text_body = form.get("text", "")
         html_body = form.get("html", "")
 
-        # Extract email address from "Name <email>" format
-        if "<" in from_email and ">" in from_email:
-            from_email = from_email.split("<")[1].split(">")[0]
+        from_candidates = _extract_email_candidates(from_email_raw)
+        from_email = from_candidates[0] if from_candidates else _normalize_email(from_email_raw)
+        inbound_to_candidates = _extract_email_candidates(to_email_raw)
+        inbound_to_email = (
+            inbound_to_candidates[0]
+            if inbound_to_candidates
+            else _normalize_email(to_email_raw)
+        )
+        to_email = inbound_to_email or to_email_raw.strip()
 
         if not from_email:
             return {"status": "ignored", "reason": "no from email"}
 
-        # Find matching prospect
-        result = await db.execute(
-            select(Outreach).where(
-                Outreach.prospect_email == from_email.lower().strip()
-            ).limit(1)
-        )
-        prospect = result.scalar_one_or_none()
+        prospect = None
+        tenant_ids = await resolve_tenant_ids_for_mailboxes(db, inbound_to_candidates)
+
+        # First, try mailbox-aware thread matching:
+        # reply sender + mailbox they replied to must match the most recent outbound.
+        # This avoids wrong matches when the same prospect email exists multiple times.
+        if inbound_to_candidates:
+            thread_result = await db.execute(
+                select(Outreach)
+                .join(OutreachEmail, OutreachEmail.outreach_id == Outreach.id)
+                .where(
+                    and_(
+                        OutreachEmail.direction == "outbound",
+                        func.lower(OutreachEmail.to_email) == from_email,
+                        func.lower(OutreachEmail.from_email).in_(inbound_to_candidates),
+                    )
+                )
+                .order_by(OutreachEmail.sent_at.desc())
+                .limit(25)
+            )
+            thread_candidates = list(thread_result.scalars().all())
+            if tenant_ids:
+                thread_candidates = [
+                    p for p in thread_candidates if p.tenant_id in tenant_ids
+                ]
+            prospect = thread_candidates[0] if thread_candidates else None
+
+        # Fallback: match by sender email only (legacy behavior), preferring
+        # recently touched prospects to keep selection deterministic.
+        if not prospect:
+            result = await db.execute(
+                select(Outreach)
+                .where(func.lower(Outreach.prospect_email) == from_email)
+                .order_by(
+                    Outreach.last_email_sent_at.desc().nullslast(),
+                    Outreach.updated_at.desc(),
+                    Outreach.created_at.desc(),
+                )
+                .limit(25)
+            )
+            fallback_candidates = list(result.scalars().all())
+            if tenant_ids:
+                fallback_candidates = [
+                    p for p in fallback_candidates if p.tenant_id in tenant_ids
+                ]
+            prospect = fallback_candidates[0] if fallback_candidates else None
 
         if not prospect:
-            logger.info("Inbound email from unknown sender: %s", from_email[:20] + "***")
+            logger.info(
+                "Inbound email from unknown sender: %s to %s",
+                from_email[:20] + "***",
+                (inbound_to_email or "unknown")[:20] + "***",
+            )
             return {"status": "ignored", "reason": "unknown sender"}
 
         # Load config for auto-reply settings
-        config_result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = config_result.scalar_one_or_none()
+        config = (
+            await get_sales_config_for_tenant(db, prospect.tenant_id)
+            if prospect.tenant_id
+            else None
+        )
 
         now = datetime.now(timezone.utc)
 
@@ -434,6 +530,7 @@ async def inbound_email_webhook(
                     auto_reply_sent = await _send_booking_reply(
                         db, prospect, config, subject,
                         reply_text=text_body or "",
+                        reply_mailbox=inbound_to_email,
                     )
                 except Exception as reply_err:
                     logger.warning(
@@ -464,9 +561,12 @@ async def inbound_email_webhook(
             "sms_sent": sms_sent,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Inbound email processing error: %s", str(e), exc_info=True)
-        return {"status": "error"}
+        # Return non-2xx so upstream providers retry transient failures.
+        raise HTTPException(status_code=500, detail="Inbound webhook processing error")
 
 
 @router.post("/email-events")
@@ -526,6 +626,7 @@ async def email_events_webhook(
 
                 if not email_record:
                     continue
+                prospect_id = email_record.outreach_id or outreach_uuid
 
                 # Get Redis for reputation tracking
                 try:
@@ -561,8 +662,8 @@ async def email_events_webhook(
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Also update prospect
-                    if outreach_uuid:
-                        prospect = await db.get(Outreach, outreach_uuid)
+                    if prospect_id:
+                        prospect = await db.get(Outreach, prospect_id)
                         if prospect:
                             prospect.last_email_opened_at = timestamp
                             # Record learning signal
@@ -577,8 +678,8 @@ async def email_events_webhook(
                             await record_email_event(redis, "clicked")
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
-                    if outreach_uuid:
-                        prospect = await db.get(Outreach, outreach_uuid)
+                    if prospect_id:
+                        prospect = await db.get(Outreach, prospect_id)
                         if prospect:
                             prospect.last_email_clicked_at = timestamp
                             await _record_email_signal(
@@ -604,8 +705,8 @@ async def email_events_webhook(
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Hard bounce -> mark prospect as lost, flag email invalid
                     if event.get("type") == "bounce" or event_type == "bounce":
-                        if outreach_uuid:
-                            prospect = await db.get(Outreach, outreach_uuid)
+                        if prospect_id:
+                            prospect = await db.get(Outreach, prospect_id)
                             if prospect:
                                 prospect.email_verified = False
                                 prospect.status = "lost"
@@ -713,8 +814,8 @@ async def email_events_webhook(
                         event.get("reason", "unknown"),
                     )
                     # Track soft bounces - mark unreachable after 3+ deferrals
-                    if outreach_uuid:
-                        prospect = await db.get(Outreach, outreach_uuid)
+                    if prospect_id:
+                        prospect = await db.get(Outreach, prospect_id)
                         if prospect and prospect.prospect_email:
                             deferral_count_result = await db.execute(
                                 select(func.count()).select_from(OutreachEmail).where(
@@ -741,8 +842,8 @@ async def email_events_webhook(
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
                     # Treat spam report as unsubscribe
-                    if outreach_uuid:
-                        prospect = await db.get(Outreach, outreach_uuid)
+                    if prospect_id:
+                        prospect = await db.get(Outreach, prospect_id)
                         if prospect:
                             prospect.email_unsubscribed = True
                             prospect.unsubscribed_at = timestamp
@@ -758,9 +859,12 @@ async def email_events_webhook(
 
         return {"status": "processed", "events": len(events)}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Email event processing error: %s", str(e))
-        return {"status": "error"}
+        # Return non-2xx so upstream providers retry transient failures.
+        raise HTTPException(status_code=500, detail="Email event processing error")
 
 
 @router.get("/unsubscribe/{prospect_id}", response_class=HTMLResponse)

@@ -99,6 +99,7 @@ def get_query_variants(trade: str) -> list[str]:
 
 async def get_next_variant_and_offset(
     db: AsyncSession,
+    tenant_id,
     city: str,
     state: str,
     trade: str,
@@ -125,6 +126,7 @@ async def get_next_variant_and_offset(
                 ScrapeJob.city == city,
                 ScrapeJob.state_code == state,
                 ScrapeJob.trade_type == trade,
+                ScrapeJob.tenant_id == tenant_id,
                 ScrapeJob.status == "completed",
                 ScrapeJob.completed_at >= cooldown_cutoff,
             )
@@ -145,10 +147,21 @@ async def _get_poll_interval() -> int:
     """Get scraper poll interval from config, with fallback."""
     try:
         async with async_session_factory() as db:
-            result = await db.execute(select(SalesEngineConfig).limit(1))
-            config = result.scalar_one_or_none()
-            if config and hasattr(config, "scraper_interval_minutes") and config.scraper_interval_minutes:
-                return config.scraper_interval_minutes * 60
+            result = await db.execute(
+                select(SalesEngineConfig.scraper_interval_minutes).where(
+                    and_(
+                        SalesEngineConfig.is_active == True,  # noqa: E712
+                        SalesEngineConfig.tenant_id.isnot(None),
+                    )
+                )
+            )
+            intervals = [
+                int(row[0]) * 60
+                for row in result.all()
+                if row[0]
+            ]
+            if intervals:
+                return max(60, min(intervals))
     except Exception as e:
         logger.debug("Config interval read failed: %s", str(e))
     return DEFAULT_POLL_INTERVAL_SECONDS
@@ -161,14 +174,7 @@ async def run_scraper():
 
     while True:
         try:
-            # Check if scraper is paused
-            async with async_session_factory() as db:
-                result = await db.execute(select(SalesEngineConfig).limit(1))
-                config = result.scalar_one_or_none()
-                if config and hasattr(config, "scraper_paused") and config.scraper_paused:
-                    logger.debug("Scraper is paused, skipping cycle")
-                else:
-                    await scrape_cycle()
+            await scrape_cycle()
         except Exception as e:
             logger.error("Scraper cycle error: %s", str(e))
 
@@ -179,12 +185,13 @@ async def run_scraper():
         await asyncio.sleep(interval + jitter)
 
 
-async def _get_round_robin_position(total_combos: int) -> int:
+async def _get_round_robin_position(total_combos: int, tenant_id=None) -> int:
     """Get and increment the round-robin scraper position via Redis."""
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
-        position = await redis.incr("leadlock:scraper:position")
+        key_suffix = str(tenant_id) if tenant_id else "global"
+        position = await redis.incr(f"leadlock:scraper:position:{key_suffix}")
         return (position - 1) % total_combos
     except Exception as e:
         logger.debug("Round-robin position read failed: %s", str(e))
@@ -197,12 +204,18 @@ async def scrape_cycle():
     in round-robin fashion. Continuous scraping with smart throttling.
     """
     async with async_session_factory() as db:
-        # Load config
-        result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = result.scalar_one_or_none()
-
-        if not config or not config.is_active:
-            logger.debug("Sales engine is disabled, skipping scrape cycle")
+        # Load active tenant configs
+        result = await db.execute(
+            select(SalesEngineConfig).where(
+                and_(
+                    SalesEngineConfig.is_active == True,  # noqa: E712
+                    SalesEngineConfig.tenant_id.isnot(None),
+                )
+            )
+        )
+        configs = [c for c in result.scalars().all() if not getattr(c, "scraper_paused", False)]
+        if not configs:
+            logger.debug("No active tenant config for scraper cycle")
             return
 
         settings = get_settings()
@@ -210,59 +223,75 @@ async def scrape_cycle():
             logger.warning("Brave API key not configured, skipping scrape")
             return
 
-        locations = config.target_locations or []
-        trade_types = config.target_trade_types or []
+        for config in configs:
+            tenant_id = config.tenant_id
+            locations = config.target_locations or []
+            trade_types = config.target_trade_types or []
+            if not locations or not trade_types:
+                continue
 
-        if not locations or not trade_types:
-            logger.debug("No target locations or trade types configured")
-            return
-
-        # Count today's scrapes
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        count_result = await db.execute(
-            select(func.count()).select_from(ScrapeJob).where(
-                ScrapeJob.created_at >= today_start
+            # Count today's scrapes per tenant
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            count_result = await db.execute(
+                select(func.count()).select_from(ScrapeJob).where(
+                    and_(
+                        ScrapeJob.tenant_id == tenant_id,
+                        ScrapeJob.created_at >= today_start,
+                    )
+                )
             )
-        )
-        today_scrapes = count_result.scalar() or 0
+            today_scrapes = count_result.scalar() or 0
+            if today_scrapes >= config.daily_scrape_limit:
+                logger.info(
+                    "Tenant %s daily scrape limit reached (%d)",
+                    str(tenant_id)[:8], config.daily_scrape_limit,
+                )
+                continue
 
-        if today_scrapes >= config.daily_scrape_limit:
-            logger.info("Daily scrape limit reached (%d)", config.daily_scrape_limit)
-            return
+            combos = [
+                (loc.get("city", ""), loc.get("state", ""), trade)
+                for loc in locations
+                for trade in trade_types
+            ]
+            if not combos:
+                continue
 
-        # Build all location+trade combos for round-robin
-        combos = [
-            (loc.get("city", ""), loc.get("state", ""), trade)
-            for loc in locations
-            for trade in trade_types
-        ]
-        if not combos:
-            return
+            position = await _get_round_robin_position(len(combos), tenant_id=tenant_id)
+            city, state, trade = combos[position]
+            location_str = f"{city}, {state}"
 
-        # Pick one combo via round-robin
-        position = await _get_round_robin_position(len(combos))
-        city, state, trade = combos[position]
-        location_str = f"{city}, {state}"
-
-        cooldown_days = getattr(config, "variant_cooldown_days", DEFAULT_VARIANT_COOLDOWN_DAYS)
-        variant_idx, offset = await get_next_variant_and_offset(
-            db, city, state, trade, cooldown_days=cooldown_days,
-        )
-
-        if variant_idx == -1:
-            logger.info(
-                "All variants in cooldown for %s in %s. Skipping.",
-                trade, location_str,
+            cooldown_days = getattr(config, "variant_cooldown_days", DEFAULT_VARIANT_COOLDOWN_DAYS)
+            variant_idx, offset = await get_next_variant_and_offset(
+                db,
+                tenant_id,
+                city,
+                state,
+                trade,
+                cooldown_days=cooldown_days,
             )
-            return
+            if variant_idx == -1:
+                logger.info(
+                    "Tenant %s all variants in cooldown for %s in %s",
+                    str(tenant_id)[:8], trade, location_str,
+                )
+                continue
 
-        variants = get_query_variants(trade)
-        query = variants[variant_idx]
+            variants = get_query_variants(trade)
+            query = variants[variant_idx]
 
-        await scrape_location_trade(
-            db, config, settings, city, state, location_str,
-            trade, query, variant_idx, offset,
-        )
+            await scrape_location_trade(
+                db,
+                config,
+                settings,
+                city,
+                state,
+                location_str,
+                trade,
+                query,
+                variant_idx,
+                offset,
+            )
+            await db.flush()
 
         await db.commit()
 
@@ -282,6 +311,7 @@ async def scrape_location_trade(
     """Scrape a single location+trade combination with specific query variant."""
     # Create scrape job record
     job = ScrapeJob(
+        tenant_id=config.tenant_id,
         platform="brave",
         trade_type=trade,
         location_query=f"{query} in {location_str}",
@@ -320,7 +350,12 @@ async def scrape_location_trade(
             # Check for duplicates by place_id
             if place_id:
                 existing = await db.execute(
-                    select(Outreach).where(Outreach.source_place_id == place_id).limit(1)
+                    select(Outreach).where(
+                        and_(
+                            Outreach.tenant_id == config.tenant_id,
+                            Outreach.source_place_id == place_id,
+                        )
+                    ).limit(1)
                 )
                 if existing.scalar_one_or_none():
                     dupe_count += 1
@@ -329,7 +364,12 @@ async def scrape_location_trade(
             # Check for duplicates by phone
             if phone:
                 existing = await db.execute(
-                    select(Outreach).where(Outreach.prospect_phone == phone).limit(1)
+                    select(Outreach).where(
+                        and_(
+                            Outreach.tenant_id == config.tenant_id,
+                            Outreach.prospect_phone == phone,
+                        )
+                    ).limit(1)
                 )
                 if existing.scalar_one_or_none():
                     dupe_count += 1
@@ -373,6 +413,7 @@ async def scrape_location_trade(
 
             # Create outreach prospect
             prospect = Outreach(
+                tenant_id=config.tenant_id,
                 prospect_name=biz.get("name", "Unknown"),
                 prospect_company=biz.get("name"),
                 prospect_email=email,

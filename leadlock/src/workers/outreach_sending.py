@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import unquote
 from typing import Optional
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.outreach import Outreach
@@ -18,6 +18,7 @@ from src.models.campaign import Campaign
 from src.models.sales_config import SalesEngineConfig
 from src.agents.sales_outreach import generate_outreach_email
 from src.services.cold_email import send_cold_email
+from src.services.sender_mailboxes import get_active_sender_mailboxes
 from src.services.outreach_timing import followup_readiness
 from src.utils.email_validation import validate_email
 
@@ -355,19 +356,39 @@ async def send_sequence_email(
     template = None
     if template_id:
         try:
-            template = await db.get(EmailTemplate, uuid.UUID(template_id))
+            template_uuid = uuid.UUID(template_id)
+            template_result = await db.execute(
+                select(EmailTemplate).where(
+                    and_(
+                        EmailTemplate.id == template_uuid,
+                        or_(
+                            EmailTemplate.tenant_id == prospect.tenant_id,
+                            EmailTemplate.tenant_id.is_(None),
+                        ),
+                    )
+                ).limit(1)
+            )
+            template = template_result.scalar_one_or_none()
         except Exception as e:
             logger.warning(
                 "Template %s not found for prospect %s",
                 template_id, str(prospect.id)[:8],
             )
 
+    sender_profile = await _choose_sender_profile(db, config, prospect, next_step)
+    if not sender_profile:
+        logger.warning(
+            "No active sender mailbox for prospect %s",
+            str(prospect.id)[:8],
+        )
+        return
+
     # Generate personalized email
     email_result = await _generate_email_with_template(
         prospect=prospect,
         next_step=next_step,
         template=template,
-        sender_name=config.sender_name or "Alek",
+        sender_name=sender_profile["sender_name"],
         enrichment_data=prospect.enrichment_data,
     )
 
@@ -413,9 +434,9 @@ async def send_sequence_email(
         to_name=prospect.prospect_name,
         subject=send_subject,
         body_html=email_result["body_html"],
-        from_email=config.from_email,
-        from_name=config.from_name or "LeadLock",
-        reply_to=config.reply_to_email or config.from_email,
+        from_email=sender_profile["from_email"],
+        from_name=sender_profile["from_name"] or "LeadLock",
+        reply_to=sender_profile["reply_to_email"] or sender_profile["from_email"],
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
         custom_args={
@@ -438,8 +459,55 @@ async def send_sequence_email(
     # Record send and update prospect
     await _record_send(
         db, prospect, config, campaign, next_step,
-        send_subject, email_result, send_result,
+        send_subject, email_result, send_result, sender_profile,
     )
+
+
+async def _choose_sender_profile(
+    db: AsyncSession,
+    config: SalesEngineConfig,
+    prospect: Outreach,
+    next_step: int,
+) -> Optional[dict]:
+    """
+    Pick a mailbox for this send using deterministic round-robin.
+    Respects optional per-mailbox daily_limit when configured.
+    """
+    profiles = get_active_sender_mailboxes(config)
+    if not profiles:
+        return None
+    if len(profiles) == 1:
+        return profiles[0]
+
+    seed = uuid.UUID(str(prospect.id)).int + int(next_step)
+    start_index = seed % len(profiles)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    for offset in range(len(profiles)):
+        profile = profiles[(start_index + offset) % len(profiles)]
+        mailbox_limit = profile.get("daily_limit")
+        if not mailbox_limit:
+            return profile
+
+        sent_today_query = (
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
+                and_(
+                    OutreachEmail.direction == "outbound",
+                    OutreachEmail.from_email == profile["from_email"],
+                    OutreachEmail.sent_at >= today_start,
+                    Outreach.tenant_id == prospect.tenant_id if prospect.tenant_id else True,
+                )
+            )
+        )
+        sent_today_result = await db.execute(sent_today_query)
+        sent_today = sent_today_result.scalar() or 0
+        if sent_today < mailbox_limit:
+            return profile
+
+    return profiles[start_index]
 
 
 async def _run_quality_gate(
@@ -585,6 +653,7 @@ async def _record_send(
     send_subject: str,
     email_result: dict,
     send_result: dict,
+    sender_profile: dict,
 ) -> None:
     """Record the sent email and update prospect state."""
     # Record email reputation event
@@ -613,7 +682,7 @@ async def _record_send(
         subject=send_subject,
         body_html=email_result["body_html"],
         body_text=email_result["body_text"],
-        from_email=config.from_email,
+        from_email=sender_profile["from_email"],
         to_email=prospect.prospect_email,
         sendgrid_message_id=send_result.get("message_id"),
         sequence_step=next_step,

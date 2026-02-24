@@ -18,6 +18,9 @@ class Outreach(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Prospect info
     prospect_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -96,6 +99,7 @@ class Outreach(Base):
     )
 
     __table_args__ = (
+        Index("ix_outreach_tenant_id", "tenant_id"),
         Index("ix_outreach_status", "status"),
         Index("ix_outreach_created_at", "created_at"),
         Index("ix_outreach_source_place_id", "source_place_id", unique=True,

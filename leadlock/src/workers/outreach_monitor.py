@@ -14,7 +14,7 @@ from sqlalchemy import select, func, and_, update
 from src.database import async_session_factory
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
-from src.models.sales_config import SalesEngineConfig
+from src.services.sales_tenancy import get_active_sales_configs
 from src.utils.alerting import send_alert, AlertType
 
 logger = logging.getLogger(__name__)
@@ -80,31 +80,35 @@ async def _check_outreach_health():
     from src.workers.outreach_sequencer import is_within_send_window
 
     async with async_session_factory() as db:
-        result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = result.scalar_one_or_none()
-
-        if not config or not config.is_active:
+        configs = await get_active_sales_configs(db)
+        if not configs:
             return
 
         now = datetime.now(timezone.utc)
-        in_send_window = is_within_send_window(config)
-
-        if in_send_window:
-            await _check_zero_sends(db, now)
-
-        await _check_bounce_rate(db, now)
-        await _check_open_rate(db, now)
+        for config in configs:
+            tenant_id = getattr(config, "tenant_id", None)
+            if not tenant_id:
+                continue
+            in_send_window = is_within_send_window(config)
+            if in_send_window:
+                await _check_zero_sends(db, now, tenant_id)
+            await _check_bounce_rate(db, now, tenant_id)
+            await _check_open_rate(db, now, tenant_id)
         await _check_sequencer_heartbeat()
         await _check_reputation_paused()
 
 
-async def _check_zero_sends(db, now: datetime) -> None:
+async def _check_zero_sends(db, now: datetime, tenant_id) -> None:
     """Alert if zero outbound emails sent in the last 4 hours during send window."""
     cutoff = now - timedelta(hours=ZERO_SENDS_HOURS)
 
     result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= cutoff,
             )
@@ -120,17 +124,25 @@ async def _check_zero_sends(db, now: datetime) -> None:
                 f"during the send window. The sequencer may be stuck or paused."
             ),
             severity="critical",
-            extra={"window_hours": str(ZERO_SENDS_HOURS), "check_time": now.isoformat()},
+            extra={
+                "window_hours": str(ZERO_SENDS_HOURS),
+                "check_time": now.isoformat(),
+                "tenant_id": str(tenant_id),
+            },
         )
 
 
-async def _check_bounce_rate(db, now: datetime) -> None:
+async def _check_bounce_rate(db, now: datetime, tenant_id) -> None:
     """Alert if bounce rate exceeds 10% in the last 24 hours."""
     cutoff = now - timedelta(hours=24)
 
     sent_result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= cutoff,
             )
@@ -142,8 +154,12 @@ async def _check_bounce_rate(db, now: datetime) -> None:
         return
 
     bounced_result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= cutoff,
                 OutreachEmail.bounced_at.isnot(None),
@@ -166,17 +182,22 @@ async def _check_bounce_rate(db, now: datetime) -> None:
                 "bounce_rate": f"{bounce_rate:.4f}",
                 "bounced": str(bounced_count),
                 "sent": str(sent_count),
+                "tenant_id": str(tenant_id),
             },
         )
 
 
-async def _check_open_rate(db, now: datetime) -> None:
+async def _check_open_rate(db, now: datetime, tenant_id) -> None:
     """Alert if open rate is below threshold over 48 hours with sufficient sample size."""
     cutoff = now - timedelta(hours=OPEN_RATE_WINDOW_HOURS)
 
     sent_result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= cutoff,
             )
@@ -188,8 +209,12 @@ async def _check_open_rate(db, now: datetime) -> None:
         return
 
     opened_result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= cutoff,
                 OutreachEmail.opened_at.isnot(None),
@@ -214,6 +239,7 @@ async def _check_open_rate(db, now: datetime) -> None:
                 "opened": str(opened_count),
                 "sent": str(sent_count),
                 "window_hours": str(OPEN_RATE_WINDOW_HOURS),
+                "tenant_id": str(tenant_id),
             },
         )
 
@@ -306,41 +332,70 @@ async def _check_reputation_paused() -> None:
 async def _cleanup_exhausted_sequences():
     """Mark exhausted outreach sequences as lost."""
     async with async_session_factory() as db:
-        result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = result.scalar_one_or_none()
-
-        if not config or not config.is_active:
+        configs = await get_active_sales_configs(db)
+        if not configs:
             return
 
-        if hasattr(config, "cleanup_paused") and config.cleanup_paused:
-            logger.debug("Outreach cleanup is paused, skipping cycle")
-            return
-
-        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
         total_marked = 0
-
-        # Pass 1: Campaign-bound prospects
         from src.models.campaign import Campaign
 
-        campaigns_result = await db.execute(
-            select(Campaign).where(
-                Campaign.status.in_(["active", "paused", "completed"])
-            )
-        )
-        all_campaigns = campaigns_result.scalars().all()
-
-        for campaign in all_campaigns:
-            steps = campaign.sequence_steps or []
-            campaign_max_steps = len(steps)
-            if campaign_max_steps == 0:
+        for config in configs:
+            tenant_id = getattr(config, "tenant_id", None)
+            if not tenant_id:
                 continue
+            if getattr(config, "cleanup_paused", False):
+                logger.debug("Outreach cleanup is paused for tenant=%s", str(tenant_id)[:8])
+                continue
+
+            delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
+
+            campaigns_result = await db.execute(
+                select(Campaign).where(
+                    and_(
+                        Campaign.tenant_id == tenant_id,
+                        Campaign.status.in_(["active", "paused", "completed"]),
+                    )
+                )
+            )
+            all_campaigns = campaigns_result.scalars().all()
+
+            for campaign in all_campaigns:
+                steps = campaign.sequence_steps or []
+                campaign_max_steps = len(steps)
+                if campaign_max_steps == 0:
+                    continue
+
+                stmt = (
+                    update(Outreach)
+                    .where(
+                        and_(
+                            Outreach.tenant_id == tenant_id,
+                            Outreach.campaign_id == campaign.id,
+                            Outreach.outreach_sequence_step >= campaign_max_steps,
+                            Outreach.status.in_(["cold", "contacted"]),
+                            Outreach.last_email_replied_at.is_(None),
+                            Outreach.last_email_sent_at.isnot(None),
+                            Outreach.last_email_sent_at <= delay_cutoff,
+                        )
+                    )
+                    .values(status="lost", updated_at=datetime.now(timezone.utc))
+                )
+                result = await db.execute(stmt)
+                campaign_marked = result.rowcount
+                if campaign_marked > 0:
+                    logger.info(
+                        "Campaign %s: marked %d exhausted sequences as lost (max_steps=%d)",
+                        str(campaign.id)[:8], campaign_marked, campaign_max_steps,
+                    )
+                    total_marked += campaign_marked
 
             stmt = (
                 update(Outreach)
                 .where(
                     and_(
-                        Outreach.campaign_id == campaign.id,
-                        Outreach.outreach_sequence_step >= campaign_max_steps,
+                        Outreach.tenant_id == tenant_id,
+                        Outreach.campaign_id.is_(None),
+                        Outreach.outreach_sequence_step >= config.max_sequence_steps,
                         Outreach.status.in_(["cold", "contacted"]),
                         Outreach.last_email_replied_at.is_(None),
                         Outreach.last_email_sent_at.isnot(None),
@@ -349,40 +404,18 @@ async def _cleanup_exhausted_sequences():
                 )
                 .values(status="lost", updated_at=datetime.now(timezone.utc))
             )
+
             result = await db.execute(stmt)
-            campaign_marked = result.rowcount
-            if campaign_marked > 0:
+            unbound_marked = result.rowcount
+            total_marked += unbound_marked
+
+            if unbound_marked > 0:
                 logger.info(
-                    "Campaign %s: marked %d exhausted sequences as lost (max_steps=%d)",
-                    str(campaign.id)[:8], campaign_marked, campaign_max_steps,
+                    "Tenant %s unbound: marked %d exhausted sequences as lost (max_steps=%d)",
+                    str(tenant_id)[:8],
+                    unbound_marked,
+                    config.max_sequence_steps,
                 )
-                total_marked += campaign_marked
-
-        # Pass 2: Unbound prospects
-        stmt = (
-            update(Outreach)
-            .where(
-                and_(
-                    Outreach.campaign_id.is_(None),
-                    Outreach.outreach_sequence_step >= config.max_sequence_steps,
-                    Outreach.status.in_(["cold", "contacted"]),
-                    Outreach.last_email_replied_at.is_(None),
-                    Outreach.last_email_sent_at.isnot(None),
-                    Outreach.last_email_sent_at <= delay_cutoff,
-                )
-            )
-            .values(status="lost", updated_at=datetime.now(timezone.utc))
-        )
-
-        result = await db.execute(stmt)
-        unbound_marked = result.rowcount
-        total_marked += unbound_marked
-
-        if unbound_marked > 0:
-            logger.info(
-                "Unbound prospects: marked %d exhausted sequences as lost (max_steps=%d)",
-                unbound_marked, config.max_sequence_steps,
-            )
 
         if total_marked > 0:
             logger.info("Total marked %d exhausted outreach sequences as lost", total_marked)

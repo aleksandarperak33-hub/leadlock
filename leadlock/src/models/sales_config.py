@@ -5,7 +5,7 @@ Admin-editable from the dashboard. Controls all automation behavior.
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Integer, Boolean, Float, DateTime
+from sqlalchemy import String, Integer, Boolean, Float, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database import Base
@@ -16,6 +16,9 @@ class SalesEngineConfig(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
     )
 
     # Master switch
@@ -42,6 +45,9 @@ class SalesEngineConfig(Base):
     from_name: Mapped[Optional[str]] = mapped_column(String(100))
     sender_name: Mapped[Optional[str]] = mapped_column(String(50))  # Human first name for sign-off (e.g. "Alek")
     reply_to_email: Mapped[Optional[str]] = mapped_column(String(255))
+    sender_mailboxes: Mapped[Optional[list]] = mapped_column(
+        JSONB, default=list
+    )  # [{"from_email":"...", "from_name":"...", "reply_to_email":"...", "sender_name":"...", "daily_limit":50}]
     company_address: Mapped[Optional[str]] = mapped_column(String(500))
 
     # Booking / demo config
@@ -77,6 +83,10 @@ class SalesEngineConfig(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_sales_engine_config_tenant_id", "tenant_id"),
     )
 
     def __repr__(self) -> str:

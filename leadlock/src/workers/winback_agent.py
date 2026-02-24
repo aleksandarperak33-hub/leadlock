@@ -20,11 +20,13 @@ from src.database import async_session_factory
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
+from src.services.sales_tenancy import get_active_sales_configs
 from src.services.winback_generation import (
     generate_winback_email,
     select_winback_angle,
 )
 from src.services.cold_email import send_cold_email
+from src.services.sender_mailboxes import get_active_sender_mailboxes
 from src.workers.outreach_sequencer import sanitize_dashes
 
 logger = logging.getLogger(__name__)
@@ -72,63 +74,67 @@ async def winback_cycle():
     no previous win-back sent.
     """
     async with async_session_factory() as db:
-        # Check if sales engine is active
-        config_result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = config_result.scalar_one_or_none()
-        if not config or not config.is_active:
-            return
-
-        if not config.from_email:
-            logger.warning("Win-back: no from_email configured")
+        configs = await get_active_sales_configs(db)
+        if not configs:
             return
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=COLD_DAYS_THRESHOLD)
-
-        # Find eligible prospects
-        eligible_query = select(Outreach).where(
-            and_(
-                Outreach.status == "contacted",
-                Outreach.last_email_sent_at <= cutoff,
-                Outreach.last_email_replied_at.is_(None),
-                Outreach.email_unsubscribed == False,
-                Outreach.prospect_email.isnot(None),
-                Outreach.prospect_email != "",
-                Outreach.winback_sent_at.is_(None),
-                Outreach.winback_eligible == True,
-            )
-        ).order_by(Outreach.last_email_sent_at).limit(MAX_WINBACKS_PER_DAY)
-
-        result = await db.execute(eligible_query)
-        prospects = result.scalars().all()
-
-        if not prospects:
-            logger.debug("Win-back: no eligible prospects found")
-            return
-
-        logger.info("Win-back: found %d eligible prospects", len(prospects))
         from src.config import get_settings
         settings = get_settings()
 
-        sent_count = 0
-        for i, prospect in enumerate(prospects):
-            try:
-                success = await _send_winback(db, config, settings, prospect, i)
-                if success:
-                    sent_count += 1
-                await db.flush()
-            except Exception as e:
-                logger.error(
-                    "Win-back failed for prospect %s: %s",
-                    str(prospect.id)[:8], str(e),
+        for config in configs:
+            mailboxes = get_active_sender_mailboxes(config)
+            if not mailboxes:
+                logger.warning(
+                    "Win-back: no sender mailbox configured for tenant %s",
+                    str(config.tenant_id)[:8],
                 )
+                continue
 
-            # Rate limit with jitter
-            if i < len(prospects) - 1:
-                jitter = random.uniform(120, 300)
-                await asyncio.sleep(jitter)
+            eligible_query = select(Outreach).where(
+                and_(
+                    Outreach.tenant_id == config.tenant_id,
+                    Outreach.status == "contacted",
+                    Outreach.last_email_sent_at <= cutoff,
+                    Outreach.last_email_replied_at.is_(None),
+                    Outreach.email_unsubscribed == False,
+                    Outreach.prospect_email.isnot(None),
+                    Outreach.prospect_email != "",
+                    Outreach.winback_sent_at.is_(None),
+                    Outreach.winback_eligible == True,
+                )
+            ).order_by(Outreach.last_email_sent_at).limit(MAX_WINBACKS_PER_DAY)
+
+            result = await db.execute(eligible_query)
+            prospects = result.scalars().all()
+
+            if not prospects:
+                continue
+
+            sent_count = 0
+            for i, prospect in enumerate(prospects):
+                try:
+                    success = await _send_winback(db, config, settings, prospect, i)
+                    if success:
+                        sent_count += 1
+                    await db.flush()
+                except Exception as e:
+                    logger.error(
+                        "Win-back failed for prospect %s: %s",
+                        str(prospect.id)[:8], str(e),
+                    )
+
+                if i < len(prospects) - 1:
+                    jitter = random.uniform(120, 300)
+                    await asyncio.sleep(jitter)
+
+            await db.flush()
+            logger.info(
+                "Win-back tenant cycle complete: tenant=%s sent=%d/%d",
+                str(config.tenant_id)[:8], sent_count, len(prospects),
+            )
 
         await db.commit()
-        logger.info("Win-back cycle complete: %d/%d sent", sent_count, len(prospects))
 
 
 async def _send_winback(
@@ -139,6 +145,11 @@ async def _send_winback(
     batch_index: int,
 ) -> bool:
     """Generate and send a single win-back email. Returns True on success."""
+    sender_profiles = get_active_sender_mailboxes(config)
+    if not sender_profiles:
+        return False
+    sender = sender_profiles[batch_index % len(sender_profiles)]
+
     angle = select_winback_angle(
         prospect.prospect_trade_type or "general",
         batch_index,
@@ -151,7 +162,7 @@ async def _send_winback(
         city=prospect.city or "",
         state=prospect.state_code or "",
         angle=angle,
-        sender_name=config.sender_name or "Alek",
+        sender_name=sender["sender_name"],
         enrichment_data=prospect.enrichment_data,
     )
 
@@ -179,9 +190,9 @@ async def _send_winback(
         to_name=prospect.prospect_name,
         subject=email_result["subject"],
         body_html=email_result["body_html"],
-        from_email=config.from_email,
-        from_name=config.from_name or "LeadLock",
-        reply_to=config.reply_to_email or config.from_email,
+        from_email=sender["from_email"],
+        from_name=sender["from_name"] or "LeadLock",
+        reply_to=sender["reply_to_email"] or sender["from_email"],
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
         custom_args={
@@ -208,7 +219,7 @@ async def _send_winback(
         subject=email_result["subject"],
         body_html=email_result["body_html"],
         body_text=email_result["body_text"],
-        from_email=config.from_email,
+        from_email=sender["from_email"],
         to_email=prospect.prospect_email,
         sendgrid_message_id=send_result.get("message_id"),
         sequence_step=99,  # Special step number for win-back

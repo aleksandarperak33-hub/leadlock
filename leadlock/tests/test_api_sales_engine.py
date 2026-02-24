@@ -10,6 +10,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import HTTPException
 from sqlalchemy import and_, func
 
 from src.models.outreach import Outreach
@@ -451,12 +452,9 @@ class TestInboundEmailWebhook:
         from src.api.sales_engine import inbound_email_webhook
 
         request = _mock_request()
-        # The function catches HTTPException internally and returns {"status": "error"}
-        # because the whole thing is wrapped in try/except
-        result = await inbound_email_webhook(request, db)
-        # When _verify_sendgrid_webhook returns False, it raises HTTPException(403)
-        # which is caught by the outer try/except, returning {"status": "error"}
-        assert result["status"] == "error"
+        with pytest.raises(HTTPException) as exc_info:
+            await inbound_email_webhook(request, db)
+        assert exc_info.value.status_code == 403
 
     @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_ignores_empty_from_email(self, mock_verify, db):
@@ -589,6 +587,57 @@ class TestInboundEmailWebhook:
         assert result["prospect_id"] == str(prospect.id)
 
     @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
+    @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
+    async def test_prefers_mailbox_aware_recent_thread_match(
+        self, mock_verify, mock_classify, db
+    ):
+        """Reply should map to the newest outbound thread for the mailbox that received it."""
+        from src.api.sales_engine import inbound_email_webhook
+
+        old_prospect = _make_prospect(
+            db,
+            prospect_name="Old Prospect",
+            prospect_email="shared@acme.com",
+            updated_at=datetime.now(timezone.utc) - timedelta(days=3),
+        )
+        new_prospect = _make_prospect(
+            db,
+            prospect_name="New Prospect",
+            prospect_email="shared@acme.com",
+        )
+        await db.flush()
+
+        _make_email(
+            db,
+            old_prospect.id,
+            to_email="shared@acme.com",
+            from_email="ops1@leadlock.org",
+            sent_at=datetime.now(timezone.utc) - timedelta(days=2),
+        )
+        _make_email(
+            db,
+            new_prospect.id,
+            to_email="shared@acme.com",
+            from_email="ops2@leadlock.org",
+            sent_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        await db.flush()
+
+        mock_classify.return_value = {"classification": "auto_reply"}
+
+        request = _mock_request(form_data={
+            "from": "Shared Contact <shared@acme.com>",
+            "to": "ops2@leadlock.org",
+            "subject": "Re: follow-up",
+            "text": "Thanks",
+            "html": "",
+        })
+
+        result = await inbound_email_webhook(request, db)
+        assert result["status"] == "processed"
+        assert result["prospect_id"] == str(new_prospect.id)
+
+    @patch("src.agents.sales_outreach.classify_reply", new_callable=AsyncMock)
     @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
     @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)
     async def test_does_not_mutate_campaign_counter_on_reply(
@@ -628,12 +677,13 @@ class TestEmailEventsWebhook:
 
     @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=False)
     async def test_rejects_invalid_token(self, mock_verify, db):
-        """Should return error status when verification fails."""
+        """Should raise 403 when verification fails."""
         from src.api.sales_engine import email_events_webhook
 
         request = _mock_request()
-        result = await email_events_webhook(request, db)
-        assert result["status"] == "error"
+        with pytest.raises(HTTPException) as exc_info:
+            await email_events_webhook(request, db)
+        assert exc_info.value.status_code == 403
 
     @patch("src.api.sales_webhooks._record_email_signal", new_callable=AsyncMock)
     @patch("src.api.sales_webhooks._verify_sendgrid_webhook", new_callable=AsyncMock, return_value=True)

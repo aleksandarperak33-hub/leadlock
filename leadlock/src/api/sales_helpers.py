@@ -62,9 +62,15 @@ def _compute_send_window_label(config: SalesEngineConfig) -> dict:
     }
 
 
-async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
+async def _build_activity_feed(
+    db: AsyncSession,
+    tenant_id=None,
+    limit: int = 20,
+) -> list:
     """Merge recent email events and scrape completions into a unified feed."""
     activities = []
+    tenant_outreach = [Outreach.tenant_id == tenant_id] if tenant_id is not None else []
+    tenant_scrape = [ScrapeJob.tenant_id == tenant_id] if tenant_id is not None else []
 
     # Recent outbound emails (sent)
     sent_result = await db.execute(
@@ -78,6 +84,7 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
         .where(
             and_(
+                *tenant_outreach,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at.isnot(None),
             )
@@ -101,7 +108,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             Outreach.prospect_name,
         )
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.opened_at.isnot(None))
+        .where(
+            and_(
+                *tenant_outreach,
+                OutreachEmail.opened_at.isnot(None),
+            )
+        )
         .order_by(desc(OutreachEmail.opened_at))
         .limit(limit)
     )
@@ -121,7 +133,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             Outreach.prospect_name,
         )
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.clicked_at.isnot(None))
+        .where(
+            and_(
+                *tenant_outreach,
+                OutreachEmail.clicked_at.isnot(None),
+            )
+        )
         .order_by(desc(OutreachEmail.clicked_at))
         .limit(limit)
     )
@@ -141,7 +158,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             Outreach.prospect_name,
         )
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.direction == "inbound")
+        .where(
+            and_(
+                *tenant_outreach,
+                OutreachEmail.direction == "inbound",
+            )
+        )
         .order_by(desc(OutreachEmail.sent_at))
         .limit(limit)
     )
@@ -161,7 +183,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             Outreach.prospect_name,
         )
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.bounced_at.isnot(None))
+        .where(
+            and_(
+                *tenant_outreach,
+                OutreachEmail.bounced_at.isnot(None),
+            )
+        )
         .order_by(desc(OutreachEmail.bounced_at))
         .limit(limit)
     )
@@ -176,7 +203,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
     # Recent scrape completions
     scrape_result = await db.execute(
         select(ScrapeJob)
-        .where(ScrapeJob.status == "completed")
+        .where(
+            and_(
+                *tenant_scrape,
+                ScrapeJob.status == "completed",
+            )
+        )
         .order_by(desc(ScrapeJob.completed_at))
         .limit(limit)
     )
@@ -195,7 +227,12 @@ async def _build_activity_feed(db: AsyncSession, limit: int = 20) -> list:
             Outreach.prospect_name,
             Outreach.prospect_company,
         )
-        .where(Outreach.unsubscribed_at.isnot(None))
+        .where(
+            and_(
+                *tenant_outreach,
+                Outreach.unsubscribed_at.isnot(None),
+            )
+        )
         .order_by(desc(Outreach.unsubscribed_at))
         .limit(limit)
     )

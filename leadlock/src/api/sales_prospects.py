@@ -16,6 +16,7 @@ from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.models.email_blacklist import EmailBlacklist
 from src.api.dashboard import get_current_admin
+from src.services.sales_tenancy import normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,18 @@ def _serialize_prospect(p: Outreach) -> dict:
     }
 
 
+async def _get_tenant_prospect(db: AsyncSession, prospect_id: uuid.UUID, tenant_id):
+    result = await db.execute(
+        select(Outreach).where(
+            and_(
+                Outreach.id == prospect_id,
+                Outreach.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 @router.get("/prospects")
 async def list_prospects(
     page: int = Query(default=1, ge=1),
@@ -66,7 +79,8 @@ async def list_prospects(
     admin=Depends(get_current_admin),
 ):
     """List prospects with pagination and filters."""
-    conditions = []
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    conditions = [Outreach.tenant_id == tenant_id]
     if status:
         conditions.append(Outreach.status == status)
     if trade_type:
@@ -124,7 +138,8 @@ async def get_prospect(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_tenant_prospect(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     return _serialize_prospect(prospect)
@@ -142,7 +157,8 @@ async def update_prospect(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_tenant_prospect(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -171,7 +187,8 @@ async def delete_prospect(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_tenant_prospect(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     await db.delete(prospect)
@@ -188,8 +205,10 @@ async def create_prospect(
     name = payload.get("prospect_name", "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="prospect_name is required")
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
 
     prospect = Outreach(
+        tenant_id=tenant_id,
         prospect_name=name,
         prospect_company=payload.get("prospect_company"),
         prospect_email=payload.get("prospect_email"),
@@ -218,7 +237,8 @@ async def blacklist_prospect(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_tenant_prospect(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -274,7 +294,8 @@ async def get_prospect_emails(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_tenant_prospect(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
@@ -320,6 +341,7 @@ async def bulk_update_prospects(
     admin=Depends(get_current_admin),
 ):
     """Bulk operations on prospects: status change, delete, assign to campaign."""
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
     prospect_ids = payload.get("prospect_ids", [])
     action = payload.get("action", "")
 
@@ -330,9 +352,30 @@ async def bulk_update_prospects(
         raise HTTPException(status_code=400, detail="Maximum 200 prospects per bulk operation")
 
     updated = 0
+    campaign_id = None
+    if action.startswith("campaign:"):
+        from src.models.campaign import Campaign
+
+        campaign_id_str = action.split(":")[1]
+        try:
+            campaign_id = uuid.UUID(campaign_id_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid campaign ID")
+
+        campaign_result = await db.execute(
+            select(Campaign).where(
+                and_(
+                    Campaign.id == campaign_id,
+                    Campaign.tenant_id == tenant_id,
+                )
+            ).limit(1)
+        )
+        if not campaign_result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
     for pid in prospect_ids:
         try:
-            prospect = await db.get(Outreach, uuid.UUID(pid))
+            prospect = await _get_tenant_prospect(db, uuid.UUID(pid), tenant_id)
             if not prospect:
                 continue
 
@@ -343,8 +386,7 @@ async def bulk_update_prospects(
                 prospect.status = new_status
                 prospect.updated_at = datetime.now(timezone.utc)
             elif action.startswith("campaign:"):
-                campaign_id_str = action.split(":")[1]
-                prospect.campaign_id = uuid.UUID(campaign_id_str)
+                prospect.campaign_id = campaign_id
                 prospect.updated_at = datetime.now(timezone.utc)
 
             updated += 1

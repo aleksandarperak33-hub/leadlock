@@ -16,10 +16,47 @@ from src.models.campaign import Campaign
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.api.dashboard import get_current_admin
+from src.services.sales_tenancy import normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/sales", tags=["campaign-inbox"])
+
+
+async def _get_campaign_for_tenant(
+    db: AsyncSession,
+    campaign_id: uuid.UUID,
+    tenant_id,
+):
+    if tenant_id is None:
+        return await db.get(Campaign, campaign_id)
+    campaign_result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.id == campaign_id,
+                Campaign.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    return campaign_result.scalar_one_or_none()
+
+
+async def _get_outreach_for_tenant(
+    db: AsyncSession,
+    prospect_id: uuid.UUID,
+    tenant_id,
+):
+    if tenant_id is None:
+        return await db.get(Outreach, prospect_id)
+    prospect_result = await db.execute(
+        select(Outreach).where(
+            and_(
+                Outreach.id == prospect_id,
+                Outreach.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    return prospect_result.scalar_one_or_none()
 
 
 @router.get("/inbox")
@@ -42,6 +79,8 @@ async def get_inbox(
     Each item includes prospect info, campaign name, last email snippet,
     reply count, sent count, and timestamps.
     """
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+
     # Subquery: email stats per prospect (outbound)
     outbound_stats = (
         select(
@@ -67,7 +106,7 @@ async def get_inbox(
     )
 
     # Build conditions based on filter
-    conditions = []
+    conditions = [Outreach.tenant_id == tenant_id]
     if campaign_id:
         try:
             cid = uuid.UUID(campaign_id)
@@ -118,9 +157,12 @@ async def get_inbox(
         .outerjoin(outbound_stats, Outreach.id == outbound_stats.c.outreach_id)
         .outerjoin(inbound_stats, Outreach.id == inbound_stats.c.outreach_id)
         .where(
-            or_(
-                outbound_stats.c.last_outbound_at.isnot(None),
-                inbound_stats.c.last_inbound_at.isnot(None),
+            and_(
+                Outreach.tenant_id == tenant_id,
+                or_(
+                    outbound_stats.c.last_outbound_at.isnot(None),
+                    inbound_stats.c.last_inbound_at.isnot(None),
+                ),
             )
         )
     )
@@ -128,7 +170,12 @@ async def get_inbox(
         select(func.count())
         .select_from(Outreach)
         .outerjoin(inbound_stats, Outreach.id == inbound_stats.c.outreach_id)
-        .where(inbound_stats.c.last_inbound_at.isnot(None))
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                inbound_stats.c.last_inbound_at.isnot(None),
+            )
+        )
     )
     count_sent_q = (
         select(func.count())
@@ -137,6 +184,7 @@ async def get_inbox(
         .outerjoin(inbound_stats, Outreach.id == inbound_stats.c.outreach_id)
         .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 outbound_stats.c.last_outbound_at.isnot(None),
                 inbound_stats.c.last_inbound_at.is_(None),
             )
@@ -220,7 +268,9 @@ async def get_inbox(
         # Get campaign name if assigned
         campaign_name = None
         if prospect.campaign_id:
-            campaign_obj = await db.get(Campaign, prospect.campaign_id)
+            campaign_obj = await _get_campaign_for_tenant(
+                db, prospect.campaign_id, tenant_id
+            )
             if campaign_obj:
                 campaign_name = campaign_obj.name
 
@@ -268,14 +318,17 @@ async def get_inbox_thread(
         pid = uuid.UUID(prospect_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid prospect ID")
-    prospect = await db.get(Outreach, pid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    prospect = await _get_outreach_for_tenant(db, pid, tenant_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
 
     # Campaign name
     campaign_name = None
     if prospect.campaign_id:
-        campaign_obj = await db.get(Campaign, prospect.campaign_id)
+        campaign_obj = await _get_campaign_for_tenant(
+            db, prospect.campaign_id, tenant_id
+        )
         if campaign_obj:
             campaign_name = campaign_obj.name
 

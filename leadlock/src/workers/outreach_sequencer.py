@@ -20,6 +20,8 @@ from src.models.outreach_email import OutreachEmail
 from src.models.sales_config import SalesEngineConfig
 from src.models.campaign import Campaign
 from src.config import get_settings
+from src.services.sales_tenancy import get_active_sales_configs
+from src.services.sender_mailboxes import get_primary_sender_profile
 from src.services.outreach_timing import (
     MIN_FOLLOWUP_DELAY_HOURS,
     followup_readiness,
@@ -194,7 +196,11 @@ async def _heartbeat():
         logger.debug("Heartbeat write failed: %s", str(e))
 
 
-async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
+async def _get_warmup_limit(
+    configured_limit: int,
+    from_email: str = "",
+    tenant_id=None,
+) -> int:
     """
     Calculate the effective daily email limit based on domain warmup schedule.
 
@@ -214,12 +220,13 @@ async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
         redis = await get_redis()
 
         domain = from_email.split("@")[1].lower() if "@" in from_email else "default"
-        warmup_key = f"leadlock:email_warmup:{domain}"
+        tenant_part = str(tenant_id) if tenant_id else "global"
+        warmup_key = f"leadlock:email_warmup:{tenant_part}:{domain}"
         started_at_raw = await redis.get(warmup_key)
 
         if started_at_raw is None:
             # Redis key missing — recover from DB to avoid resetting warmup
-            started_at = await _recover_warmup_start_from_db()
+            started_at = await _recover_warmup_start_from_db(tenant_id=tenant_id)
             if started_at is not None:
                 await redis.set(warmup_key, started_at.isoformat())
                 logger.info("Recovered warmup start from DB: %s", started_at.isoformat())
@@ -249,19 +256,25 @@ async def _get_warmup_limit(configured_limit: int, from_email: str = "") -> int:
         return configured_limit
 
 
-async def _recover_warmup_start_from_db() -> Optional[datetime]:
+async def _recover_warmup_start_from_db(tenant_id=None) -> Optional[datetime]:
     """
     Recover the warmup start date from the earliest outbound email in the DB.
     This prevents warmup resets when Redis data is lost on container restarts.
     """
     try:
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(func.min(OutreachEmail.sent_at)).where(
+            query = (
+                select(func.min(OutreachEmail.sent_at))
+                .select_from(OutreachEmail)
+                .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+                .where(
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at.isnot(None),
                 )
             )
+            if tenant_id:
+                query = query.where(Outreach.tenant_id == tenant_id)
+            result = await db.execute(query)
             earliest = result.scalar()
             return earliest
     except Exception as e:
@@ -413,40 +426,41 @@ async def run_outreach_sequencer():
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
                 continue
 
-            # Check if sequencer is paused
-            async with async_session_factory() as db:
-                result = await db.execute(select(SalesEngineConfig).limit(1))
-                config = result.scalar_one_or_none()
-                if config and hasattr(config, "sequencer_paused") and config.sequencer_paused:
-                    logger.debug("Outreach sequencer is paused, skipping cycle")
-                else:
-                    await sequence_cycle()
+            await sequence_cycle()
         except Exception as e:
             logger.error("Outreach sequencer error: %s", str(e))
 
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
-async def _recover_generation_failed() -> int:
+async def _recover_generation_failed(db: AsyncSession, tenant_id) -> int:
     """
     Reset prospects stuck in 'generation_failed' back to 'cold' so they
     can be retried now that the AI circuit breaker has cleared.
     Returns count of recovered prospects.
     """
     try:
-        async with async_session_factory() as db:
-            result = await db.execute(
-                select(Outreach).where(Outreach.status == "generation_failed")
+        result = await db.execute(
+            select(Outreach).where(
+                and_(
+                    Outreach.status == "generation_failed",
+                    Outreach.tenant_id == tenant_id,
+                )
             )
-            prospects = list(result.scalars().all())
-            if not prospects:
-                return 0
-            for p in prospects:
-                p.status = "cold"
-                p.generation_failures = 0
-            await db.commit()
-            logger.info("Recovered %d generation_failed prospects back to cold", len(prospects))
-            return len(prospects)
+        )
+        prospects = list(result.scalars().all())
+        if not prospects:
+            return 0
+        for p in prospects:
+            p.status = "cold"
+            p.generation_failures = 0
+        await db.flush()
+        logger.info(
+            "Recovered %d generation_failed prospects back to cold (tenant=%s)",
+            len(prospects),
+            str(tenant_id)[:8],
+        )
+        return len(prospects)
     except Exception as e:
         logger.debug("Recovery check failed: %s", str(e))
         return 0
@@ -455,26 +469,11 @@ async def _recover_generation_failed() -> int:
 async def sequence_cycle():
     """
     Execute one full outreach sequence cycle. Respects business hours gating.
-    Two-pass: (1) active campaigns first, (2) unbound prospects with global config.
+    Two-pass per tenant: (1) active campaigns, (2) unbound prospects.
     """
-    # Recover prospects damaged by previous AI outage
-    await _recover_generation_failed()
-
     async with async_session_factory() as db:
-        # Load config
-        result = await db.execute(select(SalesEngineConfig).limit(1))
-        config = result.scalar_one_or_none()
-
-        if not config or not config.is_active:
-            return
-
-        # Business hours gating - only send during configured window
-        if not is_within_send_window(config):
-            logger.info("Outside send window, deferring outreach to next cycle")
-            return
-
-        if not config.from_email or not config.company_address:
-            logger.warning("Sales engine email sender not configured")
+        configs = await get_active_sales_configs(db)
+        if not configs:
             return
 
         # Email reputation circuit breaker - pause if reputation is critical
@@ -484,200 +483,271 @@ async def sequence_cycle():
             return
 
         settings = get_settings()
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        for config in configs:
+            tenant_id = getattr(config, "tenant_id", None)
+            if not tenant_id:
+                continue
+            if getattr(config, "sequencer_paused", False):
+                logger.debug("Outreach sequencer paused for tenant=%s", str(tenant_id)[:8])
+                continue
+            if not is_within_send_window(config):
+                logger.info(
+                    "Outside send window, deferring outreach (tenant=%s)",
+                    str(tenant_id)[:8],
+                )
+                continue
+            if not config.company_address:
+                logger.warning(
+                    "Company address not configured for tenant=%s",
+                    str(tenant_id)[:8],
+                )
+                continue
+            primary_sender = get_primary_sender_profile(config)
+            if not primary_sender:
+                logger.warning(
+                    "No active sender mailbox configured for tenant=%s",
+                    str(tenant_id)[:8],
+                )
+                continue
 
-        # === PASS 1: Active campaigns ===
-        campaigns_result = await db.execute(
-            select(Campaign).where(Campaign.status == "active")
-        )
-        active_campaigns = campaigns_result.scalars().all()
-
-        for campaign in active_campaigns:
             try:
-                await _process_campaign_prospects(
-                    db, config, settings, campaign, today_start
+                await _sequence_cycle_for_tenant(
+                    db,
+                    config,
+                    settings,
+                    throttle_level,
+                    primary_sender["from_email"],
                 )
-            except Exception as e:
+                await db.commit()
+            except Exception as tenant_err:
+                await db.rollback()
                 logger.error(
-                    "Campaign %s processing error: %s",
-                    str(campaign.id)[:8], str(e),
+                    "Tenant outreach cycle failed tenant=%s: %s",
+                    str(tenant_id)[:8],
+                    str(tenant_err),
                 )
 
-        # === PASS 2: Unbound prospects (campaign_id IS NULL) ===
 
-        # Count today's sent emails (global)
-        sent_today_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
-                and_(
-                    OutreachEmail.direction == "outbound",
-                    OutreachEmail.sent_at >= today_start,
-                )
+async def _sequence_cycle_for_tenant(
+    db: AsyncSession,
+    config: SalesEngineConfig,
+    settings,
+    throttle_level: str,
+    primary_from_email: str,
+) -> None:
+    """Run one sequencer cycle for a single tenant config."""
+    tenant_id = config.tenant_id
+    if not tenant_id:
+        return
+
+    # Recover prospects damaged by previous AI outage
+    await _recover_generation_failed(db, tenant_id)
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # === PASS 1: Active campaigns ===
+    campaigns_result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.tenant_id == tenant_id,
+                Campaign.status == "active",
             )
         )
-        sent_today = sent_today_result.scalar() or 0
+    )
+    active_campaigns = campaigns_result.scalars().all()
 
-        # Apply warmup limit - dynamic pacing via warmup optimizer
-        warmup_limit = await _get_warmup_limit(config.daily_email_limit, config.from_email or "")
-
-        # Apply smart warmup optimizer on top of standard limit
+    for campaign in active_campaigns:
         try:
-            from src.services.warmup_optimizer import get_optimized_warmup_limit
-            from src.utils.dedup import get_redis as _get_redis_for_warmup
-            _redis = await _get_redis_for_warmup()
-            domain = (config.from_email or "").split("@")[1].lower() if "@" in (config.from_email or "") else "default"
-            _warmup_key = f"leadlock:email_warmup:{domain}"
-            _started_raw = await _redis.get(_warmup_key)
-            if _started_raw:
-                _started_str = _started_raw.decode() if isinstance(_started_raw, bytes) else str(_started_raw)
-                _started = datetime.fromisoformat(_started_str)
-                _days = (datetime.now(timezone.utc) - _started).days
-                warmup_limit = await get_optimized_warmup_limit(warmup_limit, _days)
-        except Exception as opt_err:
-            logger.debug("Warmup optimizer unavailable: %s", str(opt_err))
-
-        # Apply reputation throttle factor
-        from src.services.deliverability import EMAIL_THROTTLE_FACTORS
-        throttle_factor = EMAIL_THROTTLE_FACTORS.get(throttle_level, 1.0)
-        effective_limit = max(1, int(warmup_limit * throttle_factor))
-
-        remaining = effective_limit - sent_today
-        if remaining <= 0:
-            logger.info(
-                "Daily email limit reached (%d sent, effective_limit=%d, warmup=%d, throttle=%s)",
-                sent_today, effective_limit, warmup_limit, throttle_level,
+            await _process_campaign_prospects(
+                db, config, settings, campaign, today_start
             )
-            await db.commit()
-            return
+        except Exception as e:
+            logger.error(
+                "Campaign %s processing error: %s",
+                str(campaign.id)[:8], str(e),
+            )
 
-        # Calculate per-cycle cap for distributed sending
-        cycle_cap = _calculate_cycle_cap(
-            effective_limit, sent_today, config,
+    # === PASS 2: Unbound prospects (campaign_id IS NULL) ===
+    sent_today_result = await db.execute(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                OutreachEmail.direction == "outbound",
+                OutreachEmail.sent_at >= today_start,
+            )
         )
-        remaining = min(remaining, cycle_cap)
+    )
+    sent_today = sent_today_result.scalar() or 0
 
+    warmup_limit = await _get_warmup_limit(
+        config.daily_email_limit,
+        primary_from_email,
+        tenant_id=tenant_id,
+    )
+
+    try:
+        from src.services.warmup_optimizer import get_optimized_warmup_limit
+        from src.utils.dedup import get_redis as _get_redis_for_warmup
+
+        _redis = await _get_redis_for_warmup()
+        domain = (
+            primary_from_email.split("@")[1].lower()
+            if "@" in primary_from_email
+            else "default"
+        )
+        _warmup_key = f"leadlock:email_warmup:{tenant_id}:{domain}"
+        _started_raw = await _redis.get(_warmup_key)
+        if _started_raw:
+            _started_str = _started_raw.decode() if isinstance(_started_raw, bytes) else str(_started_raw)
+            _started = datetime.fromisoformat(_started_str)
+            _days = (datetime.now(timezone.utc) - _started).days
+            warmup_limit = await get_optimized_warmup_limit(warmup_limit, _days)
+    except Exception as opt_err:
+        logger.debug("Warmup optimizer unavailable: %s", str(opt_err))
+
+    from src.services.deliverability import EMAIL_THROTTLE_FACTORS
+
+    throttle_factor = EMAIL_THROTTLE_FACTORS.get(throttle_level, 1.0)
+    effective_limit = max(1, int(warmup_limit * throttle_factor))
+
+    remaining = effective_limit - sent_today
+    if remaining <= 0:
         logger.info(
-            "Unbound prospects: sent_today=%d effective_limit=%d (warmup=%d throttle=%s) cycle_cap=%d",
-            sent_today, effective_limit, warmup_limit, throttle_level, cycle_cap,
+            "Daily email limit reached (tenant=%s sent=%d effective_limit=%d warmup=%d throttle=%s)",
+            str(tenant_id)[:8],
+            sent_today,
+            effective_limit,
+            warmup_limit,
+            throttle_level,
+        )
+        return
+
+    cycle_cap = _calculate_cycle_cap(
+        effective_limit, sent_today, config,
+    )
+    remaining = min(remaining, cycle_cap)
+
+    logger.info(
+        "Tenant %s unbound prospects: sent_today=%d effective_limit=%d (warmup=%d throttle=%s) cycle_cap=%d",
+        str(tenant_id)[:8],
+        sent_today,
+        effective_limit,
+        warmup_limit,
+        throttle_level,
+        cycle_cap,
+    )
+
+    delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
+
+    step_0_query = select(Outreach).where(
+        and_(
+            Outreach.tenant_id == tenant_id,
+            Outreach.campaign_id.is_(None),
+            Outreach.outreach_sequence_step == 0,
+            Outreach.prospect_email.isnot(None),
+            Outreach.prospect_email != "",
+            Outreach.email_unsubscribed == False,
+            Outreach.status.in_(["cold"]),
+            Outreach.last_email_replied_at.is_(None),
+            not_(and_(
+                Outreach.email_source == "pattern_guess",
+                Outreach.email_verified == False,  # noqa: E712
+            )),
+        )
+    ).order_by(
+        Outreach.enrichment_data.is_(None).asc(),
+        Outreach.created_at,
+    ).limit(remaining).with_for_update(skip_locked=True)
+
+    followup_query = select(Outreach).where(
+        and_(
+            Outreach.tenant_id == tenant_id,
+            Outreach.campaign_id.is_(None),
+            Outreach.outreach_sequence_step >= 1,
+            Outreach.outreach_sequence_step < config.max_sequence_steps,
+            Outreach.prospect_email.isnot(None),
+            Outreach.prospect_email != "",
+            Outreach.email_unsubscribed == False,
+            Outreach.status.in_(["cold", "contacted"]),
+            Outreach.last_email_replied_at.is_(None),
+            Outreach.last_email_sent_at <= delay_cutoff,
+            not_(and_(
+                Outreach.email_source == "pattern_guess",
+                Outreach.email_verified == False,  # noqa: E712
+            )),
+        )
+    ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
+
+    step_0_result = await db.execute(step_0_query)
+    step_0_prospects = step_0_result.scalars().all()
+
+    followup_result = await db.execute(followup_query)
+    followup_prospects_raw = followup_result.scalars().all()
+    followup_prospects = []
+    for p in followup_prospects_raw:
+        is_due, required_delay, remaining_seconds = followup_readiness(
+            p, base_delay_hours=config.sequence_delay_hours
+        )
+        if is_due:
+            followup_prospects.append(p)
+        else:
+            logger.debug(
+                "Prospect %s follow-up not due yet (required=%dh remaining=%ds)",
+                str(p.id)[:8], required_delay, remaining_seconds,
+            )
+
+    all_prospects = (followup_prospects + step_0_prospects)[:remaining]
+
+    if all_prospects:
+        logger.info(
+            "Processing %d unbound prospects for outreach (tenant=%s)",
+            len(all_prospects),
+            str(tenant_id)[:8],
         )
 
-        # Find prospects ready for next step
-        delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
-
-        # Step 0: never contacted, has email, not unsubscribed, NOT campaign-bound
-        step_0_query = select(Outreach).where(
-            and_(
-                Outreach.campaign_id.is_(None),
-                Outreach.outreach_sequence_step == 0,
-                Outreach.prospect_email.isnot(None),
-                Outreach.prospect_email != "",
-                Outreach.email_unsubscribed == False,
-                Outreach.status.in_(["cold"]),
-                Outreach.last_email_replied_at.is_(None),
-                # Skip unverified pattern guesses — wait for email_finder
-                not_(and_(
-                    Outreach.email_source == "pattern_guess",
-                    Outreach.email_verified == False,  # noqa: E712
-                )),
-            )
-        ).order_by(
-            # Prioritize enriched prospects (they produce better personalized emails)
-            Outreach.enrichment_data.is_(None).asc(),
-            Outreach.created_at,
-        ).limit(remaining).with_for_update(skip_locked=True)
-
-        # Steps 1-2: contacted but no reply, delay elapsed, NOT campaign-bound
-        followup_query = select(Outreach).where(
-            and_(
-                Outreach.campaign_id.is_(None),
-                Outreach.outreach_sequence_step >= 1,
-                Outreach.outreach_sequence_step < config.max_sequence_steps,
-                Outreach.prospect_email.isnot(None),
-                Outreach.prospect_email != "",
-                Outreach.email_unsubscribed == False,
-                Outreach.status.in_(["cold", "contacted"]),
-                Outreach.last_email_replied_at.is_(None),
-                Outreach.last_email_sent_at <= delay_cutoff,
-                # Skip unverified pattern guesses — wait for email_finder
-                not_(and_(
-                    Outreach.email_source == "pattern_guess",
-                    Outreach.email_verified == False,  # noqa: E712
-                )),
-            )
-        ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
-
-        # Execute both queries
-        step_0_result = await db.execute(step_0_query)
-        step_0_prospects = step_0_result.scalars().all()
-
-        followup_result = await db.execute(followup_query)
-        followup_prospects_raw = followup_result.scalars().all()
-        followup_prospects = []
-        for p in followup_prospects_raw:
-            is_due, required_delay, remaining_seconds = followup_readiness(
-                p, base_delay_hours=config.sequence_delay_hours
-            )
-            if is_due:
-                followup_prospects.append(p)
-            else:
+    consecutive_failures = 0
+    for i, prospect in enumerate(all_prospects):
+        try:
+            deferred = await _check_smart_timing(prospect, config)
+            if deferred:
                 logger.debug(
-                    "Prospect %s follow-up not due yet (required=%dh remaining=%ds)",
-                    str(p.id)[:8], required_delay, remaining_seconds,
+                    "Prospect %s deferred to optimal send time",
+                    str(prospect.id)[:8],
                 )
+                continue
 
-        # Combine: follow-ups FIRST (they've already been waiting 48h+),
-        # then new contacts fill remaining slots
-        all_prospects = followup_prospects + step_0_prospects
-        all_prospects = all_prospects[:remaining]
+            prev_failures = prospect.generation_failures or 0
+            await send_sequence_email(db, config, settings, prospect)
+            await db.flush()
 
-        if all_prospects:
-            logger.info("Processing %d unbound prospects for outreach", len(all_prospects))
-
-        consecutive_failures = 0
-        for i, prospect in enumerate(all_prospects):
-            try:
-                # Smart send timing: check if now is the optimal time bucket
-                deferred = await _check_smart_timing(prospect, config)
-                if deferred:
-                    logger.debug(
-                        "Prospect %s deferred to optimal send time",
-                        str(prospect.id)[:8],
-                    )
-                    continue
-
-                prev_failures = prospect.generation_failures or 0
-                await send_sequence_email(db, config, settings, prospect)
-                await db.flush()
-
-                # Circuit breaker: if generation failed, track consecutive failures
-                new_failures = prospect.generation_failures or 0
-                if new_failures > prev_failures:
-                    consecutive_failures += 1
-                else:
-                    consecutive_failures = 0
-
-                if consecutive_failures >= 3:
-                    await _trip_ai_circuit_breaker()
-                    break
-            except Exception as e:
-                logger.error(
-                    "Failed to send outreach to %s: %s",
-                    str(prospect.id)[:8], str(e),
-                )
+            new_failures = prospect.generation_failures or 0
+            if new_failures > prev_failures:
                 consecutive_failures += 1
-                if consecutive_failures >= 3:
-                    logger.warning(
-                        "Circuit breaker: %d consecutive exceptions. "
-                        "Stopping batch.",
-                        consecutive_failures,
-                    )
-                    break
+            else:
+                consecutive_failures = 0
 
-            # Rate limit with jitter: spread sends across the cycle window
-            if i < len(all_prospects) - 1:
-                jitter = random.uniform(60, 120)
-                await asyncio.sleep(jitter)
+            if consecutive_failures >= 3:
+                await _trip_ai_circuit_breaker()
+                break
+        except Exception as e:
+            logger.error(
+                "Failed to send outreach to %s: %s",
+                str(prospect.id)[:8], str(e),
+            )
+            consecutive_failures += 1
+            if consecutive_failures >= 3:
+                logger.warning(
+                    "Circuit breaker: %d consecutive exceptions. Stopping batch.",
+                    consecutive_failures,
+                )
+                break
 
-        await db.commit()
+        if i < len(all_prospects) - 1:
+            jitter = random.uniform(60, 120)
+            await asyncio.sleep(jitter)
 
 
 async def _process_campaign_prospects(
@@ -702,6 +772,7 @@ async def _process_campaign_prospects(
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
         .where(
             and_(
+                Outreach.tenant_id == campaign.tenant_id,
                 Outreach.campaign_id == campaign.id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= today_start,
@@ -747,6 +818,7 @@ async def _process_campaign_prospects(
             # Step 1: cold prospects in this campaign, never contacted
             query = select(Outreach).where(
                 and_(
+                    Outreach.tenant_id == campaign.tenant_id,
                     Outreach.campaign_id == campaign.id,
                     Outreach.outreach_sequence_step == 0,
                     Outreach.prospect_email.isnot(None),
@@ -766,6 +838,7 @@ async def _process_campaign_prospects(
             delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
             query = select(Outreach).where(
                 and_(
+                    Outreach.tenant_id == campaign.tenant_id,
                     Outreach.campaign_id == campaign.id,
                     Outreach.outreach_sequence_step == step_num - 1,
                     Outreach.prospect_email.isnot(None),

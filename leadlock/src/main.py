@@ -151,30 +151,31 @@ async def lifespan(app: FastAPI):
             from src.database import async_session_factory
             from src.models.sales_config import SalesEngineConfig
             from sqlalchemy import select
+            from src.services.sales_tenancy import get_active_sales_configs
 
             async with async_session_factory() as db:
-                result = await db.execute(select(SalesEngineConfig).limit(1))
-                config = result.scalar_one_or_none()
-                if not config:
-                    config = SalesEngineConfig(is_active=False)
-                    db.add(config)
-                    await db.commit()
+                active_configs = await get_active_sales_configs(db)
+                if active_configs:
                     logger.info(
-                        "Auto-created SalesEngineConfig (inactive). "
-                        "Configure via dashboard or PUT /api/v1/sales/config"
-                    )
-                elif not config.is_active:
-                    logger.info(
-                        "SalesEngineConfig exists but is_active=False. "
-                        "Activate via dashboard or PUT /api/v1/sales/config"
+                        "SalesEngine active tenants: %d",
+                        len(active_configs),
                     )
                 else:
-                    locs = len(config.target_locations or [])
-                    trades = len(config.target_trade_types or [])
-                    logger.info(
-                        "SalesEngineConfig active: %d locations, %d trades",
-                        locs, trades,
+                    result = await db.execute(
+                        select(SalesEngineConfig).where(
+                            SalesEngineConfig.tenant_id.isnot(None)
+                        ).limit(1)
                     )
+                    any_tenant_config = result.scalar_one_or_none()
+                    if any_tenant_config:
+                        logger.info(
+                            "SalesEngine tenant configs exist but none are active."
+                        )
+                    else:
+                        logger.info(
+                            "No tenant SalesEngineConfig rows yet. "
+                            "Configure via dashboard or PUT /api/v1/sales/config."
+                        )
         except Exception as e:
             logger.warning("Failed to verify SalesEngineConfig: %s", str(e))
 

@@ -249,12 +249,12 @@ async def _handle_send_sms_followup(payload: dict) -> dict:
     """Send a deferred SMS follow-up to a warm prospect."""
     import uuid
     from src.models.outreach import Outreach
-    from src.models.sales_config import SalesEngineConfig
     from src.services.outreach_sms import (
         is_within_sms_quiet_hours,
         send_outreach_sms,
         generate_followup_sms_body,
     )
+    from src.services.sales_tenancy import get_sales_config_for_tenant
 
     outreach_id = payload.get("outreach_id")
     if not outreach_id:
@@ -283,10 +283,8 @@ async def _handle_send_sms_followup(payload: dict) -> dict:
             )
             return {"status": "re-queued", "reason": "still quiet hours"}
 
-        result = await db.execute(
-            select(SalesEngineConfig).limit(1)
-        )
-        config = result.scalar_one_or_none()
+        tenant_id = getattr(prospect, "tenant_id", None)
+        config = await get_sales_config_for_tenant(db, tenant_id)
         if not config:
             return {"status": "skipped", "reason": "no config"}
 
@@ -306,8 +304,8 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
     from sqlalchemy import func as sqla_func
     from src.models.outreach import Outreach
     from src.models.outreach_email import OutreachEmail
-    from src.models.sales_config import SalesEngineConfig
     from src.services.outreach_timing import followup_readiness
+    from src.services.sales_tenancy import get_sales_config_for_tenant
     from src.workers.outreach_sequencer import send_sequence_email, is_within_send_window
     from src.config import get_settings
 
@@ -333,10 +331,8 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
         if status and status not in {"cold", "contacted"}:
             return {"status": "skipped", "reason": f"status {status} not eligible"}
 
-        result = await db.execute(
-            select(SalesEngineConfig).limit(1)
-        )
-        config = result.scalar_one_or_none()
+        tenant_id = getattr(prospect, "tenant_id", None)
+        config = await get_sales_config_for_tenant(db, tenant_id)
         if not config or not config.is_active:
             return {"status": "skipped", "reason": "engine inactive"}
 
@@ -356,8 +352,12 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
         daily_limit = config.daily_email_limit or 50
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         count_result = await db.execute(
-            select(sqla_func.count()).select_from(OutreachEmail).where(
+            select(sqla_func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.sent_at >= today_start,
                     OutreachEmail.direction == "outbound",
                 )
@@ -440,7 +440,7 @@ async def _handle_send_winback_email(payload: dict) -> dict:
     """Send a win-back email to a cold prospect."""
     import uuid as uuid_mod
     from src.models.outreach import Outreach
-    from src.models.sales_config import SalesEngineConfig
+    from src.services.sales_tenancy import get_sales_config_for_tenant
     from src.workers.winback_agent import _send_winback
     from src.config import get_settings
 
@@ -456,10 +456,8 @@ async def _handle_send_winback_email(payload: dict) -> dict:
         if prospect.winback_sent_at:
             return {"status": "skipped", "reason": "already sent winback"}
 
-        config_result = await db.execute(
-            select(SalesEngineConfig).limit(1)
-        )
-        config = config_result.scalar_one_or_none()
+        tenant_id = getattr(prospect, "tenant_id", None)
+        config = await get_sales_config_for_tenant(db, tenant_id)
         if not config or not config.is_active:
             return {"status": "skipped", "reason": "engine inactive"}
 

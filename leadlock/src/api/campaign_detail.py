@@ -17,6 +17,7 @@ from src.models.campaign import Campaign
 from src.models.outreach import Outreach
 from src.models.outreach_email import OutreachEmail
 from src.api.dashboard import get_current_admin
+from src.services.sales_tenancy import normalize_tenant_id
 
 # Re-exports for backward compatibility
 from src.api.campaign_inbox import get_inbox, get_inbox_thread  # noqa: F401
@@ -27,6 +28,24 @@ router = APIRouter(prefix="/api/v1/sales", tags=["campaign-detail"])
 
 
 # === CAMPAIGN DETAIL ===
+
+
+async def _get_campaign_for_tenant(
+    db: AsyncSession,
+    campaign_id: uuid.UUID,
+    tenant_id,
+):
+    if tenant_id is None:
+        return await db.get(Campaign, campaign_id)
+    result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.id == campaign_id,
+                Campaign.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 @router.get("/campaigns/{campaign_id}/detail")
@@ -40,14 +59,18 @@ async def get_campaign_detail(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    campaign = await _get_campaign_for_tenant(db, cid, tenant_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     # Prospect counts by status
     status_result = await db.execute(
         select(Outreach.status, func.count()).where(
-            Outreach.campaign_id == campaign.id
+            and_(
+                Outreach.tenant_id == tenant_id,
+                Outreach.campaign_id == campaign.id,
+            )
         ).group_by(Outreach.status)
     )
     prospect_counts = {status: count for status, count in status_result.all()}
@@ -65,6 +88,7 @@ async def get_campaign_detail(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
             )
         )
@@ -80,6 +104,7 @@ async def get_campaign_detail(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "inbound",
             )
         )
@@ -98,6 +123,7 @@ async def get_campaign_detail(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
             )
         )
@@ -114,6 +140,7 @@ async def get_campaign_detail(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "inbound",
             )
         )
@@ -187,11 +214,15 @@ async def get_campaign_prospects(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    campaign = await _get_campaign_for_tenant(db, cid, tenant_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    conditions = [Outreach.campaign_id == campaign.id]
+    conditions = [
+        Outreach.tenant_id == tenant_id,
+        Outreach.campaign_id == campaign.id,
+    ]
     if status:
         conditions.append(Outreach.status == status)
     if search:
@@ -245,7 +276,8 @@ async def activate_campaign(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    campaign = await _get_campaign_for_tenant(db, cid, tenant_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -266,7 +298,7 @@ async def activate_campaign(
     campaign.updated_at = datetime.now(timezone.utc)
 
     # Auto-assign matching unbound cold prospects
-    assigned = await _auto_assign_prospects(db, campaign)
+    assigned = await _auto_assign_prospects(db, campaign, tenant_id)
 
     return {
         "status": "activated",
@@ -277,6 +309,7 @@ async def activate_campaign(
 async def _auto_assign_prospects(
     db: AsyncSession,
     campaign: Campaign,
+    tenant_id=None,
 ) -> int:
     """Assign unbound cold prospects matching campaign targeting."""
     conditions = [
@@ -286,6 +319,8 @@ async def _auto_assign_prospects(
         Outreach.prospect_email != "",
         Outreach.email_unsubscribed == False,
     ]
+    if tenant_id is not None:
+        conditions.insert(0, Outreach.tenant_id == tenant_id)
 
     # Filter by target trades
     target_trades = campaign.target_trades or []
@@ -342,7 +377,8 @@ async def assign_prospects(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    campaign = await _get_campaign_for_tenant(db, cid, tenant_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -361,7 +397,8 @@ async def assign_prospects(
         for pid in prospect_ids:
             try:
                 prospect = await db.get(Outreach, uuid.UUID(pid))
-                if prospect and prospect.campaign_id is None:
+                tenant_ok = tenant_id is None or prospect.tenant_id == tenant_id
+                if prospect and tenant_ok and prospect.campaign_id is None:
                     prospect.campaign_id = campaign.id
                     prospect.updated_at = datetime.now(timezone.utc)
                     assigned += 1
@@ -374,6 +411,8 @@ async def assign_prospects(
             Outreach.prospect_email != "",
             Outreach.email_unsubscribed == False,
         ]
+        if tenant_id is not None:
+            conditions.insert(0, Outreach.tenant_id == tenant_id)
 
         if filters.get("trade_type"):
             conditions.append(
@@ -412,7 +451,8 @@ async def get_campaign_metrics(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    campaign = await _get_campaign_for_tenant(db, cid, tenant_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -431,6 +471,7 @@ async def get_campaign_metrics(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
             )
         )
@@ -447,6 +488,7 @@ async def get_campaign_metrics(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "inbound",
             )
         )
@@ -482,6 +524,7 @@ async def get_campaign_metrics(
         .where(
             and_(
                 Outreach.campaign_id == campaign.id,
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= fourteen_days_ago,
             )
@@ -500,7 +543,10 @@ async def get_campaign_metrics(
     # Funnel for this campaign
     funnel_result = await db.execute(
         select(Outreach.status, func.count()).where(
-            Outreach.campaign_id == campaign.id
+            and_(
+                Outreach.tenant_id == tenant_id,
+                Outreach.campaign_id == campaign.id,
+            )
         ).group_by(Outreach.status)
     )
     funnel = {status: count for status, count in funnel_result.all()}

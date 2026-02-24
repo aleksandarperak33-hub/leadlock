@@ -16,6 +16,7 @@ from src.models.outreach_email import OutreachEmail
 from src.models.scrape_job import ScrapeJob
 from src.models.sales_config import SalesEngineConfig
 from src.api.dashboard import get_current_admin
+from src.services.sales_tenancy import get_sales_config_for_tenant, normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +29,12 @@ async def get_sales_config(
     admin=Depends(get_current_admin),
 ):
     """Get sales engine configuration."""
-    result = await db.execute(select(SalesEngineConfig).limit(1))
-    config = result.scalar_one_or_none()
-
-    if not config:
-        # Create default config
-        config = SalesEngineConfig()
-        db.add(config)
-        await db.flush()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    config = await get_sales_config_for_tenant(db, tenant_id, create_if_missing=True)
 
     return {
         "id": str(config.id),
+        "tenant_id": str(config.tenant_id) if config.tenant_id else None,
         "is_active": config.is_active,
         "target_trade_types": config.target_trade_types or [],
         "target_locations": config.target_locations or [],
@@ -49,6 +45,7 @@ async def get_sales_config(
         "from_email": config.from_email,
         "from_name": config.from_name,
         "sender_name": config.sender_name,
+        "sender_mailboxes": config.sender_mailboxes or [],
         "booking_url": config.booking_url,
         "reply_to_email": config.reply_to_email,
         "company_address": config.company_address,
@@ -76,18 +73,14 @@ async def update_sales_config(
     admin=Depends(get_current_admin),
 ):
     """Update sales engine configuration."""
-    result = await db.execute(select(SalesEngineConfig).limit(1))
-    config = result.scalar_one_or_none()
-
-    if not config:
-        config = SalesEngineConfig()
-        db.add(config)
-        await db.flush()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    config = await get_sales_config_for_tenant(db, tenant_id, create_if_missing=True)
 
     allowed_fields = [
         "is_active", "target_trade_types", "target_locations",
         "daily_email_limit", "daily_scrape_limit", "sequence_delay_hours",
         "max_sequence_steps", "from_email", "from_name", "sender_name", "booking_url", "reply_to_email",
+        "sender_mailboxes",
         "company_address", "sms_after_email_reply", "sms_from_phone",
         "email_templates",
         "scraper_interval_minutes", "variant_cooldown_days",
@@ -108,11 +101,11 @@ async def update_sales_config(
 
     # Invalidate cached config so workers pick up changes immediately
     from src.services.config_cache import invalidate_sales_config
-    await invalidate_sales_config()
+    await invalidate_sales_config(tenant_id)
 
     # Notify workers via event bus
     from src.services.event_bus import publish_event
-    await publish_event("config_changed")
+    await publish_event("config_changed", {"tenant_id": str(tenant_id)})
 
     return {"status": "updated"}
 
@@ -124,6 +117,7 @@ async def get_sales_metrics(
     admin=Depends(get_current_admin),
 ):
     """Sales engine performance metrics."""
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
     days = int(period.replace("d", ""))
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -131,6 +125,7 @@ async def get_sales_metrics(
     status_counts = {}
     status_result = await db.execute(
         select(Outreach.status, func.count()).where(
+            Outreach.tenant_id == tenant_id,
             Outreach.source.isnot(None)  # Only engine-sourced prospects
         ).group_by(Outreach.status)
     )
@@ -144,8 +139,11 @@ async def get_sales_metrics(
             func.count(OutreachEmail.opened_at).label("opened"),
             func.count(OutreachEmail.clicked_at).label("clicked"),
             func.count(OutreachEmail.bounced_at).label("bounced"),
-        ).where(
+        )
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "outbound",
                 OutreachEmail.sent_at >= since,
             )
@@ -158,8 +156,12 @@ async def get_sales_metrics(
 
     # Reply count
     reply_result = await db.execute(
-        select(func.count()).select_from(OutreachEmail).where(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
             and_(
+                Outreach.tenant_id == tenant_id,
                 OutreachEmail.direction == "inbound",
                 OutreachEmail.sent_at >= since,
             )
@@ -170,6 +172,7 @@ async def get_sales_metrics(
     # Total cost
     cost_result = await db.execute(
         select(func.coalesce(func.sum(Outreach.total_cost_usd), 0.0)).where(
+            Outreach.tenant_id == tenant_id,
             Outreach.source.isnot(None)
         )
     )
@@ -181,7 +184,12 @@ async def get_sales_metrics(
             func.count().label("total_jobs"),
             func.coalesce(func.sum(ScrapeJob.new_prospects_created), 0).label("total_scraped"),
             func.coalesce(func.sum(ScrapeJob.api_cost_usd), 0.0).label("scrape_cost"),
-        ).where(ScrapeJob.created_at >= since)
+        ).where(
+            and_(
+                ScrapeJob.tenant_id == tenant_id,
+                ScrapeJob.created_at >= since,
+            )
+        )
     )
     scrape_row = scrape_result.one()
 
@@ -225,6 +233,7 @@ async def get_worker_status(
     admin=Depends(get_current_admin),
 ):
     """Get worker health status from Redis heartbeats."""
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
     try:
         from src.utils.dedup import get_redis
         redis = await get_redis()
@@ -254,8 +263,12 @@ async def get_worker_status(
         # Bounce rate check
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         sent_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at >= today_start,
                 )
@@ -264,8 +277,12 @@ async def get_worker_status(
         sent_today = sent_result.scalar() or 0
 
         bounced_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.bounced_at.isnot(None),
                     OutreachEmail.sent_at >= today_start,
@@ -300,8 +317,8 @@ async def pause_worker(
     if not field:
         raise HTTPException(status_code=400, detail=f"Unknown worker: {worker_name}")
 
-    result = await db.execute(select(SalesEngineConfig).limit(1))
-    config = result.scalar_one_or_none()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    config = await get_sales_config_for_tenant(db, tenant_id, create_if_missing=True)
     if config and hasattr(config, field):
         setattr(config, field, True)
         config.updated_at = datetime.now(timezone.utc)
@@ -320,8 +337,8 @@ async def resume_worker(
     if not field:
         raise HTTPException(status_code=400, detail=f"Unknown worker: {worker_name}")
 
-    result = await db.execute(select(SalesEngineConfig).limit(1))
-    config = result.scalar_one_or_none()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    config = await get_sales_config_for_tenant(db, tenant_id, create_if_missing=True)
     if config and hasattr(config, field):
         setattr(config, field, False)
         config.updated_at = datetime.now(timezone.utc)
@@ -339,7 +356,9 @@ async def list_templates(
     from src.models.email_template import EmailTemplate
 
     result = await db.execute(
-        select(EmailTemplate).order_by(EmailTemplate.created_at)
+        select(EmailTemplate)
+        .where(EmailTemplate.tenant_id == normalize_tenant_id(getattr(admin, "id", None)))
+        .order_by(EmailTemplate.created_at)
     )
     templates = result.scalars().all()
 
@@ -374,7 +393,9 @@ async def create_template(
     if not name or not step_type:
         raise HTTPException(status_code=400, detail="name and step_type are required")
 
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
     template = EmailTemplate(
+        tenant_id=tenant_id,
         name=name,
         step_type=step_type,
         subject_template=payload.get("subject_template"),
@@ -401,7 +422,16 @@ async def update_template(
         tid = uuid.UUID(template_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid template ID")
-    template = await db.get(EmailTemplate, tid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    result = await db.execute(
+        select(EmailTemplate).where(
+            and_(
+                EmailTemplate.id == tid,
+                EmailTemplate.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
@@ -426,7 +456,16 @@ async def delete_template(
         tid = uuid.UUID(template_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid template ID")
-    template = await db.get(EmailTemplate, tid)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    result = await db.execute(
+        select(EmailTemplate).where(
+            and_(
+                EmailTemplate.id == tid,
+                EmailTemplate.tenant_id == tenant_id,
+            )
+        ).limit(1)
+    )
+    template = result.scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     await db.delete(template)

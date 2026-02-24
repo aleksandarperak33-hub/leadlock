@@ -5,6 +5,7 @@ No AI calls. Pure SQL analytics.
 """
 import json
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -49,15 +50,20 @@ async def _cached_query(cache_key: str, query_fn, ttl: int = CACHE_TTL_SECONDS) 
     return result
 
 
-async def get_trade_funnel(trade: Optional[str] = None) -> dict:
+async def get_trade_funnel(
+    trade: Optional[str] = None,
+    tenant_id: Optional[uuid.UUID] = None,
+) -> dict:
     """
     Per-trade conversion funnel: cold -> contacted -> demo_scheduled -> won.
     """
-    cache_key = f"trade_funnel:{trade or 'all'}"
+    cache_key = f"trade_funnel:{tenant_id or 'global'}:{trade or 'all'}"
 
     async def _query():
         async with async_session_factory() as db:
             base_filter = []
+            if tenant_id:
+                base_filter.append(Outreach.tenant_id == tenant_id)
             if trade:
                 base_filter.append(Outreach.prospect_trade_type == trade)
 
@@ -92,13 +98,18 @@ async def get_trade_funnel(trade: Optional[str] = None) -> dict:
     return await _cached_query(cache_key, _query)
 
 
-async def get_cost_per_lead(trade: Optional[str] = None) -> dict:
+async def get_cost_per_lead(
+    trade: Optional[str] = None,
+    tenant_id: Optional[uuid.UUID] = None,
+) -> dict:
     """Cost-per-lead breakdown by trade."""
-    cache_key = f"cost_per_lead:{trade or 'all'}"
+    cache_key = f"cost_per_lead:{tenant_id or 'global'}:{trade or 'all'}"
 
     async def _query():
         async with async_session_factory() as db:
             base_filter = []
+            if tenant_id:
+                base_filter.append(Outreach.tenant_id == tenant_id)
             if trade:
                 base_filter.append(Outreach.prospect_trade_type == trade)
 
@@ -129,9 +140,11 @@ async def get_cost_per_lead(trade: Optional[str] = None) -> dict:
     return await _cached_query(cache_key, _query)
 
 
-async def get_email_performance_by_step() -> dict:
+async def get_email_performance_by_step(
+    tenant_id: Optional[uuid.UUID] = None,
+) -> dict:
     """Email open/reply rates broken down by sequence step."""
-    cache_key = "email_perf_by_step"
+    cache_key = f"email_perf_by_step:{tenant_id or 'global'}"
 
     async def _query():
         async with async_session_factory() as db:
@@ -145,9 +158,15 @@ async def get_email_performance_by_step() -> dict:
                             (OutreachEmail.direction == "inbound", OutreachEmail.id),
                         )
                     ).label("total_replied"),
-                ).where(
-                    OutreachEmail.direction == "outbound",
-                ).group_by(OutreachEmail.sequence_step).order_by(
+                )
+                .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+                .where(
+                    and_(
+                        OutreachEmail.direction == "outbound",
+                        Outreach.tenant_id == tenant_id if tenant_id else True,
+                    )
+                )
+                .group_by(OutreachEmail.sequence_step).order_by(
                     OutreachEmail.sequence_step
                 )
             )
@@ -219,9 +238,11 @@ async def get_ab_test_results() -> dict:
     return await _cached_query(cache_key, _query)
 
 
-async def get_pipeline_waterfall() -> dict:
+async def get_pipeline_waterfall(
+    tenant_id: Optional[uuid.UUID] = None,
+) -> dict:
     """Outreach pipeline waterfall showing progression through stages."""
-    cache_key = "pipeline_waterfall"
+    cache_key = f"pipeline_waterfall:{tenant_id or 'global'}"
 
     async def _query():
         async with async_session_factory() as db:
@@ -230,6 +251,8 @@ async def get_pipeline_waterfall() -> dict:
                 select(
                     Outreach.status,
                     func.count(Outreach.id).label("count"),
+                ).where(
+                    Outreach.tenant_id == tenant_id if tenant_id else True
                 ).group_by(Outreach.status)
             )
             rows = result.fetchall()

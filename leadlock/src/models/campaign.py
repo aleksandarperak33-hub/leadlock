@@ -17,6 +17,9 @@ class Campaign(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
@@ -56,6 +59,7 @@ class Campaign(Base):
     )
 
     __table_args__ = (
+        Index("ix_campaigns_tenant_id", "tenant_id"),
         Index("ix_campaigns_status", "status"),
     )
 

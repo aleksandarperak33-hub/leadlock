@@ -86,5 +86,9 @@ async def handle_events(events: list[dict[str, Any]]) -> None:
 
         if event_type == "config_changed":
             from src.services.config_cache import invalidate_sales_config
-            await invalidate_sales_config()
-            logger.info("Config cache invalidated via event bus")
+            tenant_id = (event.get("data") or {}).get("tenant_id")
+            await invalidate_sales_config(tenant_id)
+            logger.info(
+                "Config cache invalidated via event bus%s",
+                f" tenant={str(tenant_id)[:8]}" if tenant_id else "",
+            )

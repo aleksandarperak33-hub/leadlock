@@ -5,7 +5,7 @@ Can be static templates or AI-generation guidance.
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Text, Boolean, DateTime
+from sqlalchemy import String, Text, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database import Base
@@ -16,6 +16,9 @@ class EmailTemplate(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
     )
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -32,6 +35,10 @@ class EmailTemplate(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index("ix_email_templates_tenant_id", "tenant_id"),
     )
 
     def __repr__(self) -> str:

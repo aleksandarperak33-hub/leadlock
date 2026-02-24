@@ -5,7 +5,9 @@ All queries use Redis-cached SQL aggregations.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from src.api.dashboard import get_current_admin
 
 from src.services.analytics import (
     get_trade_funnel,
@@ -15,30 +17,44 @@ from src.services.analytics import (
     get_pipeline_waterfall,
     get_agent_costs,
 )
+from src.services.sales_tenancy import normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+router = APIRouter(
+    prefix="/api/v1/analytics",
+    tags=["analytics"],
+    dependencies=[Depends(get_current_admin)],
+)
 
 
 @router.get("/funnel")
-async def trade_funnel(trade: Optional[str] = Query(None)):
+async def trade_funnel(
+    trade: Optional[str] = Query(None),
+    admin=Depends(get_current_admin),
+):
     """Per-trade conversion funnel."""
-    data = await get_trade_funnel(trade)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    data = await get_trade_funnel(trade, tenant_id=tenant_id)
     return {"success": True, "data": data}
 
 
 @router.get("/cost-per-lead")
-async def cost_per_lead(trade: Optional[str] = Query(None)):
+async def cost_per_lead(
+    trade: Optional[str] = Query(None),
+    admin=Depends(get_current_admin),
+):
     """Cost-per-lead breakdown by trade."""
-    data = await get_cost_per_lead(trade)
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    data = await get_cost_per_lead(trade, tenant_id=tenant_id)
     return {"success": True, "data": data}
 
 
 @router.get("/email-performance")
-async def email_performance():
+async def email_performance(admin=Depends(get_current_admin)):
     """Email open/reply rates by sequence step."""
-    data = await get_email_performance_by_step()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    data = await get_email_performance_by_step(tenant_id=tenant_id)
     return {"success": True, "data": data}
 
 
@@ -50,9 +66,10 @@ async def ab_tests():
 
 
 @router.get("/pipeline")
-async def pipeline_waterfall():
+async def pipeline_waterfall(admin=Depends(get_current_admin)):
     """Outreach pipeline waterfall chart data."""
-    data = await get_pipeline_waterfall()
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+    data = await get_pipeline_waterfall(tenant_id=tenant_id)
     return {"success": True, "data": data}
 
 

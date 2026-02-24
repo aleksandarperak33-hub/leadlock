@@ -21,6 +21,7 @@ from src.api.sales_helpers import (
     _build_activity_feed,
     _compute_alerts,
 )
+from src.services.sales_tenancy import get_sales_config_for_tenant, normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,11 @@ async def list_campaigns(
 ):
     """List campaigns with pagination."""
     from src.models.campaign import Campaign
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
 
-    count_result = await db.execute(select(func.count()).select_from(Campaign))
+    count_result = await db.execute(
+        select(func.count()).select_from(Campaign).where(Campaign.tenant_id == tenant_id)
+    )
     total = count_result.scalar() or 0
 
     # Subquery: per-campaign outbound email stats (sent, opened)
@@ -51,7 +55,12 @@ async def list_campaigns(
         )
         .select_from(OutreachEmail)
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.direction == "outbound")
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                OutreachEmail.direction == "outbound",
+            )
+        )
         .group_by(Outreach.campaign_id)
     ).subquery("outbound_stats")
 
@@ -63,7 +72,12 @@ async def list_campaigns(
         )
         .select_from(OutreachEmail)
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-        .where(OutreachEmail.direction == "inbound")
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                OutreachEmail.direction == "inbound",
+            )
+        )
         .group_by(Outreach.campaign_id)
     ).subquery("inbound_stats")
 
@@ -74,7 +88,12 @@ async def list_campaigns(
             func.count().label("prospect_count"),
         )
         .select_from(Outreach)
-        .where(Outreach.campaign_id.isnot(None))
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                Outreach.campaign_id.isnot(None),
+            )
+        )
         .group_by(Outreach.campaign_id)
     ).subquery("prospect_stats")
 
@@ -86,6 +105,7 @@ async def list_campaigns(
             func.coalesce(inbound_stats.c.replied, 0).label("calc_replied"),
             func.coalesce(prospect_stats.c.prospect_count, 0).label("calc_prospects"),
         )
+        .where(Campaign.tenant_id == tenant_id)
         .outerjoin(outbound_stats, Campaign.id == outbound_stats.c.campaign_id)
         .outerjoin(inbound_stats, Campaign.id == inbound_stats.c.campaign_id)
         .outerjoin(prospect_stats, Campaign.id == prospect_stats.c.campaign_id)
@@ -133,6 +153,7 @@ async def create_campaign(
         raise HTTPException(status_code=400, detail="name is required")
 
     campaign = Campaign(
+        tenant_id=normalize_tenant_id(getattr(admin, "id", None)),
         name=name,
         description=payload.get("description"),
         status="draft",
@@ -161,7 +182,15 @@ async def update_campaign(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.id == cid,
+                Campaign.tenant_id == normalize_tenant_id(getattr(admin, "id", None)),
+            )
+        ).limit(1)
+    )
+    campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -187,7 +216,15 @@ async def pause_campaign(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.id == cid,
+                Campaign.tenant_id == normalize_tenant_id(getattr(admin, "id", None)),
+            )
+        ).limit(1)
+    )
+    campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = "paused"
@@ -208,7 +245,15 @@ async def resume_campaign(
         cid = uuid.UUID(campaign_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID")
-    campaign = await db.get(Campaign, cid)
+    result = await db.execute(
+        select(Campaign).where(
+            and_(
+                Campaign.id == cid,
+                Campaign.tenant_id == normalize_tenant_id(getattr(admin, "id", None)),
+            )
+        ).limit(1)
+    )
+    campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign.status = "active"
@@ -229,6 +274,7 @@ async def get_command_center(
     sequence performance, geo performance, recent emails, activity feed, and alerts.
     """
     try:
+        tenant_id = normalize_tenant_id(getattr(admin, "id", None))
         now = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         thirty_days_ago = now - timedelta(days=30)
@@ -236,7 +282,11 @@ async def get_command_center(
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # 1. Config
-        config_result = await db.execute(select(SalesEngineConfig).limit(1))
+        config_result = await db.execute(
+            select(SalesEngineConfig)
+            .where(SalesEngineConfig.tenant_id == tenant_id)
+            .limit(1)
+        )
         config = config_result.scalar_one_or_none()
 
         engine_active = config.is_active if config else False
@@ -290,6 +340,7 @@ async def get_command_center(
         # 4. Budget
         cost_result = await db.execute(
             select(func.coalesce(func.sum(Outreach.total_cost_usd), 0.0)).where(
+                Outreach.tenant_id == tenant_id,
                 Outreach.updated_at >= month_start
             )
         )
@@ -301,6 +352,7 @@ async def get_command_center(
         # 5. Funnel counts
         funnel_result = await db.execute(
             select(Outreach.status, func.count()).where(
+                Outreach.tenant_id == tenant_id,
                 Outreach.source.isnot(None)
             ).group_by(Outreach.status)
         )
@@ -322,8 +374,11 @@ async def get_command_center(
                 func.count(OutreachEmail.opened_at).label("opened"),
                 func.count(OutreachEmail.clicked_at).label("clicked"),
                 func.count(OutreachEmail.bounced_at).label("bounced"),
-            ).where(
+            )
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at >= today_start,
                 )
@@ -332,8 +387,12 @@ async def get_command_center(
         today_row = today_email.one()
 
         today_reply_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "inbound",
                     OutreachEmail.sent_at >= today_start,
                 )
@@ -344,6 +403,7 @@ async def get_command_center(
         today_unsub_result = await db.execute(
             select(func.count()).select_from(Outreach).where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     Outreach.unsubscribed_at.isnot(None),
                     Outreach.unsubscribed_at >= today_start,
                 )
@@ -360,8 +420,11 @@ async def get_command_center(
                 func.count(OutreachEmail.opened_at).label("opened"),
                 func.count(OutreachEmail.clicked_at).label("clicked"),
                 func.count(OutreachEmail.bounced_at).label("bounced"),
-            ).where(
+            )
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at >= thirty_days_ago,
                 )
@@ -371,8 +434,12 @@ async def get_command_center(
         period_sent = period_row.sent or 0
 
         reply_30d_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "inbound",
                     OutreachEmail.sent_at >= thirty_days_ago,
                 )
@@ -387,8 +454,11 @@ async def get_command_center(
                 func.count(OutreachEmail.opened_at).label("opened"),
                 func.count(OutreachEmail.clicked_at).label("clicked"),
                 func.count(OutreachEmail.bounced_at).label("bounced"),
-            ).where(
+            )
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at >= sixty_days_ago,
                     OutreachEmail.sent_at < thirty_days_ago,
@@ -399,8 +469,12 @@ async def get_command_center(
         prev_sent = prev_row.sent or 0
 
         reply_prev_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "inbound",
                     OutreachEmail.sent_at >= sixty_days_ago,
                     OutreachEmail.sent_at < thirty_days_ago,
@@ -419,8 +493,11 @@ async def get_command_center(
                 func.count().label("sent"),
                 func.count(OutreachEmail.opened_at).label("opened"),
                 func.count(OutreachEmail.clicked_at).label("clicked"),
-            ).where(
+            )
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "outbound",
                     OutreachEmail.sent_at >= thirty_days_ago,
                 )
@@ -432,8 +509,11 @@ async def get_command_center(
             select(
                 OutreachEmail.sequence_step,
                 func.count().label("replied"),
-            ).where(
+            )
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     OutreachEmail.direction == "inbound",
                     OutreachEmail.sent_at >= thirty_days_ago,
                 )
@@ -461,18 +541,29 @@ async def get_command_center(
             select(
                 func.coalesce(func.sum(ScrapeJob.new_prospects_created), 0).label("new_today"),
                 func.coalesce(func.sum(ScrapeJob.duplicates_skipped), 0).label("dupes_today"),
-            ).where(ScrapeJob.created_at >= today_start)
+            ).where(
+                and_(
+                    ScrapeJob.tenant_id == tenant_id,
+                    ScrapeJob.created_at >= today_start,
+                )
+            )
         )
         scraper_today_row = scraper_today.one()
 
         total_prospects_result = await db.execute(
-            select(func.count()).select_from(Outreach).where(Outreach.source.isnot(None))
+            select(func.count()).select_from(Outreach).where(
+                and_(
+                    Outreach.tenant_id == tenant_id,
+                    Outreach.source.isnot(None),
+                )
+            )
         )
         total_prospects = total_prospects_result.scalar() or 0
 
         scraped_today_result = await db.execute(
             select(func.count()).select_from(Outreach).where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     Outreach.source.isnot(None),
                     Outreach.created_at >= today_start,
                 )
@@ -491,6 +582,7 @@ async def get_command_center(
                 func.count(Outreach.id).label("prospects"),
             ).where(
                 and_(
+                    Outreach.tenant_id == tenant_id,
                     Outreach.source.isnot(None),
                     Outreach.city.isnot(None),
                 )
@@ -510,6 +602,7 @@ async def get_command_center(
                     and_(
                         OutreachEmail.direction == "outbound",
                         OutreachEmail.sent_at >= thirty_days_ago,
+                        Outreach.tenant_id == tenant_id,
                         Outreach.city == row.city,
                         Outreach.state_code == row.state_code,
                     )
@@ -524,6 +617,7 @@ async def get_command_center(
                     and_(
                         OutreachEmail.direction == "inbound",
                         OutreachEmail.sent_at >= thirty_days_ago,
+                        Outreach.tenant_id == tenant_id,
                         Outreach.city == row.city,
                         Outreach.state_code == row.state_code,
                     )
@@ -543,8 +637,14 @@ async def get_command_center(
 
         # 11b. Total sent all-time
         total_sent_all_result = await db.execute(
-            select(func.count()).select_from(OutreachEmail).where(
-                OutreachEmail.direction == "outbound"
+            select(func.count())
+            .select_from(OutreachEmail)
+            .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+            .where(
+                and_(
+                    Outreach.tenant_id == tenant_id,
+                    OutreachEmail.direction == "outbound",
+                )
             )
         )
         total_sent_all_time = total_sent_all_result.scalar() or 0
@@ -563,7 +663,12 @@ async def get_command_center(
                 Outreach.prospect_name,
             )
             .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
-            .where(OutreachEmail.direction == "outbound")
+            .where(
+                and_(
+                    Outreach.tenant_id == tenant_id,
+                    OutreachEmail.direction == "outbound",
+                )
+            )
             .order_by(desc(OutreachEmail.sent_at))
             .limit(10)
         )
@@ -583,7 +688,7 @@ async def get_command_center(
             })
 
         # 13. Activity feed
-        activity = await _build_activity_feed(db, limit=20)
+        activity = await _build_activity_feed(db, tenant_id=tenant_id, limit=20)
 
         # Assemble response
         data = {
