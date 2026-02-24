@@ -40,6 +40,7 @@ const Landing = lazy(() => import('./pages/Landing'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -73,6 +74,7 @@ function App() {
           <Route path="/signup" element={<Page component={Signup} />} />
           <Route path="/onboarding" element={<Page component={Onboarding} />} />
           <Route path="/privacy" element={<Page component={Privacy} />} />
+          <Route path="/terms" element={<Page component={Terms} />} />
           <Route path="/forgot-password" element={<Page component={ForgotPassword} />} />
           <Route path="/reset-password" element={<Page component={ResetPassword} />} />
           <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
@@ -104,9 +106,27 @@ function App() {
             <Route path="/agents" element={<Page component={AdminAgents} />} />
           </Route>
           <Route path="/privacy" element={<Page component={Privacy} />} />
+          <Route path="/terms" element={<Page component={Terms} />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  // Check if onboarding is incomplete — redirect to onboarding
+  const onboardingStatus = localStorage.getItem('ll_onboarding_status');
+  if (onboardingStatus && onboardingStatus !== 'live') {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/onboarding" element={<Page component={Onboarding} />} />
+          <Route path="/privacy" element={<Page component={Privacy} />} />
+          <Route path="/terms" element={<Page component={Terms} />} />
+          <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
+          <Route path="/billing" element={<Page component={Billing} />} />
+          <Route path="*" element={<Navigate to="/onboarding" replace />} />
         </Routes>
       </Suspense>
     );
@@ -117,6 +137,7 @@ function App() {
       <Routes>
         <Route path="/onboarding" element={<Page component={Onboarding} />} />
         <Route path="/privacy" element={<Page component={Privacy} />} />
+        <Route path="/terms" element={<Page component={Terms} />} />
         <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Page component={Dashboard} />} />

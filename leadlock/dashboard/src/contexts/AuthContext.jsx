@@ -23,6 +23,8 @@ export function AuthProvider({ children }) {
     if (data.is_admin) localStorage.setItem(AUTH_KEYS.IS_ADMIN, 'true');
     if (data.business_name) localStorage.setItem(AUTH_KEYS.BUSINESS, data.business_name);
     if (data.client_id) localStorage.setItem(AUTH_KEYS.CLIENT_ID, data.client_id);
+    if (data.onboarding_status) localStorage.setItem('ll_onboarding_status', data.onboarding_status);
+    if (data.billing_status) localStorage.setItem('ll_billing_status', data.billing_status);
     setAuth(readAuthState());
   }, []);
 

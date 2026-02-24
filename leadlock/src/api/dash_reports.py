@@ -1,6 +1,7 @@
 """
 Dashboard reports, metrics, activity, compliance, settings, onboarding, and bookings.
 """
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -121,6 +122,30 @@ async def get_settings(
     }
 
 
+@router.get("/api/v1/dashboard/readiness")
+async def check_readiness(
+    client: Client = Depends(get_current_client),
+):
+    """Check if client is fully configured and ready to receive leads."""
+    config = client.config or {}
+    checks = {
+        "phone_provisioned": bool(client.twilio_phone),
+        "billing_active": client.billing_status in ("active", "pilot"),
+        "services_configured": bool(config.get("services", {}).get("primary")),
+        "persona_set": bool(config.get("persona", {}).get("rep_name")),
+        "crm_connected": client.crm_type != "google_sheets" or bool(client.crm_api_key_encrypted),
+    }
+    return {
+        "ready": all([
+            checks["phone_provisioned"],
+            checks["billing_active"],
+            checks["services_configured"],
+            checks["persona_set"],
+        ]),
+        "checks": checks,
+    }
+
+
 @router.put("/api/v1/dashboard/settings")
 async def update_settings(
     request: Request,
@@ -132,7 +157,6 @@ async def update_settings(
         body = await request.body()
         if len(body) > 51200:  # 50KB max
             raise HTTPException(status_code=413, detail="Payload too large (max 50KB)")
-        import json
         payload = json.loads(body)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
@@ -151,11 +175,28 @@ async def update_settings(
 
 @router.post("/api/v1/dashboard/onboarding")
 async def complete_onboarding(
-    payload: dict,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     client: Client = Depends(get_current_client),
 ):
     """Save onboarding configuration and mark client as onboarded."""
+    try:
+        body = await request.body()
+        if len(body) > 51200:
+            raise HTTPException(status_code=413, detail="Payload too large (max 50KB)")
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    except HTTPException:
+        raise
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    if "config" in payload:
+        if not isinstance(payload["config"], dict):
+            raise HTTPException(status_code=400, detail="config must be a JSON object")
+
     if "config" in payload:
         existing = client.config or {}
         merged = {**existing, **payload["config"]}
@@ -187,11 +228,20 @@ async def complete_onboarding(
     if payload.get("business_address"):
         client.business_address = payload["business_address"]
 
-    client.onboarding_status = "live"
+    # Allow partial saves during onboarding; only go live when explicitly requested
+    go_live = payload.get("go_live", False)
+    if go_live:
+        client.onboarding_status = "live"
+    elif client.onboarding_status == "pending":
+        client.onboarding_status = "in_progress"
 
     await db.commit()
-    logger.info("Onboarding completed for client %s", client.business_name)
-    return {"status": "onboarded", "client_id": str(client.id)}
+    logger.info(
+        "Onboarding %s for client %s",
+        "completed" if go_live else "updated",
+        client.business_name,
+    )
+    return {"status": "onboarded" if go_live else "saved", "client_id": str(client.id)}
 
 
 # === COMPLIANCE ===

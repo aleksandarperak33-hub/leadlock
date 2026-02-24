@@ -224,7 +224,7 @@ async def send_subscription_confirmation(
         f"Your {plan_name} plan is now active at {amount}/month.\n\n"
         f"You now have full access to all {plan_name} features. "
         "Manage your subscription anytime from your dashboard.\n\n"
-        "Manage billing: {get_settings().dashboard_base_url}/billing\n\n"
+        f"Manage billing: {get_settings().dashboard_base_url}/billing\n\n"
         "-- LeadLock"
     )
 
@@ -261,7 +261,7 @@ async def send_payment_failed(email: str, business_name: str) -> dict:
         "Payment Failed\n\n"
         f"Hi {business_name}, we were unable to process your latest payment. "
         "Please update your payment method to avoid service interruption.\n\n"
-        "Update payment: {get_settings().dashboard_base_url}/billing\n\n"
+        f"Update payment: {get_settings().dashboard_base_url}/billing\n\n"
         "If your payment is not updated within 7 days, your account will be "
         "paused and lead response will stop.\n\n"
         "-- LeadLock"

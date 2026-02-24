@@ -345,9 +345,11 @@ class TestLogin:
         ):
             result = await login(payload, MagicMock(), db)
 
-        assert result.token is not None
-        assert result.client_id == str(mock_client.id)
-        assert result.business_name == "Austin HVAC"
+        assert result["token"] is not None
+        assert result["client_id"] == str(mock_client.id)
+        assert result["business_name"] == "Austin HVAC"
+        assert "onboarding_status" in result
+        assert "billing_status" in result
 
     @pytest.mark.asyncio
     async def test_invalid_email_returns_401(self):
@@ -418,6 +420,7 @@ class TestSignup:
             "phone": "+15125551234",
             "trade_type": "hvac",
             "password": "securepass123",
+            "tos_accepted": True,
         })
 
         redis = _mock_redis()
@@ -431,8 +434,10 @@ class TestSignup:
         assert "token" in result
         assert result["business_name"] == "HVAC Pros"
         assert result["is_admin"] is False
+        assert result["billing_status"] == "pending"
+        assert result["onboarding_status"] == "pending"
         db.add.assert_called_once()
-        db.flush.assert_awaited_once()
+        db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_signup_missing_business_name(self):
@@ -1930,8 +1935,8 @@ class TestUpdateSettings:
 
 class TestCompleteOnboarding:
     @pytest.mark.asyncio
-    async def test_successful_onboarding(self):
-        """Should save onboarding config and mark as live."""
+    async def test_successful_onboarding_go_live(self):
+        """Should save onboarding config and mark as live when go_live=true."""
         client = _make_mock_client(config={"existing": "data"})
         db = _make_mock_db()
 
@@ -1939,9 +1944,11 @@ class TestCompleteOnboarding:
             "config": {"persona": {"rep_name": "Sarah"}},
             "crm_type": "servicetitan",
             "crm_tenant_id": "tenant-123",
+            "go_live": True,
         }
+        request = _make_mock_request(json_data=payload)
 
-        result = await complete_onboarding(payload, db, client)
+        result = await complete_onboarding(request, db, client)
 
         assert result["status"] == "onboarded"
         assert client.onboarding_status == "live"
@@ -1950,15 +1957,33 @@ class TestCompleteOnboarding:
         db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_partial_save_without_go_live(self):
+        """Without go_live, onboarding should save but not mark live."""
+        client = _make_mock_client(config={"existing": "data"})
+        db = _make_mock_db()
+
+        payload = {
+            "config": {"persona": {"rep_name": "Sarah"}},
+            "crm_type": "servicetitan",
+        }
+        request = _make_mock_request(json_data=payload)
+
+        result = await complete_onboarding(request, db, client)
+
+        assert result["status"] == "saved"
+        assert client.onboarding_status == "in_progress"
+
+    @pytest.mark.asyncio
     async def test_onboarding_with_crm_api_key(self):
         """CRM API key should be encrypted before storage."""
         client = _make_mock_client()
         db = _make_mock_db()
 
-        payload = {"crm_api_key": "secret-api-key-123"}
+        payload = {"crm_api_key": "secret-api-key-123", "go_live": True}
+        request = _make_mock_request(json_data=payload)
 
         with patch(ENCRYPT_PATCH, return_value="encrypted_value"):
-            result = await complete_onboarding(payload, db, client)
+            result = await complete_onboarding(request, db, client)
 
         assert result["status"] == "onboarded"
         assert client.crm_api_key_encrypted == "encrypted_value"
@@ -1974,9 +1999,11 @@ class TestCompleteOnboarding:
             "business_ein": "12-3456789",
             "business_website": "https://hvac.com",
             "business_address": {"city": "Austin"},
+            "go_live": True,
         }
+        request = _make_mock_request(json_data=payload)
 
-        result = await complete_onboarding(payload, db, client)
+        result = await complete_onboarding(request, db, client)
 
         assert client.business_type == "llc"
         assert client.business_ein == "12-3456789"
@@ -1990,21 +2017,23 @@ class TestCompleteOnboarding:
         db = _make_mock_db()
 
         payload = {"business_type": "invalid_type"}
+        request = _make_mock_request(json_data=payload)
 
         with pytest.raises(HTTPException) as exc_info:
-            await complete_onboarding(payload, db, client)
+            await complete_onboarding(request, db, client)
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_empty_payload_still_marks_live(self):
-        """Empty payload should still mark onboarding as live."""
+    async def test_empty_payload_marks_in_progress(self):
+        """Empty payload should save without going live."""
         client = _make_mock_client()
         db = _make_mock_db()
 
-        result = await complete_onboarding({}, db, client)
+        request = _make_mock_request(json_data={})
+        result = await complete_onboarding(request, db, client)
 
-        assert result["status"] == "onboarded"
-        assert client.onboarding_status == "live"
+        assert result["status"] == "saved"
+        assert client.onboarding_status == "in_progress"
 
 
 # ---------------------------------------------------------------------------

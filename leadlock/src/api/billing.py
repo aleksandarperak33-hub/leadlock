@@ -124,12 +124,15 @@ async def create_checkout(
         await db.flush()
 
     base_url = settings.app_base_url.rstrip("/")
+    # Allow custom return path for onboarding flow
+    success_path = (payload.get("success_path") or "/billing").strip()
+    cancel_path = (payload.get("cancel_path") or "/billing").strip()
     result = await billing_service.create_checkout_session(
         client_id=str(client.id),
         stripe_customer_id=client.stripe_customer_id,
         price_id=price_id,
-        success_url=f"{base_url}/billing?success=true",
-        cancel_url=f"{base_url}/billing?canceled=true",
+        success_url=f"{base_url}{success_path}?success=true",
+        cancel_url=f"{base_url}{cancel_path}?canceled=true",
     )
 
     if result["error"]:
@@ -172,11 +175,16 @@ async def billing_status(
 
     if client.stripe_subscription_id:
         try:
+            import asyncio
             import stripe
             settings = get_settings()
-            sub = stripe.Subscription.retrieve(
-                client.stripe_subscription_id,
-                api_key=settings.stripe_secret_key,
+            loop = asyncio.get_running_loop()
+            sub = await loop.run_in_executor(
+                None,
+                lambda: stripe.Subscription.retrieve(
+                    client.stripe_subscription_id,
+                    api_key=settings.stripe_secret_key,
+                ),
             )
             price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
             plan = billing_service._price_id_to_plan(price_id)

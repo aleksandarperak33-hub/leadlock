@@ -91,6 +91,22 @@ async def _enforce_rate_limit(request: Request, client_id: str | None = None) ->
         )
 
 
+async def _enforce_billing_gate(client: Client | None, client_id: str) -> dict | None:
+    """Check client billing and phone readiness. Returns error dict or None if OK."""
+    if not client or not client.is_active:
+        return {"status": "client_inactive"}
+    if client.billing_status not in ("active", "pilot"):
+        logger.warning(
+            "Lead rejected: client %s billing_status=%s",
+            client_id[:8], client.billing_status,
+        )
+        return {"status": "billing_inactive"}
+    if not client.twilio_phone:
+        logger.warning("Lead rejected: client %s has no phone", client_id[:8])
+        return {"status": "no_phone"}
+    return None
+
+
 async def _validate_signature(
     source: str, request: Request, body: bytes, form_params: dict | None = None,
 ) -> None:
@@ -153,6 +169,12 @@ async def twilio_sms_webhook(
         if not client:
             await _complete_webhook_event(event, "failed", "Client not found")
             raise HTTPException(status_code=404, detail="Client not found")
+
+        # Billing / phone gate
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
         event.processing_status = "processing"
 
@@ -280,6 +302,13 @@ async def website_form_webhook(
     )
 
     try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
         phone = normalize_phone(payload.phone)
         if not phone:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
@@ -366,6 +395,13 @@ async def google_lsa_webhook(
     )
 
     try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
         phone = normalize_phone(payload.phone_number)
         if not phone:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
@@ -443,6 +479,13 @@ async def angi_webhook(
     )
 
     try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
         phone = normalize_phone(payload.phone)
         if not phone:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
@@ -514,6 +557,13 @@ async def facebook_webhook(
     )
 
     try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
         entries = payload.get("entry", [])
         if not entries:
             await _complete_webhook_event(event)
@@ -601,6 +651,13 @@ async def missed_call_webhook(
     )
 
     try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
         phone = normalize_phone(payload.caller_phone)
         if not phone:
             await _complete_webhook_event(event, "failed", "Invalid phone number")

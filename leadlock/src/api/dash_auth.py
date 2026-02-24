@@ -51,7 +51,7 @@ async def _check_auth_rate_limit(
 
 # === AUTH ===
 
-@router.post("/api/v1/auth/login", response_model=LoginResponse)
+@router.post("/api/v1/auth/login")
 async def login(
     payload: LoginRequest,
     request: Request,
@@ -88,12 +88,14 @@ async def login(
         algorithm="HS256",
     )
 
-    return LoginResponse(
-        token=token,
-        client_id=str(client.id),
-        business_name=client.business_name,
-        is_admin=client.is_admin,
-    )
+    return {
+        "token": token,
+        "client_id": str(client.id),
+        "business_name": client.business_name,
+        "is_admin": client.is_admin,
+        "onboarding_status": client.onboarding_status,
+        "billing_status": client.billing_status,
+    }
 
 
 @router.post("/api/v1/auth/signup")
@@ -132,6 +134,19 @@ async def signup(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="An account with this email already exists")
 
+    # Validate phone format if provided
+    if phone:
+        from src.services.phone_validation import normalize_phone
+        normalized = normalize_phone(phone)
+        if not normalized:
+            raise HTTPException(status_code=400, detail="Invalid phone number format")
+        phone = normalized
+
+    # ToS acceptance
+    tos_accepted = payload.get("tos_accepted", False)
+    if not tos_accepted:
+        raise HTTPException(status_code=400, detail="You must accept the Terms of Service")
+
     import bcrypt
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -144,11 +159,12 @@ async def signup(
         owner_email=email,
         owner_phone=phone,
         is_admin=False,
-        billing_status="trial",
+        billing_status="pending",
         onboarding_status="pending",
+        tos_accepted_at=datetime.now(timezone.utc),
     )
     db.add(client)
-    await db.flush()
+    await db.commit()
 
     # Generate JWT
     import jwt
@@ -187,6 +203,8 @@ async def signup(
         "client_id": str(client.id),
         "business_name": business_name,
         "is_admin": False,
+        "onboarding_status": "pending",
+        "billing_status": "pending",
     }
 
 

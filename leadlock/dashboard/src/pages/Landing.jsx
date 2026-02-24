@@ -901,7 +901,12 @@ export default function Landing() {
                     Privacy Policy
                   </Link>
                 </li>
-                {['Terms of Service', 'TCPA Compliance', 'Security'].map(item => (
+                <li>
+                  <Link to="/terms" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    Terms of Service
+                  </Link>
+                </li>
+                {['TCPA Compliance', 'Security'].map(item => (
                   <li key={item}>
                     <span className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
                       {item}

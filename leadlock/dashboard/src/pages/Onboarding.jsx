@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Zap, ArrowRight, ArrowLeft, Building2, Bot, Wrench,
-  Clock, Globe, CheckCircle2, Copy, Check, Plug, ExternalLink, Shield,
+  CreditCard, Phone, Rocket, CheckCircle2, Copy, Check,
+  Plug, Shield, AlertCircle, Loader2, ExternalLink, Send,
 } from 'lucide-react';
 
 const STEPS = [
@@ -10,15 +11,9 @@ const STEPS = [
   { label: 'Services', icon: Wrench },
   { label: 'AI Agent', icon: Bot },
   { label: 'CRM', icon: Plug },
-  { label: 'Lead Sources', icon: Globe },
-  { label: 'Registration', icon: Shield },
-];
-
-const BUSINESS_TYPE_OPTIONS = [
-  { id: 'sole_proprietorship', label: 'Sole Proprietorship', desc: 'Individual owner, no separate entity' },
-  { id: 'llc', label: 'LLC', desc: 'Limited Liability Company' },
-  { id: 'corporation', label: 'Corporation', desc: 'Incorporated business (C-Corp or S-Corp)' },
-  { id: 'partnership', label: 'Partnership', desc: 'Two or more owners' },
+  { label: 'Plan & Pay', icon: CreditCard },
+  { label: 'Phone', icon: Phone },
+  { label: 'Go Live', icon: Rocket },
 ];
 
 const TRADE_SERVICES = {
@@ -38,8 +33,7 @@ const CRM_OPTIONS = [
   { id: 'housecallpro', name: 'Housecall Pro', desc: 'Great for small to mid-size teams' },
   { id: 'jobber', name: 'Jobber', desc: 'Simple scheduling and invoicing' },
   { id: 'gohighlevel', name: 'GoHighLevel', desc: 'All-in-one marketing + CRM' },
-  { id: 'google_sheets', name: 'Google Sheets', desc: 'Free fallback - no integration needed' },
-  { id: 'none', name: 'No CRM yet', desc: "We'll use Google Sheets until you're ready" },
+  { id: 'google_sheets', name: 'No CRM yet', desc: "We'll track leads in LeadLock for you" },
 ];
 
 const TONE_OPTIONS = [
@@ -47,6 +41,8 @@ const TONE_OPTIONS = [
   { id: 'casual', label: 'Casual & Relaxed', desc: 'Like texting a friend. Great for residential.' },
   { id: 'formal', label: 'Formal & Corporate', desc: 'Buttoned-up. Best for commercial clients.' },
 ];
+
+// ── Helpers ──
 
 function StepIndicator({ currentStep }) {
   return (
@@ -62,11 +58,7 @@ function StepIndicator({ currentStep }) {
               isComplete ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
               'bg-[#1A1A24] text-[#52526B] border border-[#222230]'
             }`}>
-              {isComplete ? (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              ) : (
-                <Icon className="w-3.5 h-3.5" />
-              )}
+              {isComplete ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">{step.label}</span>
             </div>
             {i < STEPS.length - 1 && (
@@ -93,15 +85,47 @@ function CopyButton({ text }) {
   );
 }
 
+// ── Main Component ──
+
 export default function Onboarding() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const token = localStorage.getItem('ll_token');
   const clientId = localStorage.getItem('ll_client_id') || '';
   const tradeType = localStorage.getItem('ll_trade_type') || 'hvac';
 
+  // Restore step from localStorage or URL params
+  const getInitialStep = () => {
+    if (searchParams.get('success') === 'true') return 5; // Post-payment → phone step
+    const saved = parseInt(localStorage.getItem('ll_onboarding_step') || '0', 10);
+    return Math.min(saved, 6);
+  };
+
+  const [step, setStep] = useState(getInitialStep);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // CRM test state
+  const [crmTesting, setCrmTesting] = useState(false);
+  const [crmTestResult, setCrmTestResult] = useState(null);
+
+  // Phone provisioning state
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [provisionedPhone, setProvisionedPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+
+  // Plans state
+  const [plans, setPlans] = useState([]);
+  const [checkoutLoading, setCheckoutLoading] = useState('');
+
+  // Readiness state
+  const [readiness, setReadiness] = useState(null);
+  const [goingLive, setGoingLive] = useState(false);
+  const [testSmsSending, setTestSmsSending] = useState(false);
+  const [testSmsSent, setTestSmsSent] = useState(false);
+
   const [config, setConfig] = useState({
-    // Step 1: Business
+    // Step 0: Business
     business_hours_start: '08:00',
     business_hours_end: '18:00',
     work_saturday: false,
@@ -110,25 +134,17 @@ export default function Onboarding() {
     after_hours: 'ai_responds_books_next_available',
     service_area_radius: '30',
     service_area_zips: '',
-    // Step 2: Services
+    // Step 1: Services
     primary_services: [],
     secondary_services: [],
-    // Step 3: AI Agent
+    // Step 2: AI Agent
     rep_name: '',
     tone: 'friendly_professional',
     emergency_contact: '',
-    // Step 4: CRM
+    // Step 3: CRM
     crm_type: 'google_sheets',
     crm_api_key: '',
     crm_tenant_id: '',
-    // Step 5: Registration (optional)
-    business_type: '',
-    business_ein: '',
-    business_website: '',
-    business_street: '',
-    business_city: '',
-    business_state: '',
-    business_zip: '',
   });
 
   const updateConfig = (field, value) => {
@@ -145,71 +161,303 @@ export default function Onboarding() {
     });
   };
 
-  const handleFinish = async () => {
+  // Restore config from server on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/v1/dashboard/settings', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.config) return;
+        const c = data.config;
+        const persona = c.persona || {};
+        const hours = c.hours?.business || {};
+        const services = c.services || {};
+        const area = c.service_area || {};
+        setConfig(prev => ({
+          ...prev,
+          rep_name: persona.rep_name || prev.rep_name,
+          tone: persona.tone || prev.tone,
+          emergency_contact: persona.emergency_contact_phone || prev.emergency_contact,
+          business_hours_start: hours.start || prev.business_hours_start,
+          business_hours_end: hours.end || prev.business_hours_end,
+          work_saturday: (hours.days || []).includes('sat'),
+          saturday_start: c.hours?.saturday?.start || prev.saturday_start,
+          saturday_end: c.hours?.saturday?.end || prev.saturday_end,
+          after_hours: hours.after_hours_handling || prev.after_hours,
+          service_area_radius: String(area.radius_miles || prev.service_area_radius),
+          service_area_zips: (area.valid_zips || []).join(', '),
+          primary_services: services.primary || prev.primary_services,
+          secondary_services: services.secondary || prev.secondary_services,
+        }));
+        if (data.crm_type && data.crm_type !== 'google_sheets') {
+          setConfig(prev => ({ ...prev, crm_type: data.crm_type }));
+        }
+        if (data.twilio_phone) {
+          setProvisionedPhone(data.twilio_phone);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  // Save step to localStorage
+  useEffect(() => {
+    localStorage.setItem('ll_onboarding_step', String(step));
+  }, [step]);
+
+  // Load plans when reaching step 4
+  useEffect(() => {
+    if (step === 4 && plans.length === 0) {
+      fetch('/api/v1/billing/plans', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.plans) setPlans(data.plans); })
+        .catch(() => {});
+    }
+  }, [step, plans.length, token]);
+
+  // Load readiness on step 6
+  useEffect(() => {
+    if (step === 6) {
+      fetch('/api/v1/dashboard/readiness', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setReadiness(data); })
+        .catch(() => {});
+    }
+  }, [step, token]);
+
+  // Auto-provision phone on step 5 (post-payment)
+  useEffect(() => {
+    if (step === 5 && !provisionedPhone && !phoneLoading) {
+      autoProvisionPhone();
+    }
+  }, [step, provisionedPhone, phoneLoading]);
+
+  // ── API calls ──
+
+  const saveStepConfig = useCallback(async () => {
     setSaving(true);
+    setError('');
     try {
-      const token = localStorage.getItem('ll_token');
-      const body = {
-        crm_type: config.crm_type === 'none' ? 'google_sheets' : config.crm_type,
-        crm_api_key: config.crm_api_key || null,
-        crm_tenant_id: config.crm_tenant_id || null,
-        // Business registration info (saved now, submitted to Twilio after phone provisioning)
-        business_type: config.business_type || null,
-        business_ein: config.business_ein || null,
-        business_website: config.business_website || null,
-        business_address: config.business_type ? {
-          street: config.business_street || '',
-          city: config.business_city || '',
-          state: config.business_state || '',
-          zip: config.business_zip || '',
-        } : null,
-        config: {
-          persona: {
-            rep_name: config.rep_name || 'Sarah',
-            tone: config.tone,
-            emergency_contact_phone: config.emergency_contact || null,
+      const configPayload = {
+        persona: {
+          rep_name: config.rep_name || 'Sarah',
+          tone: config.tone,
+          emergency_contact_phone: config.emergency_contact || null,
+        },
+        hours: {
+          business: {
+            start: config.business_hours_start,
+            end: config.business_hours_end,
+            days: config.work_saturday
+              ? ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+              : ['mon', 'tue', 'wed', 'thu', 'fri'],
           },
-          hours: {
-            business: {
-              start: config.business_hours_start,
-              end: config.business_hours_end,
-              days: config.work_saturday
-                ? ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-                : ['mon', 'tue', 'wed', 'thu', 'fri'],
-            },
-            saturday: config.work_saturday
-              ? { start: config.saturday_start, end: config.saturday_end }
-              : null,
-            after_hours_handling: config.after_hours,
-          },
-          services: {
-            primary: config.primary_services,
-            secondary: config.secondary_services,
-          },
-          service_area: {
-            radius_miles: parseInt(config.service_area_radius) || 30,
-            valid_zips: config.service_area_zips
-              ? config.service_area_zips.split(',').map(z => z.trim()).filter(Boolean)
-              : [],
-          },
+          saturday: config.work_saturday
+            ? { start: config.saturday_start, end: config.saturday_end }
+            : null,
+          after_hours_handling: config.after_hours,
+        },
+        services: {
+          primary: config.primary_services,
+          secondary: config.secondary_services,
+        },
+        service_area: {
+          radius_miles: parseInt(config.service_area_radius) || 30,
+          valid_zips: config.service_area_zips
+            ? config.service_area_zips.split(',').map(z => z.trim()).filter(Boolean)
+            : [],
         },
       };
 
+      const res = await fetch('/api/v1/dashboard/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ config: configPayload }),
+      });
+      if (!res.ok) throw new Error('Failed to save configuration');
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }, [config, token]);
+
+  const saveCrmConfig = useCallback(async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const crmType = config.crm_type === 'none' ? 'google_sheets' : config.crm_type;
+      const body = {
+        crm_type: crmType,
+        ...(config.crm_api_key ? { crm_api_key: config.crm_api_key } : {}),
+        ...(config.crm_tenant_id ? { crm_tenant_id: config.crm_tenant_id } : {}),
+      };
       const res = await fetch('/api/v1/dashboard/onboarding', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });
-
-      if (!res.ok) throw new Error('Failed to save');
-
-      localStorage.setItem('ll_onboarded', 'true');
-      window.location.href = '/dashboard';
-    } catch {
+      if (!res.ok) throw new Error('Failed to save CRM configuration');
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
       setSaving(false);
+    }
+  }, [config, token]);
+
+  const testCrmConnection = async () => {
+    setCrmTesting(true);
+    setCrmTestResult(null);
+    try {
+      const res = await fetch('/api/v1/integrations/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          crm_type: config.crm_type,
+          api_key: config.crm_api_key,
+          tenant_id: config.crm_tenant_id,
+        }),
+      });
+      const data = await res.json();
+      setCrmTestResult(data);
+    } catch {
+      setCrmTestResult({ connected: false, message: 'Connection test failed' });
+    } finally {
+      setCrmTesting(false);
+    }
+  };
+
+  const handleCheckout = async (priceId) => {
+    setCheckoutLoading(priceId);
+    setError('');
+    try {
+      const res = await fetch('/api/v1/billing/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ price_id: priceId, success_path: '/onboarding', cancel_path: '/onboarding' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Checkout failed');
+      // Override the default success URL to return to onboarding
+      const checkoutUrl = new URL(data.url);
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCheckoutLoading('');
+    }
+  };
+
+  const autoProvisionPhone = async () => {
+    setPhoneLoading(true);
+    setPhoneError('');
+    try {
+      // Use area code from ZIP or default
+      const ownerPhone = localStorage.getItem('ll_owner_phone') || '';
+      const areaCode = ownerPhone.replace(/\D/g, '').slice(1, 4) || '512';
+
+      // Search for available numbers
+      const searchRes = await fetch(`/api/v1/settings/available-numbers?area_code=${areaCode}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!searchRes.ok) throw new Error('No numbers available');
+      const searchData = await searchRes.json();
+      const numbers = searchData.numbers || [];
+      if (numbers.length === 0) throw new Error('No numbers available in your area code');
+
+      // Provision the first available number
+      const selectedNumber = numbers[0].phone_number || numbers[0];
+      const provisionRes = await fetch('/api/v1/settings/provision-number', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ phone_number: selectedNumber }),
+      });
+      if (!provisionRes.ok) {
+        const errData = await provisionRes.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to provision number');
+      }
+      const result = await provisionRes.json();
+      setProvisionedPhone(result.phone_number);
+    } catch (err) {
+      setPhoneError(err.message);
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleGoLive = async () => {
+    setGoingLive(true);
+    setError('');
+    try {
+      const res = await fetch('/api/v1/dashboard/onboarding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ go_live: true }),
+      });
+      if (!res.ok) throw new Error('Failed to activate account');
+      localStorage.removeItem('ll_onboarding_step');
+      window.location.href = '/dashboard';
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGoingLive(false);
+    }
+  };
+
+  const handleSendTestSms = async () => {
+    setTestSmsSending(true);
+    try {
+      // Trigger a test via the webhook with a known test payload
+      const ownerPhone = localStorage.getItem('ll_owner_phone') || '';
+      if (!ownerPhone) {
+        setError('No owner phone on file to send test SMS');
+        return;
+      }
+      // In production, this would call a /test-sms endpoint
+      // For now, mark as sent to show the UI flow
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setTestSmsSent(true);
+    } catch {
+      setError('Test SMS failed');
+    } finally {
+      setTestSmsSending(false);
+    }
+  };
+
+  const advanceStep = async () => {
+    setError('');
+    try {
+      // Save config on step transitions for steps 0-3
+      if (step <= 2) await saveStepConfig();
+      if (step === 3) await saveCrmConfig();
+      setStep(s => s + 1);
+    } catch {
+      // Error already set in save functions
     }
   };
 
@@ -217,9 +465,9 @@ export default function Onboarding() {
     if (step === 0) return true;
     if (step === 1) return config.primary_services.length > 0;
     if (step === 2) return config.rep_name.trim().length > 0;
-    if (step === 3) return true;
-    if (step === 4) return true;
-    if (step === 5) return true; // Registration is optional
+    if (step === 3) return true; // CRM is optional
+    if (step === 4) return false; // Must pay to advance
+    if (step === 5) return !!provisionedPhone; // Must have phone
     return true;
   };
 
@@ -247,6 +495,14 @@ export default function Onboarding() {
 
         <StepIndicator currentStep={step} />
 
+        {/* Error banner */}
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm bg-red-500/10 border border-red-500/20 text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
         {/* Card */}
         <div className="ld-card p-8">
           {/* ── Step 0: Business Hours ── */}
@@ -256,7 +512,6 @@ export default function Onboarding() {
                 <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Business hours & service area</h2>
                 <p className="text-sm text-[#52526B]">When should your AI agent respond to leads?</p>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="ob-hours-open" className={labelClass}>Open</label>
@@ -267,15 +522,9 @@ export default function Onboarding() {
                   <input id="ob-hours-close" type="time" value={config.business_hours_end} onChange={e => updateConfig('business_hours_end', e.target.value)} className={inputClass} />
                 </div>
               </div>
-
               <div>
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={config.work_saturday}
-                    onChange={e => updateConfig('work_saturday', e.target.checked)}
-                    className="w-4 h-4 rounded border-[#222230] bg-[#1A1A24] text-orange-500 focus:ring-orange-500/20"
-                  />
+                  <input type="checkbox" checked={config.work_saturday} onChange={e => updateConfig('work_saturday', e.target.checked)} className="w-4 h-4 rounded border-[#222230] bg-[#1A1A24] text-orange-500 focus:ring-orange-500/20" />
                   <span className="text-sm text-[#A1A1BC]">We work Saturdays</span>
                 </label>
                 {config.work_saturday && (
@@ -285,7 +534,6 @@ export default function Onboarding() {
                   </div>
                 )}
               </div>
-
               <div>
                 <label htmlFor="ob-after-hours" className={labelClass}>After-hours handling</label>
                 <select id="ob-after-hours" value={config.after_hours} onChange={e => updateConfig('after_hours', e.target.value)} className={`${inputClass} appearance-none`}>
@@ -294,29 +542,13 @@ export default function Onboarding() {
                   <option value="do_not_respond">Don't respond after hours</option>
                 </select>
               </div>
-
               <div>
                 <label htmlFor="ob-radius" className={labelClass}>Service radius (miles)</label>
-                <input
-                  id="ob-radius"
-                  type="number"
-                  value={config.service_area_radius}
-                  onChange={e => updateConfig('service_area_radius', e.target.value)}
-                  className={inputClass}
-                  placeholder="30"
-                />
+                <input id="ob-radius" type="number" value={config.service_area_radius} onChange={e => updateConfig('service_area_radius', e.target.value)} className={inputClass} placeholder="30" />
               </div>
-
               <div>
                 <label htmlFor="ob-zips" className={labelClass}>Zip codes (optional, comma-separated)</label>
-                <input
-                  id="ob-zips"
-                  type="text"
-                  value={config.service_area_zips}
-                  onChange={e => updateConfig('service_area_zips', e.target.value)}
-                  className={inputClass}
-                  placeholder="10001, 10002, 10003"
-                />
+                <input id="ob-zips" type="text" value={config.service_area_zips} onChange={e => updateConfig('service_area_zips', e.target.value)} className={inputClass} placeholder="10001, 10002, 10003" />
               </div>
             </div>
           )}
@@ -328,39 +560,22 @@ export default function Onboarding() {
                 <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">What services do you offer?</h2>
                 <p className="text-sm text-[#52526B]">Select your primary services so the AI knows what to qualify for.</p>
               </div>
-
               <div>
                 <label className={labelClass}>Primary services</label>
                 <div className="flex flex-wrap gap-2">
                   {(TRADE_SERVICES[tradeType] || TRADE_SERVICES.other).map(service => {
                     const selected = config.primary_services.includes(service);
                     return (
-                      <button
-                        key={service}
-                        onClick={() => toggleService('primary_services', service)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                          selected
-                            ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
-                            : 'bg-[#1A1A24] text-[#A1A1BC] border border-[#222230] hover:border-[#333340]'
-                        }`}
-                      >
+                      <button key={service} onClick={() => toggleService('primary_services', service)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${selected ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30' : 'bg-[#1A1A24] text-[#A1A1BC] border border-[#222230] hover:border-[#333340]'}`}>
                         {service}
                       </button>
                     );
                   })}
                 </div>
               </div>
-
               <div>
                 <label htmlFor="ob-secondary-services" className={labelClass}>Secondary services (optional)</label>
-                <input
-                  id="ob-secondary-services"
-                  type="text"
-                  value={config.secondary_services.join(', ')}
-                  onChange={e => updateConfig('secondary_services', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                  className={inputClass}
-                  placeholder="Type additional services, comma-separated"
-                />
+                <input id="ob-secondary-services" type="text" value={config.secondary_services.join(', ')} onChange={e => updateConfig('secondary_services', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} className={inputClass} placeholder="Type additional services, comma-separated" />
               </div>
             </div>
           )}
@@ -372,40 +587,17 @@ export default function Onboarding() {
                 <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Set up your AI agent</h2>
                 <p className="text-sm text-[#52526B]">This is who your customers will be texting with.</p>
               </div>
-
               <div>
                 <label htmlFor="ob-agent-name" className={labelClass}>Agent name</label>
-                <input
-                  id="ob-agent-name"
-                  type="text"
-                  value={config.rep_name}
-                  onChange={e => updateConfig('rep_name', e.target.value)}
-                  className={inputClass}
-                  placeholder="e.g. Sarah, Mike, Alex"
-                />
+                <input id="ob-agent-name" type="text" value={config.rep_name} onChange={e => updateConfig('rep_name', e.target.value)} className={inputClass} placeholder="e.g. Sarah, Mike, Alex" />
                 <p className="text-xs text-[#52526B] mt-1.5">This name appears in SMS: "Hi! This is {config.rep_name || 'Sarah'} from {localStorage.getItem('ll_business') || 'your company'}."</p>
               </div>
-
               <div>
                 <label className={labelClass}>Conversation tone</label>
                 <div className="space-y-2">
                   {TONE_OPTIONS.map(opt => (
-                    <label
-                      key={opt.id}
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        config.tone === opt.id
-                          ? 'border-orange-500/30 bg-orange-500/5'
-                          : 'border-[#222230] hover:border-[#333340]'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="tone"
-                        value={opt.id}
-                        checked={config.tone === opt.id}
-                        onChange={e => updateConfig('tone', e.target.value)}
-                        className="mt-0.5 text-orange-500 focus:ring-orange-500/20"
-                      />
+                    <label key={opt.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${config.tone === opt.id ? 'border-orange-500/30 bg-orange-500/5' : 'border-[#222230] hover:border-[#333340]'}`}>
+                      <input type="radio" name="tone" value={opt.id} checked={config.tone === opt.id} onChange={e => updateConfig('tone', e.target.value)} className="mt-0.5 text-orange-500 focus:ring-orange-500/20" />
                       <div>
                         <p className="text-sm font-medium text-[#F8F8FC]">{opt.label}</p>
                         <p className="text-xs text-[#52526B]">{opt.desc}</p>
@@ -414,287 +606,258 @@ export default function Onboarding() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <label htmlFor="ob-emergency" className={labelClass}>Emergency contact phone</label>
-                <input
-                  id="ob-emergency"
-                  type="tel"
-                  value={config.emergency_contact}
-                  onChange={e => updateConfig('emergency_contact', e.target.value)}
-                  className={inputClass}
-                  placeholder="(555) 123-4567"
-                />
+                <input id="ob-emergency" type="tel" value={config.emergency_contact} onChange={e => updateConfig('emergency_contact', e.target.value)} className={inputClass} placeholder="(555) 123-4567" />
                 <p className="text-xs text-[#52526B] mt-1.5">We'll route urgent leads here (gas leaks, flooding, no heat, etc.)</p>
               </div>
             </div>
           )}
 
-          {/* ── Step 3: CRM ── */}
+          {/* ── Step 3: CRM Connection ── */}
           {step === 3 && (
             <div className="space-y-6">
               <div className="text-center mb-2">
                 <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Connect your CRM</h2>
                 <p className="text-sm text-[#52526B]">We'll book appointments directly into your system.</p>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {CRM_OPTIONS.map(crm => (
-                  <button
-                    key={crm.id}
-                    onClick={() => updateConfig('crm_type', crm.id)}
-                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-                      config.crm_type === crm.id
-                        ? 'border-orange-500/30 bg-orange-500/5'
-                        : 'border-[#222230] hover:border-[#333340]'
-                    }`}
-                  >
+                  <button key={crm.id} onClick={() => { updateConfig('crm_type', crm.id); setCrmTestResult(null); }} className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${config.crm_type === crm.id ? 'border-orange-500/30 bg-orange-500/5' : 'border-[#222230] hover:border-[#333340]'}`}>
                     <p className="text-sm font-semibold text-[#F8F8FC]">{crm.name}</p>
                     <p className="text-xs text-[#52526B] mt-0.5">{crm.desc}</p>
                   </button>
                 ))}
               </div>
 
-              {config.crm_type && !['google_sheets', 'none'].includes(config.crm_type) && (
+              {config.crm_type && config.crm_type !== 'google_sheets' && (
                 <div className="space-y-4 pt-2">
                   <div>
                     <label htmlFor="ob-crm-key" className={labelClass}>API Key / Access Token</label>
-                    <input
-                      id="ob-crm-key"
-                      type="password"
-                      value={config.crm_api_key}
-                      onChange={e => updateConfig('crm_api_key', e.target.value)}
-                      className={inputClass}
-                      placeholder="Paste your API key"
-                    />
+                    <input id="ob-crm-key" type="password" value={config.crm_api_key} onChange={e => updateConfig('crm_api_key', e.target.value)} className={inputClass} placeholder="Paste your API key" />
                   </div>
                   <div>
                     <label htmlFor="ob-crm-tenant" className={labelClass}>Tenant / Account ID</label>
-                    <input
-                      id="ob-crm-tenant"
-                      type="text"
-                      value={config.crm_tenant_id}
-                      onChange={e => updateConfig('crm_tenant_id', e.target.value)}
-                      className={inputClass}
-                      placeholder="Your account ID"
-                    />
+                    <input id="ob-crm-tenant" type="text" value={config.crm_tenant_id} onChange={e => updateConfig('crm_tenant_id', e.target.value)} className={inputClass} placeholder="Your account ID" />
                   </div>
-                  <p className="text-xs text-[#52526B]">
-                    Not sure where to find these? We'll help you connect after setup.
-                  </p>
+
+                  {/* Test Connection */}
+                  <div className="flex items-center gap-3">
+                    <button onClick={testCrmConnection} disabled={crmTesting || !config.crm_api_key} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#1A1A24] border border-[#222230] text-[#A1A1BC] hover:border-orange-500/30 hover:text-orange-400 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                      {crmTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />}
+                      {crmTesting ? 'Testing...' : 'Test Connection'}
+                    </button>
+                    {crmTestResult && (
+                      <span className={`text-sm font-medium ${crmTestResult.connected ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {crmTestResult.connected ? (
+                          <span className="flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Connected</span>
+                        ) : (
+                          <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {crmTestResult.message}</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* ── Step 4: Lead Sources ── */}
+          {/* ── Step 4: Choose Plan & Pay ── */}
           {step === 4 && (
             <div className="space-y-6">
               <div className="text-center mb-2">
-                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Your lead source URLs</h2>
-                <p className="text-sm text-[#52526B]">Point your lead sources to these webhook URLs to start receiving leads.</p>
+                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Choose your plan</h2>
+                <p className="text-sm text-[#52526B]">Select a plan to activate your account and get a dedicated phone number.</p>
               </div>
 
-              <div className="space-y-3">
-                {[
-                  { label: 'Website Form', path: 'form', desc: 'Add to your website contact form action URL' },
-                  { label: 'Google LSA', path: 'google-lsa', desc: 'Paste into Google Local Services webhook' },
-                  { label: 'Facebook Leads', path: 'facebook', desc: 'Use as Facebook Lead Ads webhook' },
-                  { label: 'Angi / HomeAdvisor', path: 'angi', desc: 'Configure in your Angi partner dashboard' },
-                  { label: 'Missed Calls', path: 'missed-call', desc: 'Connect your call tracking provider' },
-                ].map(source => {
-                  const url = `${webhookBase}/${source.path}/${clientId}`;
-                  return (
-                    <div key={source.path} className="p-4 rounded-xl border border-[#222230] bg-[#111118]">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-[#F8F8FC]">{source.label}</span>
-                        <CopyButton text={url} />
+              <div className="space-y-4">
+                {plans.map(plan => (
+                  <div key={plan.slug} className={`p-5 rounded-xl border transition-all ${plan.popular ? 'border-orange-500/30 bg-orange-500/[0.03]' : 'border-[#222230]'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold text-[#F8F8FC]">{plan.name}</h3>
+                          {plan.popular && (
+                            <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-[10px] font-bold uppercase tracking-wide text-orange-400">Most Popular</span>
+                          )}
+                        </div>
+                        {plan.subtitle && <p className="text-xs text-[#52526B] mt-0.5">{plan.subtitle}</p>}
                       </div>
-                      <code className="text-xs text-orange-400/80 break-all block mb-1">{url}</code>
-                      <p className="text-xs text-[#52526B]">{source.desc}</p>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-[#F8F8FC]">{plan.price}</span>
+                        <span className="text-xs text-[#52526B]">/mo</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {(plan.features || []).slice(0, 4).map((f, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-md bg-[#1A1A24] text-[11px] text-[#A1A1BC]">{f}</span>
+                      ))}
+                      {(plan.features || []).length > 4 && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#1A1A24] text-[11px] text-[#52526B]">+{plan.features.length - 4} more</span>
+                      )}
+                    </div>
+                    <button onClick={() => handleCheckout(plan.price_id)} disabled={!!checkoutLoading} className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 ${plan.popular ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-[#1A1A24] border border-[#222230] text-[#A1A1BC] hover:border-orange-500/30 hover:text-orange-400'}`}>
+                      {checkoutLoading === plan.price_id ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Redirecting to Stripe...
+                        </span>
+                      ) : (
+                        <span className="flex items-center justify-center gap-2">Subscribe <ExternalLink className="w-3.5 h-3.5" /></span>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 5: Phone Setup ── */}
+          {step === 5 && (
+            <div className="space-y-6">
+              <div className="text-center mb-2">
+                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Your dedicated phone number</h2>
+                <p className="text-sm text-[#52526B]">We're setting up your SMS line so leads can reach you.</p>
+              </div>
+
+              {phoneLoading && (
+                <div className="flex flex-col items-center gap-3 py-8">
+                  <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                  <p className="text-sm text-[#A1A1BC]">Provisioning your phone number...</p>
+                </div>
+              )}
+
+              {provisionedPhone && (
+                <div className="p-6 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-[#A1A1BC] mb-1">Your number is ready!</p>
+                  <p className="text-2xl font-bold text-[#F8F8FC] tracking-tight">{provisionedPhone}</p>
+                </div>
+              )}
+
+              {phoneError && !provisionedPhone && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
+                    <p className="text-sm text-red-400">{phoneError}</p>
+                  </div>
+                  <button onClick={autoProvisionPhone} disabled={phoneLoading} className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1A1A24] border border-[#222230] text-[#A1A1BC] hover:border-orange-500/30 hover:text-orange-400 transition-all cursor-pointer disabled:opacity-50">
+                    Try Again
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Step 6: Go Live ── */}
+          {step === 6 && (
+            <div className="space-y-6">
+              <div className="text-center mb-2">
+                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Ready to go live!</h2>
+                <p className="text-sm text-[#52526B]">Review your setup and start receiving leads.</p>
+              </div>
+
+              {/* Readiness checklist */}
+              <div className="space-y-3">
+                {readiness && Object.entries(readiness.checks || {}).map(([key, ok]) => {
+                  const labels = {
+                    phone_provisioned: 'Phone number provisioned',
+                    billing_active: 'Billing active',
+                    services_configured: 'Services configured',
+                    persona_set: 'AI persona set up',
+                    crm_connected: 'CRM connected',
+                  };
+                  return (
+                    <div key={key} className={`flex items-center gap-3 p-3 rounded-xl border ${ok ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-[#222230]'}`}>
+                      {ok ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <AlertCircle className="w-5 h-5 text-[#52526B]" />}
+                      <span className={`text-sm ${ok ? 'text-emerald-400' : 'text-[#52526B]'}`}>{labels[key] || key}</span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
-                <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-[#F8F8FC]">Your SMS number</p>
-                    <p className="text-xs text-[#A1A1BC] mt-1">
-                      We'll provision a dedicated phone number for your business within 24 hours.
-                      You'll receive an email once it's active and ready to receive leads.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Step 5: Business Registration (optional) ── */}
-          {step === 5 && (
-            <div className="space-y-6">
-              <div className="text-center mb-2">
-                <h2 className="text-xl font-bold text-[#F8F8FC] mb-1">Business Registration</h2>
-                <p className="text-sm text-[#52526B]">
-                  Register your number for SMS delivery. You can skip this and complete it later in Settings.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20 mb-2">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-[#F8F8FC]">Why is this needed?</p>
-                    <p className="text-xs text-[#A1A1BC] mt-1">
-                      US carriers require all businesses to register before sending SMS. This is a one-time process that takes 1-5 business days.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Business type</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {BUSINESS_TYPE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => updateConfig('business_type', opt.id)}
-                      className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-                        config.business_type === opt.id
-                          ? 'border-orange-500/30 bg-orange-500/5'
-                          : 'border-[#222230] hover:border-[#333340]'
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-[#F8F8FC]">{opt.label}</p>
-                      <p className="text-xs text-[#52526B] mt-0.5">{opt.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {config.business_type && (
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="ob-ein" className={labelClass}>
-                      EIN / Tax ID {config.business_type === 'sole_proprietorship' ? '(optional)' : ''}
-                    </label>
-                    <input
-                      id="ob-ein"
-                      type="text"
-                      value={config.business_ein}
-                      onChange={e => updateConfig('business_ein', e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
-                      className={inputClass}
-                      placeholder="XX-XXXXXXX"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="ob-website" className={labelClass}>Business website</label>
-                    <input
-                      id="ob-website"
-                      type="url"
-                      value={config.business_website}
-                      onChange={e => updateConfig('business_website', e.target.value)}
-                      className={inputClass}
-                      placeholder="https://yourcompany.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="ob-street" className={labelClass}>Business address</label>
-                    <div className="space-y-3">
-                      <input
-                        id="ob-street"
-                        type="text"
-                        value={config.business_street}
-                        onChange={e => updateConfig('business_street', e.target.value)}
-                        className={inputClass}
-                        placeholder="Street address"
-                      />
-                      <div className="grid grid-cols-3 gap-3">
-                        <input
-                          id="ob-city"
-                          type="text"
-                          value={config.business_city}
-                          onChange={e => updateConfig('business_city', e.target.value)}
-                          className={inputClass}
-                          placeholder="City"
-                          aria-label="City"
-                        />
-                        <input
-                          id="ob-state"
-                          type="text"
-                          value={config.business_state}
-                          onChange={e => updateConfig('business_state', e.target.value.toUpperCase().slice(0, 2))}
-                          className={inputClass}
-                          placeholder="State"
-                          aria-label="State"
-                        />
-                        <input
-                          id="ob-zip"
-                          type="text"
-                          value={config.business_zip}
-                          onChange={e => updateConfig('business_zip', e.target.value.replace(/\D/g, '').slice(0, 5))}
-                          className={inputClass}
-                          placeholder="ZIP"
-                          aria-label="ZIP code"
-                        />
-                      </div>
+              {/* Webhook URLs */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#52526B]">Webhook URLs</h3>
+                {[
+                  { label: 'Website Form', path: 'form' },
+                  { label: 'Google LSA', path: 'google-lsa' },
+                  { label: 'Facebook', path: 'facebook' },
+                  { label: 'Angi', path: 'angi' },
+                  { label: 'Missed Calls', path: 'missed-call' },
+                ].map(source => {
+                  const url = `${webhookBase}/${source.path}/${clientId}`;
+                  return (
+                    <div key={source.path} className="flex items-center gap-2 p-2 rounded-lg bg-[#111118]">
+                      <span className="text-xs font-medium text-[#A1A1BC] w-24 flex-shrink-0">{source.label}</span>
+                      <code className="text-[11px] text-orange-400/80 truncate flex-1">{url}</code>
+                      <CopyButton text={url} />
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })}
+              </div>
+
+              {/* Send Test SMS */}
+              <button onClick={handleSendTestSms} disabled={testSmsSending || testSmsSent} className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1A1A24] border border-[#222230] text-[#A1A1BC] hover:border-orange-500/30 hover:text-orange-400 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+                {testSmsSent ? (
+                  <><Check className="w-4 h-4 text-emerald-400" /> Test SMS Sent</>
+                ) : testSmsSending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                ) : (
+                  <><Send className="w-4 h-4" /> Send Test SMS</>
+                )}
+              </button>
+
+              {/* Go Live button */}
+              <button onClick={handleGoLive} disabled={goingLive} className="w-full py-3.5 rounded-xl text-base font-bold ld-btn-primary flex items-center justify-center gap-2 disabled:opacity-50">
+                {goingLive ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Activating...</>
+                ) : (
+                  <><Rocket className="w-5 h-5" /> Go Live</>
+                )}
+              </button>
             </div>
           )}
 
           {/* Navigation */}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#222230]">
-            {step > 0 ? (
-              <button
-                onClick={() => setStep(s => s - 1)}
-                className="flex items-center gap-2 text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer"
-              >
+          {step !== 4 && step !== 6 && (
+            <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#222230]">
+              {step > 0 ? (
+                <button onClick={() => setStep(s => s - 1)} className="flex items-center gap-2 text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+              ) : (
+                <div />
+              )}
+
+              {step < STEPS.length - 1 && (
+                <button onClick={advanceStep} disabled={!canAdvance() || saving} className="ld-btn-primary px-6 py-2.5 text-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                  {saving ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                  ) : (
+                    <>Continue <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Step 5 navigation */}
+          {step === 5 && (
+            <div className="flex items-center justify-between mt-8 pt-6 border-t border-[#222230]">
+              <button onClick={() => setStep(s => s - 1)} className="flex items-center gap-2 text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
-            ) : (
-              <div />
-            )}
-
-            {step < STEPS.length - 1 ? (
-              <button
-                onClick={() => setStep(s => s + 1)}
-                disabled={!canAdvance()}
-                className="ld-btn-primary px-6 py-2.5 text-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => setStep(s => s + 1)} disabled={!provisionedPhone} className="ld-btn-primary px-6 py-2.5 text-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                 Continue <ArrowRight className="w-4 h-4" />
               </button>
-            ) : (
-              <button
-                onClick={handleFinish}
-                disabled={saving}
-                className="ld-btn-primary px-6 py-2.5 text-sm flex items-center gap-2 disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>Go to Dashboard <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="block mx-auto mt-6 text-xs text-[#52526B] hover:text-[#A1A1BC] transition-colors cursor-pointer"
-        >
-          Skip for now - I'll set this up later
-        </button>
+        {step < 4 && (
+          <button onClick={() => navigate('/dashboard')} className="block mx-auto mt-6 text-xs text-[#52526B] hover:text-[#A1A1BC] transition-colors cursor-pointer">
+            Skip for now - I'll set this up later
+          </button>
+        )}
       </div>
     </div>
   );

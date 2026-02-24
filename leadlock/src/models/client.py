@@ -57,8 +57,8 @@ class Client(Base):
 
     # Billing
     billing_status: Mapped[str] = mapped_column(
-        String(30), default="trial"
-    )  # trial, pilot, active, paused, churned
+        String(30), default="pending"
+    )  # pending, pilot, active, past_due, canceled, paused, churned
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(100))
     stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(100))
 
@@ -77,6 +77,9 @@ class Client(Base):
 
     # Trial
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Terms of Service acceptance
+    tos_accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Admin flag - True for LeadLock operators who see the admin dashboard
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)

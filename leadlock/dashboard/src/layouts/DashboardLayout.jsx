@@ -88,16 +88,22 @@ export default function DashboardLayout() {
   const banners = (
     <>
       {!emailVerified && <VerificationBanner />}
+      {billingStatus === 'pending' && (
+        <div className="bg-orange-50 border border-orange-200/60 rounded-xl px-4 py-3 mb-6 flex items-center gap-2.5 text-sm text-orange-700">
+          <Zap className="w-4 h-4 flex-shrink-0" />
+          <span>Complete setup to start receiving leads. <button onClick={() => navigate('/onboarding')} className="font-semibold underline cursor-pointer">Continue onboarding</button></span>
+        </div>
+      )}
       {billingStatus === 'past_due' && (
         <div className="bg-red-50 border border-red-200/60 rounded-xl px-4 py-3 mb-6 flex items-center gap-2.5 text-sm text-red-700">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>Your payment failed. <button onClick={() => navigate('/billing')} className="font-semibold underline cursor-pointer">Update payment method</button> to avoid service interruption.</span>
+          <span>Payment failed. <button onClick={() => navigate('/billing')} className="font-semibold underline cursor-pointer">Update your card</button> to keep receiving leads.</span>
         </div>
       )}
-      {billingStatus === 'trial' && (
-        <div className="bg-orange-50 border border-orange-200/60 rounded-xl px-4 py-3 mb-6 flex items-center gap-2.5 text-sm text-orange-700">
-          <Zap className="w-4 h-4 flex-shrink-0" />
-          <span>You're on a free trial. <button onClick={() => navigate('/billing')} className="font-semibold underline cursor-pointer">Subscribe now</button> to keep your leads flowing.</span>
+      {billingStatus === 'canceled' && (
+        <div className="bg-red-50 border border-red-200/60 rounded-xl px-4 py-3 mb-6 flex items-center gap-2.5 text-sm text-red-700">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>Your subscription is canceled. Leads are paused. <button onClick={() => navigate('/billing')} className="font-semibold underline cursor-pointer">Resubscribe</button></span>
         </div>
       )}
     </>

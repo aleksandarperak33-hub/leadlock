@@ -78,6 +78,9 @@ def _make_client(client_id: str = CLIENT_ID) -> MagicMock:
     client.id = uuid.UUID(client_id)
     client.business_name = "Test HVAC Co"
     client.trade_type = "hvac"
+    client.is_active = True
+    client.billing_status = "active"
+    client.twilio_phone = "+15125550000"
     return client
 
 
@@ -126,6 +129,11 @@ def _standard_patches():
         "get_correlation_id": patch(
             "src.api.webhooks.get_correlation_id",
             return_value="test-correlation-id",
+        ),
+        "billing_gate": patch(
+            "src.api.webhooks._enforce_billing_gate",
+            new_callable=AsyncMock,
+            return_value=None,
         ),
     }
 
@@ -797,6 +805,7 @@ class TestWebsiteFormWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await website_form_webhook(CLIENT_ID, request, db)
 
@@ -830,6 +839,7 @@ class TestWebsiteFormWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await website_form_webhook(CLIENT_ID, request, db)
 
@@ -855,6 +865,7 @@ class TestWebsiteFormWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await website_form_webhook(CLIENT_ID, request, db)
 
@@ -879,6 +890,7 @@ class TestWebsiteFormWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await website_form_webhook(CLIENT_ID, request, db)
 
@@ -919,6 +931,7 @@ class TestWebsiteFormWebhook:
             patches["compute_hash"],
             patch("src.api.webhooks.normalize_phone", return_value=None),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await website_form_webhook(CLIENT_ID, request, db)
@@ -947,6 +960,7 @@ class TestWebsiteFormWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await website_form_webhook(CLIENT_ID, request, db)
 
@@ -976,6 +990,7 @@ class TestWebsiteFormWebhook:
                 side_effect=RuntimeError("Boom"),
             ),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await website_form_webhook(CLIENT_ID, request, db)
@@ -1029,6 +1044,7 @@ class TestGoogleLsaWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await google_lsa_webhook(CLIENT_ID, request, db)
 
@@ -1061,6 +1077,7 @@ class TestGoogleLsaWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await google_lsa_webhook(CLIENT_ID, request, db)
 
@@ -1088,6 +1105,7 @@ class TestGoogleLsaWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await google_lsa_webhook(CLIENT_ID, request, db)
 
@@ -1127,6 +1145,7 @@ class TestGoogleLsaWebhook:
             patches["compute_hash"],
             patch("src.api.webhooks.normalize_phone", return_value=None),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await google_lsa_webhook(CLIENT_ID, request, db)
@@ -1153,6 +1172,7 @@ class TestGoogleLsaWebhook:
                 side_effect=RuntimeError("AI down"),
             ),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await google_lsa_webhook(CLIENT_ID, request, db)
@@ -1196,6 +1216,7 @@ class TestAngiWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await angi_webhook(CLIENT_ID, request, db)
 
@@ -1240,6 +1261,7 @@ class TestAngiWebhook:
             patches["compute_hash"],
             patch("src.api.webhooks.normalize_phone", return_value=None),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await angi_webhook(CLIENT_ID, request, db)
@@ -1266,6 +1288,7 @@ class TestAngiWebhook:
                 side_effect=RuntimeError("Fail"),
             ),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await angi_webhook(CLIENT_ID, request, db)
@@ -1315,6 +1338,7 @@ class TestFacebookWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1369,6 +1393,7 @@ class TestFacebookWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1391,6 +1416,7 @@ class TestFacebookWebhook:
             patches["validate_sig"],
             patches["compute_hash"],
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1426,6 +1452,7 @@ class TestFacebookWebhook:
             patches["compute_hash"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1462,6 +1489,7 @@ class TestFacebookWebhook:
             patch("src.api.webhooks.normalize_phone", return_value=None),
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1517,6 +1545,7 @@ class TestFacebookWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1554,6 +1583,7 @@ class TestFacebookWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1590,6 +1620,7 @@ class TestFacebookWebhook:
                 side_effect=RuntimeError("Boom"),
             ),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await facebook_webhook(CLIENT_ID, request, db)
@@ -1610,6 +1641,7 @@ class TestFacebookWebhook:
             patches["validate_sig"],
             patches["compute_hash"],
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await facebook_webhook(CLIENT_ID, request, db)
 
@@ -1650,6 +1682,7 @@ class TestMissedCallWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             result = await missed_call_webhook(CLIENT_ID, request, db)
 
@@ -1684,6 +1717,7 @@ class TestMissedCallWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await missed_call_webhook(CLIENT_ID, request, db)
 
@@ -1712,6 +1746,7 @@ class TestMissedCallWebhook:
             patches["normalize_phone"],
             patches["handle_new_lead"] as mock_new_lead,
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             await missed_call_webhook(CLIENT_ID, request, db)
 
@@ -1754,6 +1789,7 @@ class TestMissedCallWebhook:
             patches["compute_hash"],
             patch("src.api.webhooks.normalize_phone", return_value=None),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await missed_call_webhook(CLIENT_ID, request, db)
@@ -1783,6 +1819,7 @@ class TestMissedCallWebhook:
                 side_effect=RuntimeError("Fail"),
             ),
             patches["get_correlation_id"],
+            patches["billing_gate"],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await missed_call_webhook(CLIENT_ID, request, db)

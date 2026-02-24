@@ -102,8 +102,9 @@ export default function Billing() {
   }
 
   const isActive = billing?.billing_status === 'active';
-  const isTrial = billing?.billing_status === 'trial';
+  const isPending = billing?.billing_status === 'pending';
   const isPastDue = billing?.billing_status === 'past_due';
+  const isCanceled = billing?.billing_status === 'canceled';
 
   return (
     <div>
@@ -151,12 +152,13 @@ export default function Billing() {
             </div>
             <div className="flex items-center gap-3 mt-2">
               <span className="text-2xl font-bold text-gray-900 capitalize">
-                {billing?.plan !== 'none' ? billing?.plan : isTrial ? 'Free Trial' : 'No Plan'}
+                {billing?.plan !== 'none' ? billing?.plan : isPending ? 'No Plan' : 'No Plan'}
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                 isActive ? 'bg-green-50 text-green-600' :
-                isTrial ? 'bg-orange-50 text-orange-600' :
+                isPending ? 'bg-orange-50 text-orange-600' :
                 isPastDue ? 'bg-red-50 text-red-600' :
+                isCanceled ? 'bg-red-50 text-red-600' :
                 'bg-gray-100 text-gray-500'
               }`}>
                 {billing?.billing_status?.replace('_', ' ')}
@@ -182,7 +184,7 @@ export default function Billing() {
       </div>
 
       {/* Plan selection */}
-      {(!isActive || isTrial) && (
+      {(!isActive || isPending) && (
         <>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose a plan</h2>
           <div className="grid md:grid-cols-3 gap-5">
