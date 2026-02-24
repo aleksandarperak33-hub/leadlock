@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from src.services.enrichment import _is_safe_url, extract_domain
 
@@ -78,21 +78,11 @@ async def _fetch_team_page(website: str) -> tuple[Optional[str], str]:
 
     base = website.rstrip("/")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; LeadLock/1.0; business research)",
-        "Accept": "text/html,application/xhtml+xml",
-    }
-
-    async with httpx.AsyncClient(
-        timeout=10.0,
-        follow_redirects=True,
-        max_redirects=3,
-        headers=headers,
-    ) as client:
+    async with AsyncSession(impersonate="chrome") as session:
         for path in _TEAM_PATHS:
             url = f"{base}{path}"
             try:
-                response = await client.get(url)
+                response = await session.get(url, timeout=10)
                 if response.status_code != 200:
                     continue
 
@@ -111,7 +101,7 @@ async def _fetch_team_page(website: str) -> tuple[Optional[str], str]:
                 if any(signal in text_lower for signal in people_signals):
                     return text, path
 
-            except (httpx.HTTPError, httpx.InvalidURL, Exception) as e:
+            except Exception as e:
                 logger.debug("Failed to fetch %s: %s", url, str(e))
                 continue
 

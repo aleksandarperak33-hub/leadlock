@@ -557,6 +557,17 @@ async def _route_to_book(
         for c in lead.conversations
     ]
 
+    # Look up booking_url from SalesEngineConfig for calendar link
+    # Uses httpx for Brave API (no TLS impersonation needed)
+    booking_url = None
+    try:
+        from src.services.config_cache import get_sales_config
+        sales_config = await get_sales_config(tenant_id=client.id)
+        if sales_config:
+            booking_url = sales_config.get("booking_url")
+    except (KeyError, TypeError, ValueError, OSError):
+        pass  # Non-critical — proceed without booking URL
+
     result = await process_booking(
         lead_message=message,
         first_name=lead.first_name or "there",
@@ -568,6 +579,7 @@ async def _route_to_book(
         team_members=[t.model_dump() for t in config.team] if config.team else [],
         hours_config=config.hours.model_dump() if config.hours else {},
         conversation_history=conversations,
+        booking_url=booking_url,
     )
 
     if result.booking_confirmed:

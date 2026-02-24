@@ -15,38 +15,38 @@ logger = logging.getLogger(__name__)
 INTAKE_TEMPLATES = {
     "standard": {
         "A": (
-            "Hi {first_name}! This is {rep_name} from {business_name}. "
-            "We received your request for {service_type} and want to help! "
-            "Can you tell me a bit more about what's going on? "
+            "Hi {first_name}, this is {rep_name} from {business_name}. "
+            "We got your request for {service_type} and want to help. "
+            "What's going on with it? "
             "Reply STOP to opt out."
         ),
         "B": (
-            "Hey {first_name}, {rep_name} here from {business_name}! "
-            "Thanks for reaching out about {service_type}. "
-            "I'd love to get you taken care of - what's happening? "
+            "Hey {first_name}, {rep_name} here from {business_name}. "
+            "Got your message about {service_type}. "
+            "What can we do for you? "
             "Reply STOP to opt out."
         ),
     },
     "missed_call": {
         "A": (
-            "Hi {first_name}! This is {rep_name} from {business_name}. "
-            "Sorry we missed your call! How can we help you today? "
+            "Hi {first_name}, this is {rep_name} from {business_name}. "
+            "Sorry we missed your call. How can we help? "
             "Reply STOP to opt out."
         ),
         "B": (
             "Hey {first_name}, {rep_name} at {business_name} here. "
-            "I see we missed your call - what can we do for you? "
+            "Missed your call - what can we do for you? "
             "Reply STOP to opt out."
         ),
     },
     "text_in": {
         "A": (
-            "Hi! This is {rep_name} from {business_name}. "
-            "Thanks for texting us! How can we help you today? "
+            "Hi, this is {rep_name} from {business_name}. "
+            "Thanks for texting. How can we help? "
             "Reply STOP to opt out."
         ),
         "B": (
-            "Hey there! {rep_name} from {business_name} here. "
+            "Hey, {rep_name} from {business_name} here. "
             "Got your message - what do you need help with? "
             "Reply STOP to opt out."
         ),

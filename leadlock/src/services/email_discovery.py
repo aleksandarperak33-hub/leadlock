@@ -17,6 +17,7 @@ from typing import Optional
 from urllib.parse import urlparse, urljoin, unquote
 
 import httpx
+from curl_cffi.requests import AsyncSession
 
 from src.services.enrichment import (
     _EMAIL_REGEX,
@@ -60,11 +61,6 @@ _FOOTER_PATTERN = re.compile(
 _TIMEOUT = 8.0
 _MAX_PAGES = 15
 _MAX_INTERNAL_LINKS = 8
-
-_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; LeadLock/1.0; business contact lookup)",
-    "Accept": "text/html,application/xhtml+xml",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -173,18 +169,13 @@ async def deep_scrape_website(website: str) -> list[str]:
     seen: set[str] = set()
     pages_fetched = 0
 
-    async with httpx.AsyncClient(
-        timeout=_TIMEOUT,
-        follow_redirects=True,
-        max_redirects=3,
-        headers=_HEADERS,
-    ) as client:
+    async with AsyncSession(impersonate="chrome") as session:
         # Phase 1: Scrape extended paths
         for path in _EXTENDED_PATHS:
             if pages_fetched >= _MAX_PAGES:
                 break
             url = f"{base}{path}" if path != "/" else base
-            emails = await _fetch_and_extract(client, url, target_domain)
+            emails = await _fetch_and_extract(session, url, target_domain)
             pages_fetched += 1
             for email in emails:
                 if email not in seen:
@@ -193,13 +184,13 @@ async def deep_scrape_website(website: str) -> list[str]:
 
         # Phase 2: Crawl internal links from homepage (find pages we missed)
         if pages_fetched < _MAX_PAGES:
-            homepage_html = await _fetch_html(client, base)
+            homepage_html = await _fetch_html(session, base)
             if homepage_html:
                 internal_links = _extract_internal_links(homepage_html, base)
                 for link_url in internal_links[:_MAX_INTERNAL_LINKS]:
                     if pages_fetched >= _MAX_PAGES:
                         break
-                    link_emails = await _fetch_and_extract(client, link_url, target_domain)
+                    link_emails = await _fetch_and_extract(session, link_url, target_domain)
                     pages_fetched += 1
                     for email in link_emails:
                         if email not in seen:
@@ -215,27 +206,27 @@ async def deep_scrape_website(website: str) -> list[str]:
     return found_emails
 
 
-async def _fetch_html(client: httpx.AsyncClient, url: str) -> Optional[str]:
-    """Fetch a URL and return HTML content, or None on failure."""
+async def _fetch_html(session: AsyncSession, url: str) -> Optional[str]:
+    """Fetch a URL using curl_cffi with Chrome TLS fingerprinting."""
     try:
-        response = await client.get(url)
+        response = await session.get(url, timeout=_TIMEOUT)
         if response.status_code != 200:
             return None
         content_type = response.headers.get("content-type", "")
         if "text/html" not in content_type and "text/plain" not in content_type:
             return None
         return response.text
-    except (httpx.HTTPError, httpx.InvalidURL, Exception):
+    except Exception:
         return None
 
 
 async def _fetch_and_extract(
-    client: httpx.AsyncClient,
+    session: AsyncSession,
     url: str,
     target_domain: Optional[str],
 ) -> list[str]:
     """Fetch a page and extract all emails using multiple strategies."""
-    html = await _fetch_html(client, url)
+    html = await _fetch_html(session, url)
     if not html:
         return []
     return _extract_all_emails(html, target_domain)
@@ -398,6 +389,9 @@ async def search_brave_for_email(domain: str) -> list[str]:
     """
     Search Brave for publicly listed emails at a domain.
     Queries: "@{domain}" to find pages mentioning emails at the domain.
+
+    Uses httpx (not curl_cffi) — Brave is an API call that doesn't
+    need Chrome TLS fingerprinting.
 
     Returns list of unique valid emails found in search snippets.
     Cost: $0.005 per search.

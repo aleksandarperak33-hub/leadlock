@@ -352,6 +352,18 @@ def _build_fallback_outreach_email(
     trade = (trade_type or "home services").strip()
     company = (company_name or "your business").strip()
 
+    # Trade-specific revenue stats for fallback variation
+    _trade_stats = {
+        "hvac": ("$3,200", "AC repair"),
+        "plumbing": ("$2,800", "emergency plumbing"),
+        "roofing": ("$4,100", "roof replacement"),
+        "electrical": ("$2,600", "electrical"),
+        "solar": ("$5,500", "solar install"),
+    }
+    monthly_loss, trade_service = _trade_stats.get(
+        trade.lower(), ("$2,400", "service")
+    )
+
     # Build a rating hook when data is available
     rating_line = ""
     if rating and review_count:
@@ -372,14 +384,14 @@ def _build_fallback_outreach_email(
                 f"and {company} came up."
             )
         value_line = (
-            "Most contractors lose about $2,400 a month because leads wait "
-            "too long for a callback."
+            f"Most {trade} contractors lose about {monthly_loss} a month "
+            f"because leads wait too long for a callback."
         )
         ask_line = "How fast is your team currently getting back to brand-new leads?"
     elif step == 2:
         subject = f"{trade.capitalize()} teams in {city or 'your area'}"[:60]
         step_line = (
-            f"78% of homeowners go with the first contractor who calls back."
+            "78% of homeowners go with the first contractor who calls back."
         )
         value_line = (
             f"A few {trade} shops in {location or 'your area'} already reply "

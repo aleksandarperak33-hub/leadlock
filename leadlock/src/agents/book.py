@@ -30,6 +30,8 @@ CONVERSATION HISTORY:
 AVAILABLE SLOTS:
 {available_slots}
 
+{booking_url_instruction}
+
 RULES:
 - Offer the closest available slot to their preferred time.
 - If their preferred time isn't available, suggest 2-3 alternatives.
@@ -65,6 +67,7 @@ async def process_booking(
     team_members: list,
     hours_config: dict,
     conversation_history: list[dict],
+    booking_url: Optional[str] = None,
 ) -> BookResponse:
     """
     Process a booking request. Generates available slots and uses AI to
@@ -104,6 +107,14 @@ async def process_booking(
         direction = "Customer" if msg.get("direction") == "inbound" else _escape_braces(rep_name)
         history_text += f"{direction}: {_escape_braces(msg.get('content', ''))}\n"
 
+    # Build booking URL instruction
+    booking_url_instruction = ""
+    if booking_url:
+        booking_url_instruction = (
+            f"BOOKING LINK: When confirming the appointment, include this link "
+            f"so the customer can add it to their calendar: {_escape_braces(booking_url)}"
+        )
+
     # Build prompt - escape all user-controlled fields
     system = BOOK_SYSTEM_PROMPT.format(
         rep_name=_escape_braces(rep_name),
@@ -113,6 +124,7 @@ async def process_booking(
         preferred_date=_escape_braces(preferred_date or "not specified"),
         available_slots=_escape_braces(slots_text),
         conversation_history=history_text or "No prior conversation.",
+        booking_url_instruction=booking_url_instruction,
     )
 
     # Generate response

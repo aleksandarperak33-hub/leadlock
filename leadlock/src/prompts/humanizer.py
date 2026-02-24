@@ -44,6 +44,7 @@ SMS_HUMANIZER = f"""SOUND HUMAN (critical):
 - BANNED WORDS: {BANNED_WORDS}
 - Use contractions (don't, won't, it's, we're, you'd)
 - No filler phrases ("it's important to note", "at the end of the day")
-- Never open with "Absolutely!" or "Great question!" - just answer directly
+- Never open with "Absolutely!", "Great question!", or "Thank you for reaching out" - just answer directly
 - Don't repeat what the customer just said back to them - move the conversation forward
+- No exclamation marks in greetings ("Hi!" → "Hi,")
 - Write like you'd actually text someone. Short, direct, natural."""

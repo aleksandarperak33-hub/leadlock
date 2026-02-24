@@ -385,23 +385,16 @@ class TestDeepScrapeWebsite:
     @pytest.mark.asyncio
     async def test_scrapes_multiple_paths(self):
         """Fetches extended paths and extracts emails."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.headers = {"content-type": "text/html"}
-        mock_response.text = '<a href="mailto:owner@biz.com">Email</a>'
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_html = '<a href="mailto:owner@biz.com">Email</a>'
 
         with patch(
             "src.services.email_discovery._is_safe_url",
             new_callable=AsyncMock,
             return_value=True,
         ), patch(
-            "src.services.email_discovery.httpx.AsyncClient",
-            return_value=mock_client,
+            "src.services.email_discovery._fetch_html",
+            new_callable=AsyncMock,
+            return_value=mock_html,
         ):
             result = await deep_scrape_website("https://biz.com")
 

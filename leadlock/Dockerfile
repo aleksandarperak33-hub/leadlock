@@ -4,7 +4,7 @@ WORKDIR /app
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev curl && \
+    gcc libpq-dev curl libcurl4-openssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy project files needed for install
