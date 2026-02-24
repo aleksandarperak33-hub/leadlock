@@ -43,6 +43,8 @@ PERMANENT_ERRORS = {
     "21610",  # Unsubscribed recipient (carrier-level opt-out)
     "30006",  # Landline or unreachable
     "21612",  # Invalid "To" phone number for SMS
+    "30489",  # Toll-free A2P registration rejected (website not established)
+    "30475",  # Toll-free A2P registration rejected (consent bundled)
 }
 
 TRANSIENT_ERRORS = {

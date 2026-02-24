@@ -145,7 +145,7 @@ async def generate_winback_email(
         system_prompt=system_prompt,
         user_message=user_message,
         model_tier="fast",
-        max_tokens=400,
+        max_tokens=300,
         temperature=0.6,
     )
 

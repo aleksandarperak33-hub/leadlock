@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     anthropic_max_tokens_fast: int = 300
     anthropic_max_tokens_smart: int = 500
     anthropic_timeout_seconds: int = 10
+    ai_daily_budget_usd: float = 5.0  # Hard cap on daily AI spend (all providers)
 
     # Twilio
     twilio_account_sid: str
@@ -84,8 +85,8 @@ class Settings(BaseSettings):
     # Agent feature flags (toggle without code deploys)
     agent_ab_test_engine: bool = True
     agent_winback_agent: bool = True
-    agent_referral_agent: bool = False      # Disabled: crash bugs, needs fix
-    agent_reflection_agent: bool = False    # Disabled: writes to unread table
+    agent_referral_agent: bool = True
+    agent_reflection_agent: bool = True
 
     # Transactional Email (auth flows, billing notifications)
     sendgrid_transactional_key: str = ""  # Separate key for transactional emails

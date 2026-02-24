@@ -63,7 +63,7 @@ async def run_reflection_analysis(performance_data: dict) -> dict:
             performance_data=json.dumps(performance_data, indent=2, default=str),
         ),
         model_tier="smart",
-        max_tokens=1500,
+        max_tokens=1000,
         temperature=0.3,
     )
 

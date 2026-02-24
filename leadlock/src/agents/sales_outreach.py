@@ -554,7 +554,7 @@ async def generate_outreach_email(
         system_prompt=system_prompt,
         user_message=user_message,
         model_tier="fast",
-        max_tokens=500,
+        max_tokens=400,
         temperature=STEP_TEMPERATURE.get(step, 0.5),
     )
 

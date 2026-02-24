@@ -43,6 +43,14 @@ class TestClassifyError:
     def test_transient_30010(self):
         assert classify_error("30010") == "transient"
 
+    def test_tollfree_rejection_30489(self):
+        """Toll-free A2P registration rejected (website not established) is permanent."""
+        assert classify_error("30489") == "permanent"
+
+    def test_tollfree_rejection_30475(self):
+        """Toll-free A2P registration rejected (consent bundled) is permanent."""
+        assert classify_error("30475") == "permanent"
+
     def test_unknown_code(self):
         assert classify_error("99999") == "unknown"
 

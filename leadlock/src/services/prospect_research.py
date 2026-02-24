@@ -132,7 +132,7 @@ async def _extract_decision_maker(page_text: str) -> dict:
         system_prompt=_EXTRACTION_PROMPT,
         user_message=f"Website page content:\n\n{page_text}",
         model_tier="fast",
-        max_tokens=100,
+        max_tokens=50,
         temperature=0.0,
     )
 

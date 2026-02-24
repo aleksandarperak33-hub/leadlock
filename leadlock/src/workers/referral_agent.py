@@ -126,7 +126,28 @@ async def referral_cycle():
                     logger.warning("Referral email failed for client %s", str(client.id)[:8])
                     continue
 
-                # Record request
+                # Send the email via SendGrid
+                recipient = client.owner_email or client.dashboard_email
+                if not recipient:
+                    logger.warning("No email for client %s, skipping referral", str(client.id)[:8])
+                    continue
+
+                from src.services.transactional_email import _send_transactional
+                send_result = await _send_transactional(
+                    to_email=recipient,
+                    subject=email_result["subject"],
+                    html_content=email_result["body_html"],
+                    text_content=email_result["body_text"],
+                )
+
+                if send_result.get("error"):
+                    logger.warning(
+                        "Referral email send failed for client %s: %s",
+                        str(client.id)[:8], send_result["error"],
+                    )
+                    continue
+
+                # Record request only after successful send
                 request = ReferralRequest(
                     client_id=client.id,
                     referral_link_id=link.id,
