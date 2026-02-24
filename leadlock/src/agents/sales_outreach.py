@@ -640,13 +640,13 @@ async def classify_reply(reply_text: str) -> dict:
 
     if result.get("error"):
         logger.warning("Reply classification failed: %s", result["error"])
-        return {"classification": "interested", "ai_cost_usd": result.get("cost_usd", 0.0)}
+        return {"classification": "auto_reply", "ai_cost_usd": result.get("cost_usd", 0.0)}
 
     classification = result["content"].strip().lower().replace(" ", "_")
 
     if classification not in VALID_CLASSIFICATIONS:
-        logger.warning("Unknown classification '%s', defaulting to 'interested'", classification)
-        classification = "interested"
+        logger.warning("Unknown classification '%s', defaulting to 'auto_reply'", classification)
+        classification = "auto_reply"
 
     return {
         "classification": classification,
