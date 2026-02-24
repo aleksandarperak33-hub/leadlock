@@ -321,6 +321,14 @@ async def send_sequence_email(
     """Generate and send a single outreach email for a prospect."""
     next_step = prospect.outreach_sequence_step + 1
 
+    # Hard cap: never exceed max_sequence_steps regardless of campaign definition.
+    if next_step > config.max_sequence_steps:
+        logger.info(
+            "Prospect %s at max touches (%d/%d) — skipping",
+            str(prospect.id)[:8], prospect.outreach_sequence_step, config.max_sequence_steps,
+        )
+        return
+
     # Cadence guardrail - never send follow-ups too soon.
     if next_step > 1:
         is_due, required_delay, remaining_seconds = followup_readiness(

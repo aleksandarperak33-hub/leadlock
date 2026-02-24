@@ -731,6 +731,14 @@ async def _process_campaign_prospects(
         delay_hours = step_def.get("delay_hours", 0)
         template_id = step_def.get("template_id")
 
+        # Hard cap: skip campaign steps beyond max_sequence_steps
+        if step_num > config.max_sequence_steps:
+            logger.debug(
+                "Campaign %s step %d exceeds max_sequence_steps %d, skipping",
+                str(campaign.id)[:8], step_num, config.max_sequence_steps,
+            )
+            continue
+
         if step_num == 1:
             # Step 1: cold prospects in this campaign, never contacted
             query = select(Outreach).where(
