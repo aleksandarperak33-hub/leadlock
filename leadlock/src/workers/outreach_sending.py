@@ -449,17 +449,26 @@ async def _run_quality_gate(
     template: Optional[EmailTemplate],
     config: SalesEngineConfig,
 ) -> dict:
-    """Run quality gate on generated email, regenerate once if it fails."""
+    """Run quality gate on generated email, regenerate once if it fails.
+
+    On 2nd failure, falls back to the deterministic template which always
+    passes quality checks — never sends a bad AI-generated email.
+    """
     try:
         from src.services.email_quality_gate import check_email_quality
+        from src.agents.sales_outreach import _build_fallback_outreach_email, _extract_first_name
 
-        quality = check_email_quality(
-            subject=email_result["subject"],
-            body_text=email_result["body_text"],
+        qg_kwargs = dict(
             prospect_name=prospect.prospect_name,
             company_name=prospect.prospect_company,
             city=prospect.city,
             trade_type=prospect.prospect_trade_type,
+            sequence_step=next_step,
+        )
+        quality = check_email_quality(
+            subject=email_result["subject"],
+            body_text=email_result["body_text"],
+            **qg_kwargs,
         )
         if not quality["passed"]:
             logger.info(
@@ -483,18 +492,37 @@ async def _run_quality_gate(
                 retry_quality = check_email_quality(
                     subject=retry_result["subject"],
                     body_text=retry_result["body_text"],
-                    prospect_name=prospect.prospect_name,
-                    company_name=prospect.prospect_company,
-                    city=prospect.city,
-                    trade_type=prospect.prospect_trade_type,
+                    **qg_kwargs,
                 )
                 if retry_quality["passed"]:
                     return retry_result
-                else:
-                    logger.warning(
-                        "Quality gate still failing for %s after retry: %s - sending anyway",
-                        str(prospect.id)[:8], "; ".join(retry_quality["issues"]),
-                    )
+
+            # 2nd failure (or retry error): use deterministic fallback
+            logger.warning(
+                "Quality gate still failing for %s after retry - using fallback template",
+                str(prospect.id)[:8],
+            )
+            fallback = _build_fallback_outreach_email(
+                prospect_name=prospect.prospect_name or "",
+                company_name=prospect.prospect_company or prospect.prospect_name or "",
+                trade_type=prospect.prospect_trade_type or "general",
+                city=prospect.city or "",
+                state=prospect.state_code or "",
+                sequence_step=next_step,
+                sender_name=config.sender_name or "Alek",
+                rating=prospect.google_rating,
+                review_count=prospect.review_count,
+            )
+            result = {
+                **fallback,
+                "subject": sanitize_dashes(fallback["subject"]),
+                "body_html": sanitize_dashes(fallback["body_html"]),
+                "body_text": sanitize_dashes(fallback["body_text"]),
+            }
+            # Preserve A/B variant ID so tracking isn't silently lost
+            if email_result.get("ab_variant_id"):
+                result["ab_variant_id"] = email_result["ab_variant_id"]
+            return result
     except Exception as qg_err:
         logger.debug("Quality gate check failed: %s", str(qg_err))
 
@@ -591,6 +619,7 @@ async def _record_send(
         sequence_step=next_step,
         sent_at=now,
         ai_cost_usd=email_result.get("ai_cost_usd", 0.0),
+        fallback_used=email_result.get("fallback_used", False),
         ab_variant_id=ab_variant_uuid,
     )
     db.add(email_record)

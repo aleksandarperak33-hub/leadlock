@@ -1833,10 +1833,11 @@ class TestSendSequenceEmail:
         blacklist_result = MagicMock()
         blacklist_result.scalar_one_or_none.return_value = None
 
+        good_body = "Hey John, " + "word " * 60 + "\nAlek"
         mock_gen.return_value = {
-            "subject": "Sub",
-            "body_html": "<p>B</p>",
-            "body_text": "B",
+            "subject": "Quick question for Acme HVAC",
+            "body_html": f"<p>{good_body}</p>",
+            "body_text": good_body,
             "ai_cost_usd": 0.005,
         }
 

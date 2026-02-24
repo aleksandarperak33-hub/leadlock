@@ -44,6 +44,12 @@ FORMATTING:
 - body_text must have proper line breaks between paragraphs (use \\n\\n). Do NOT output a single blob of text.
 - Output valid JSON only
 
+ANTI-REPETITION (critical):
+- NEVER open with "I noticed", "I came across", "I found your", "I was looking at", "I saw that"
+- NEVER start two emails in the same sequence with the same sentence structure
+- NEVER reuse subject line angles across steps
+- Alternative openers: start with a question, a stat, their name + direct observation, or "Quick question"
+
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
@@ -118,10 +124,26 @@ async def _get_best_day_of_week(trade_type: str, state: str) -> str:
     return ""
 
 
+def _prescriptive_open_rate(open_rate: float) -> str:
+    """Turn an open rate number into an actionable instruction for the AI."""
+    if open_rate > 0.20:
+        return "Current subject line approach is working well - keep the same tone and length."
+    if open_rate > 0.10:
+        return "Try more specific subject lines referencing their city or Google rating."
+    return "Change approach: shorter, more direct subjects. Ask a question in the subject."
+
+
+def _prescriptive_reply_rate(reply_rate: float) -> str:
+    """Turn a reply rate number into an actionable instruction for the AI."""
+    if reply_rate > 0.05:
+        return "CTAs are generating replies - keep the same conversational ask."
+    return "Make CTA more specific - ask about their response time or team size."
+
+
 async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> str:
     """
-    Fetch learning insights to include in AI prompt context.
-    Returns a short string with best-performing patterns, capped at 5 lines.
+    Fetch learning insights and convert them into prescriptive AI instructions.
+    Returns actionable guidance, not raw stats.
     """
     parts: list[str] = []
 
@@ -130,20 +152,24 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
 
         open_rate = await get_open_rate_by_dimension("trade", trade_type)
         if open_rate > 0:
-            parts.append(f"Avg open rate for {trade_type}: {open_rate:.0%}")
+            parts.append(_prescriptive_open_rate(open_rate))
 
-        # Open rate by step
+        # Step-level open rate
         step_open = await get_open_rate_by_dimension("step", str(step))
-        if step_open > 0:
-            parts.append(f"Open rate for step {step}: {step_open:.0%}")
+        if step_open > 0 and step_open != open_rate:
+            parts.append(
+                f"Step {step} open rate is {step_open:.0%} - "
+                + ("this step is strong, maintain approach." if step_open > 0.15
+                   else "this step underperforms, try a different angle.")
+            )
 
         reply_rate = await _get_reply_rate_by_trade(trade_type)
         if reply_rate > 0:
-            parts.append(f"Reply rate for {trade_type}: {reply_rate:.0%}")
+            parts.append(_prescriptive_reply_rate(reply_rate))
 
         best_day = await _get_best_day_of_week(trade_type, state)
         if best_day:
-            parts.append(f"Best day to send: {best_day}")
+            parts.append(f"Best performing send day: {best_day}")
 
         best_time = await get_best_send_time(trade_type, state)
         if best_time:
@@ -164,7 +190,7 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
     # Cap at 5 insight lines to avoid prompt bloat
     if parts:
         capped = parts[:5]
-        return "Performance insights:\n" + "\n".join(
+        return "Writing instructions from past performance:\n" + "\n".join(
             f"- {p}" if not p.startswith("Proven") else p for p in capped
         )
 
@@ -172,24 +198,53 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
 
 
 STEP_INSTRUCTIONS = {
-    1: """STEP 1 - First contact.
-Open with their first name. Reference something specific about their business (rating, reviews, city, trade).
-Mention a specific dollar amount contractors lose from slow lead response (e.g. "$2,400/month in missed revenue").
-End with a soft question about their current response time - not a demand.
+    1: """STEP 1 — CURIOSITY / PAIN (first contact).
+Angle: Lead with a question or observation about THEIR business specifically.
+- Reference one concrete detail: their Google rating, their city, or their trade.
+- Mention a specific dollar amount contractors lose from slow lead response (e.g. "$2,400/month in missed revenue").
+- End with a genuine question about their business, not a pitch.
+- Subject line must create curiosity or reference a specific observation about them.
+- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 120 words. Subject under 50 chars - must include their company name or city.""",
 
-    2: """STEP 2 - Follow-up (they didn't reply to step 1).
-Open with their first name. Mention you sent them a note last week - keep it casual.
-Share a specific stat: "78% of homeowners go with the first contractor who calls back."
-Ask if they're happy with how fast their team gets back to leads.
-Under 90 words. Subject under 50 chars - different angle than step 1.""",
+    2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
+Angle: Do NOT rehash the pain point from step 1. Lead with what similar contractors are doing.
+- Share what other contractors in their trade or city are doing differently.
+- Include a specific result or stat (e.g. "78% of homeowners go with the first contractor who calls back").
+- Ask a different question than step 1 - focus on their team's workflow, not revenue.
+- Subject line must use a completely different angle than step 1.
+- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
+- Do NOT mention that you emailed before or "following up" - just lead with the new angle.
+Under 90 words. Subject under 50 chars.""",
 
-    3: """STEP 3 - Final email.
-Open with their first name. Keep it to 3-4 sentences max.
-Mention this is the last email you'll send - creates urgency without pressure.
-Leave the door open: "if this ever becomes a priority, just reply."
+    3: """STEP 3 — FAREWELL (final email).
+Angle: Short and final. No new stats, no new value props.
+- 3-4 sentences max. State this is the last email.
+- No selling. Just "if this ever matters, reply."
+- Subject line should feel short and final.
+- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 60 words. Subject under 40 chars.""",
 }
+
+STEP_SUBJECT_EXAMPLES = {
+    1: [
+        "Quick question for {company}",
+        "{city} {trade} shops losing $12k/month",
+        "saw your {rating} rating, {first_name}",
+    ],
+    2: [
+        "what {trade} teams in {city} are doing differently",
+        "78% stat that surprised me, {first_name}",
+        "{trade} response times in {city}",
+    ],
+    3: [
+        "closing the loop, {first_name}",
+        "last note from me",
+        "one more thing, {first_name}",
+    ],
+}
+
+STEP_TEMPERATURE = {1: 0.4, 2: 0.6, 3: 0.7}
 
 
 def _extract_first_name(full_name: str) -> str:
@@ -286,6 +341,8 @@ def _build_fallback_outreach_email(
     state: str,
     sequence_step: int,
     sender_name: str,
+    rating: Optional[float] = None,
+    review_count: Optional[int] = None,
 ) -> dict:
     """Deterministic fallback when AI providers are unavailable."""
     first_name = _extract_first_name(prospect_name)
@@ -295,43 +352,59 @@ def _build_fallback_outreach_email(
     trade = (trade_type or "home services").strip()
     company = (company_name or "your business").strip()
 
+    # Build a rating hook when data is available
+    rating_line = ""
+    if rating and review_count:
+        rating_line = (
+            f"Your {rating}/5 rating with {review_count} reviews caught my eye."
+        )
+    elif rating:
+        rating_line = f"Your {rating}/5 Google rating stood out."
+
     step = min(max(sequence_step, 1), 3)
     if step == 1:
         subject = f"Quick question for {company}"[:60]
-        step_line = (
-            f"I work with {trade} teams and noticed {company} in {location or 'your market'}."
+        if rating_line:
+            step_line = rating_line
+        else:
+            step_line = (
+                f"I work with {trade} teams in {location or 'your market'} "
+                f"and {company} came up."
+            )
+        value_line = (
+            "Most contractors lose about $2,400 a month because leads wait "
+            "too long for a callback."
         )
         ask_line = "How fast is your team currently getting back to brand-new leads?"
     elif step == 2:
-        subject = f"Following up with {company}"[:60]
+        subject = f"{trade.capitalize()} teams in {city or 'your area'}"[:60]
         step_line = (
-            f"Quick follow-up on my note to {company} about response speed on incoming leads."
+            f"78% of homeowners go with the first contractor who calls back."
         )
-        ask_line = "Are you happy with how quickly your team reaches out to new inquiries today?"
+        value_line = (
+            f"A few {trade} shops in {location or 'your area'} already reply "
+            f"to every lead in under 60 seconds."
+        )
+        ask_line = "Is your crew getting to new inquiries same-day right now?"
     else:
-        subject = f"Last note for {company}"[:60]
+        subject = f"Closing the loop, {first_name or company}"[:60]
         step_line = (
-            f"Last note from me about {company}, then I will close this thread on my end."
+            f"Last note from me. If faster lead response ever becomes a "
+            f"priority for {company}, just reply and I will circle back."
         )
-        ask_line = "If faster lead response becomes a priority later, should I circle back?"
+        value_line = ""
+        ask_line = ""
 
-    value_line = (
-        "Most contractors we support recover missed jobs when every lead gets a reply in under 60 seconds."
-    )
-    context_line = (
-        f"This stood out because {company} already has a strong local presence and fast follow-up usually compounds that advantage."
-    )
     stop_line = "If this isn't relevant, just reply 'stop' and I won't reach out again."
 
-    body_parts = [
+    body_parts = [p for p in [
         greeting,
         step_line,
         value_line,
-        context_line,
         ask_line,
         stop_line,
         sender_name,
-    ]
+    ] if p]
     body_text = "\n\n".join(body_parts)
     body_html = "".join(f"<p>{part}</p>" for part in body_parts)
 
@@ -450,6 +523,28 @@ async def generate_outreach_email(
     if extra_instructions:
         prospect_details += f"\n\nAdditional instructions: {extra_instructions}"
 
+    # Append subject line examples for inspiration
+    subject_examples = STEP_SUBJECT_EXAMPLES.get(step, [])
+    if subject_examples:
+        filled_examples = []
+        subs = {
+            "{first_name}": first_name or company_name,
+            "{company}": company_name,
+            "{city}": city or "your area",
+            "{trade}": trade_type or "home services",
+            "{rating}": str(rating) if rating else "4.5",
+        }
+        for ex in subject_examples:
+            filled = ex
+            for key, val in subs.items():
+                filled = filled.replace(key, val)
+            filled_examples.append(filled)
+        step_instruction = (
+            step_instruction
+            + "\n\nExample subjects (for inspiration, don't copy exactly): "
+            + " | ".join(f'"{e}"' for e in filled_examples)
+        )
+
     user_message = f"{step_instruction}\n\n{prospect_details}"
 
     # Inject sender_name into system prompt
@@ -460,7 +555,19 @@ async def generate_outreach_email(
         user_message=user_message,
         model_tier="fast",
         max_tokens=500,
-        temperature=0.5,
+        temperature=STEP_TEMPERATURE.get(step, 0.5),
+    )
+
+    fallback_kwargs = dict(
+        prospect_name=effective_name,
+        company_name=company_name,
+        trade_type=trade_type,
+        city=city,
+        state=state,
+        sequence_step=step,
+        sender_name=sender_name,
+        rating=rating,
+        review_count=review_count,
     )
 
     if result.get("error"):
@@ -468,15 +575,7 @@ async def generate_outreach_email(
             "AI email generation failed, using deterministic fallback: %s",
             result["error"],
         )
-        return _build_fallback_outreach_email(
-            prospect_name=effective_name,
-            company_name=company_name,
-            trade_type=trade_type,
-            city=city,
-            state=state,
-            sequence_step=step,
-            sender_name=sender_name,
-        )
+        return _build_fallback_outreach_email(**fallback_kwargs)
 
     # Parse JSON response
     try:
@@ -487,15 +586,7 @@ async def generate_outreach_email(
         email_data = json.loads(content)
     except (json.JSONDecodeError, IndexError) as e:
         logger.warning("Failed to parse AI email response, using fallback: %s", str(e))
-        return _build_fallback_outreach_email(
-            prospect_name=effective_name,
-            company_name=company_name,
-            trade_type=trade_type,
-            city=city,
-            state=state,
-            sequence_step=step,
-            sender_name=sender_name,
-        )
+        return _build_fallback_outreach_email(**fallback_kwargs)
 
     subject = email_data.get("subject", "").strip()
     body_html = email_data.get("body_html", "").strip()
@@ -503,15 +594,7 @@ async def generate_outreach_email(
 
     if not subject or not body_html:
         logger.warning("AI generated empty content for step %d, using fallback", step)
-        return _build_fallback_outreach_email(
-            prospect_name=effective_name,
-            company_name=company_name,
-            trade_type=trade_type,
-            city=city,
-            state=state,
-            sequence_step=step,
-            sender_name=sender_name,
-        )
+        return _build_fallback_outreach_email(**fallback_kwargs)
 
     return {
         "subject": subject,

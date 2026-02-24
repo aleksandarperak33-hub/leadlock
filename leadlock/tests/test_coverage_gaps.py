@@ -543,7 +543,7 @@ class TestSalesOutreachGaps:
 
     @patch("src.agents.sales_outreach.generate_response")
     async def test_get_learning_context_with_data(self, mock_gen):
-        """Lines 39-57: _get_learning_context returns insights when data exists."""
+        """Lines 39-57: _get_learning_context returns prescriptive instructions."""
         with patch("src.services.learning.get_open_rate_by_dimension", new_callable=AsyncMock) as mock_open_rate, \
              patch("src.services.learning.get_best_send_time", new_callable=AsyncMock) as mock_best_time:
             mock_open_rate.return_value = 0.42
@@ -552,8 +552,9 @@ class TestSalesOutreachGaps:
             from src.agents.sales_outreach import _get_learning_context
             result = await _get_learning_context("hvac", "TX")
 
-            assert "Performance insights" in result
-            assert "42%" in result
+            assert "Writing instructions from past performance" in result
+            # High open rate → prescriptive keep instruction
+            assert "working well" in result or "keep" in result
             assert "9am-12pm" in result
 
     async def test_get_learning_context_no_data(self):
@@ -607,7 +608,7 @@ class TestSalesOutreachGaps:
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_outreach_email_with_learning_context(self, mock_gen, mock_learning):
         """Line 123: learning context appended to prospect details."""
-        mock_learning.return_value = "Performance insights:\n- Avg open rate for hvac: 42%"
+        mock_learning.return_value = "Writing instructions from past performance:\n- Avg open rate for hvac: 42%"
         mock_gen.return_value = {
             "content": '{"subject": "Test", "body_html": "<p>Hi</p>", "body_text": "Hi"}',
             "error": None,

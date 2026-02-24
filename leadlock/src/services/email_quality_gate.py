@@ -3,6 +3,7 @@ Email quality gate - lightweight pre-send validation.
 Pure string checks, no AI calls. Zero latency on happy path.
 """
 import logging
+import re
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,9 @@ logger = logging.getLogger(__name__)
 MAX_SUBJECT_LENGTH = 60
 MIN_BODY_WORDS = 50
 MAX_BODY_WORDS = 200
+
+# Step-aware minimums: step 3 (farewell) is intentionally short
+MIN_BODY_WORDS_BY_STEP = {1: 50, 2: 40, 3: 20}
 
 FORBIDDEN_WORDS = frozenset({
     "game-changer",
@@ -33,7 +37,26 @@ FORBIDDEN_WORDS = frozenset({
     "scalable solution",
     "empower",
     "holistic",
+    "solution",
+    "platform",
+    "opportunity",
+    "pain point",
+    "i noticed",
+    "i came across",
+    "i found your",
+    "i was looking at",
+    "i saw that",
+    "streamline",
+    "optimize",
+    "facilitate",
 })
+
+# Pre-compile regex patterns for word-boundary matching (avoids false positives
+# on company names like "ABC Solutions" or "Green Opportunity Solar")
+_FORBIDDEN_PATTERNS = [
+    re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+    for word in FORBIDDEN_WORDS
+]
 
 
 def check_email_quality(
@@ -43,6 +66,7 @@ def check_email_quality(
     company_name: Optional[str] = None,
     city: Optional[str] = None,
     trade_type: Optional[str] = None,
+    sequence_step: int = 1,
 ) -> dict:
     """
     Validate email quality before sending.
@@ -52,6 +76,9 @@ def check_email_quality(
         body_text: Plain text email body
         prospect_name: Prospect's name (for personalization check)
         company_name: Company name (for personalization check)
+        city: City (for personalization check)
+        trade_type: Trade type (for personalization check)
+        sequence_step: Which step in the sequence (1-3), affects word count min
 
     Returns:
         {"passed": bool, "issues": [str]}
@@ -64,12 +91,13 @@ def check_email_quality(
             f"Subject too long: {len(subject)} chars (max {MAX_SUBJECT_LENGTH})"
         )
 
-    # Body word count check
+    # Body word count check (step-aware minimum)
+    min_words = MIN_BODY_WORDS_BY_STEP.get(sequence_step, MIN_BODY_WORDS)
     words = body_text.split() if body_text else []
     word_count = len(words)
-    if word_count < MIN_BODY_WORDS:
+    if word_count < min_words:
         issues.append(
-            f"Body too short: {word_count} words (min {MIN_BODY_WORDS})"
+            f"Body too short: {word_count} words (min {min_words})"
         )
     elif word_count > MAX_BODY_WORDS:
         issues.append(
@@ -119,13 +147,13 @@ def check_email_quality(
     if "hey there" in combined_text:
         issues.append("Contains generic greeting: 'Hey there'")
 
-    # Forbidden words check
-    body_lower = body_text.lower() if body_text else ""
-    subject_lower = subject.lower() if subject else ""
-    combined = f"{subject_lower} {body_lower}"
-    for word in FORBIDDEN_WORDS:
-        if word in combined:
-            issues.append(f"Contains forbidden word: '{word}'")
+    # Forbidden words check (word-boundary matching to avoid false positives
+    # on company names containing "solution", "platform", etc.)
+    combined = f"{(subject or '')} {(body_text or '')}"
+    for pattern in _FORBIDDEN_PATTERNS:
+        match = pattern.search(combined)
+        if match:
+            issues.append(f"Contains forbidden word: '{match.group()}'")
             break  # One forbidden word is enough to flag
 
     passed = len(issues) == 0

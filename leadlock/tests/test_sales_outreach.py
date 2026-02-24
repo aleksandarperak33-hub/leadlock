@@ -11,7 +11,12 @@ from src.agents.sales_outreach import (
     classify_reply,
     _extract_first_name,
     _extract_name_from_email,
+    _build_fallback_outreach_email,
+    _prescriptive_open_rate,
+    _prescriptive_reply_rate,
     STEP_INSTRUCTIONS,
+    STEP_SUBJECT_EXAMPLES,
+    STEP_TEMPERATURE,
     VALID_CLASSIFICATIONS,
 )
 
@@ -173,17 +178,40 @@ class TestStepInstructions:
         assert 2 in STEP_INSTRUCTIONS
         assert 3 in STEP_INSTRUCTIONS
 
-    def test_step_1_is_first_contact(self):
+    def test_step_1_is_curiosity_pain(self):
         assert "STEP 1" in STEP_INSTRUCTIONS[1]
+        assert "CURIOSITY" in STEP_INSTRUCTIONS[1]
         assert "120 words" in STEP_INSTRUCTIONS[1]
 
-    def test_step_2_is_followup(self):
+    def test_step_2_is_social_proof(self):
         assert "STEP 2" in STEP_INSTRUCTIONS[2]
+        assert "SOCIAL PROOF" in STEP_INSTRUCTIONS[2]
         assert "90 words" in STEP_INSTRUCTIONS[2]
 
-    def test_step_3_is_breakup(self):
+    def test_step_3_is_farewell(self):
         assert "STEP 3" in STEP_INSTRUCTIONS[3]
+        assert "FAREWELL" in STEP_INSTRUCTIONS[3]
         assert "60 words" in STEP_INSTRUCTIONS[3]
+
+    def test_each_step_has_distinct_angle(self):
+        """Each step should have a unique angle keyword."""
+        s1 = STEP_INSTRUCTIONS[1].lower()
+        s2 = STEP_INSTRUCTIONS[2].lower()
+        s3 = STEP_INSTRUCTIONS[3].lower()
+        # Step 1 focuses on pain/curiosity
+        assert "curiosity" in s1 or "pain" in s1
+        # Step 2 focuses on social proof
+        assert "social proof" in s2
+        # Step 3 focuses on farewell
+        assert "farewell" in s3 or "final" in s3
+
+    def test_anti_repetition_in_all_steps(self):
+        """Each step should explicitly ban common AI openers."""
+        for step_num in [1, 2, 3]:
+            text = STEP_INSTRUCTIONS[step_num]
+            assert "I noticed" in text
+            assert "I came across" in text
+            assert "I found your" in text
 
 
 class TestGenerateOutreachEmail:
@@ -461,3 +489,199 @@ class TestClassifyReply:
         assert "out_of_office" in VALID_CLASSIFICATIONS
         assert "unsubscribe" in VALID_CLASSIFICATIONS
         assert len(VALID_CLASSIFICATIONS) == 5
+
+
+class TestStepTemperature:
+    """Verify per-step temperature configuration."""
+
+    def test_step_1_low_temperature(self):
+        assert STEP_TEMPERATURE[1] == 0.4
+
+    def test_step_2_medium_temperature(self):
+        assert STEP_TEMPERATURE[2] == 0.6
+
+    def test_step_3_high_temperature(self):
+        assert STEP_TEMPERATURE[3] == 0.7
+
+    def test_all_steps_covered(self):
+        assert set(STEP_TEMPERATURE.keys()) == {1, 2, 3}
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_step_1_uses_correct_temperature(self, mock_ai, mock_learning):
+        """Step 1 should pass temperature=0.4 to AI."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="John", company_name="HVAC Co",
+            trade_type="hvac", city="Austin", state="TX", sequence_step=1,
+        )
+        assert mock_ai.call_args.kwargs["temperature"] == 0.4
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_step_2_uses_correct_temperature(self, mock_ai, mock_learning):
+        """Step 2 should pass temperature=0.6 to AI."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="John", company_name="HVAC Co",
+            trade_type="hvac", city="Austin", state="TX", sequence_step=2,
+        )
+        assert mock_ai.call_args.kwargs["temperature"] == 0.6
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_step_3_uses_correct_temperature(self, mock_ai, mock_learning):
+        """Step 3 should pass temperature=0.7 to AI."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="John", company_name="HVAC Co",
+            trade_type="hvac", city="Austin", state="TX", sequence_step=3,
+        )
+        assert mock_ai.call_args.kwargs["temperature"] == 0.7
+
+
+class TestStepSubjectExamples:
+    """Verify subject line examples configuration."""
+
+    def test_all_steps_have_examples(self):
+        assert set(STEP_SUBJECT_EXAMPLES.keys()) == {1, 2, 3}
+
+    def test_each_step_has_three_examples(self):
+        for step in [1, 2, 3]:
+            assert len(STEP_SUBJECT_EXAMPLES[step]) == 3
+
+    @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
+    @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
+    async def test_examples_injected_into_prompt(self, mock_ai, mock_learning):
+        """Subject examples should appear in the AI prompt."""
+        mock_learning.return_value = ""
+        mock_ai.return_value = _mock_ai_response(_valid_email_json())
+
+        await generate_outreach_email(
+            prospect_name="John", company_name="Austin HVAC",
+            trade_type="hvac", city="Austin", state="TX", sequence_step=1,
+        )
+
+        user_msg = mock_ai.call_args.kwargs.get("user_message", "")
+        assert "Example subjects" in user_msg
+        assert "inspiration" in user_msg
+
+
+class TestFallbackTemplateEnhanced:
+    """Test improved fallback template with rating/enrichment data."""
+
+    def test_step_1_with_rating(self):
+        """Step 1 fallback should use rating when available."""
+        result = _build_fallback_outreach_email(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sequence_step=1,
+            sender_name="Alek",
+            rating=4.8,
+            review_count=125,
+        )
+        assert "4.8" in result["body_text"]
+        assert "125" in result["body_text"]
+        assert result["fallback_used"] is True
+        assert result["ai_cost_usd"] == 0.0
+
+    def test_step_1_without_rating(self):
+        """Step 1 fallback without rating should still work."""
+        result = _build_fallback_outreach_email(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sequence_step=1,
+            sender_name="Alek",
+        )
+        assert "Cool Air HVAC" in result["body_text"]
+        assert result["fallback_used"] is True
+
+    def test_step_2_social_proof_angle(self):
+        """Step 2 fallback should use social proof (not rehash step 1)."""
+        result = _build_fallback_outreach_email(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sequence_step=2,
+            sender_name="Alek",
+        )
+        assert "78%" in result["body_text"]
+        assert "hvac" in result["subject"].lower() or "austin" in result["subject"].lower()
+
+    def test_step_3_short_farewell(self):
+        """Step 3 fallback should be short and final."""
+        result = _build_fallback_outreach_email(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sequence_step=3,
+            sender_name="Alek",
+        )
+        # Step 3 should be noticeably shorter than step 1
+        step1 = _build_fallback_outreach_email(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sequence_step=1,
+            sender_name="Alek",
+        )
+        assert len(result["body_text"]) < len(step1["body_text"])
+
+    def test_steps_produce_different_subjects(self):
+        """Each step should produce a different subject."""
+        kwargs = dict(
+            prospect_name="Mike Johnson",
+            company_name="Cool Air HVAC",
+            trade_type="hvac",
+            city="Austin",
+            state="TX",
+            sender_name="Alek",
+        )
+        s1 = _build_fallback_outreach_email(sequence_step=1, **kwargs)["subject"]
+        s2 = _build_fallback_outreach_email(sequence_step=2, **kwargs)["subject"]
+        s3 = _build_fallback_outreach_email(sequence_step=3, **kwargs)["subject"]
+        assert s1 != s2
+        assert s2 != s3
+        assert s1 != s3
+
+
+class TestPrescriptiveLearning:
+    """Test prescriptive learning context helpers."""
+
+    def test_high_open_rate_keep_approach(self):
+        result = _prescriptive_open_rate(0.25)
+        assert "working well" in result.lower() or "keep" in result.lower()
+
+    def test_medium_open_rate_more_specific(self):
+        result = _prescriptive_open_rate(0.15)
+        assert "specific" in result.lower() or "city" in result.lower()
+
+    def test_low_open_rate_change_approach(self):
+        result = _prescriptive_open_rate(0.05)
+        assert "change" in result.lower() or "shorter" in result.lower()
+
+    def test_good_reply_rate_keep_cta(self):
+        result = _prescriptive_reply_rate(0.08)
+        assert "keep" in result.lower() or "generating" in result.lower()
+
+    def test_zero_reply_rate_improve_cta(self):
+        result = _prescriptive_reply_rate(0.0)
+        assert "specific" in result.lower() or "response time" in result.lower()

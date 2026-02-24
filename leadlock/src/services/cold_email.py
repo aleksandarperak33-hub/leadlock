@@ -156,7 +156,7 @@ async def send_cold_email(
         )
         message.tracking_settings = TrackingSettings(
             open_tracking=OpenTracking(enable=True),
-            click_tracking=ClickTracking(enable=False),
+            click_tracking=ClickTracking(enable=True, enable_text=False),
         )
 
         sg = SendGridAPIClient(api_key=settings.sendgrid_api_key)

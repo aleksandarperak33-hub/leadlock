@@ -119,7 +119,7 @@ class TestForbiddenWords:
     def test_clean_email_passes(self):
         result = check_email_quality(
             subject="Saw your reviews, Mike",
-            body_text="Hey Mike, I noticed your HVAC shop has great reviews. " + "word " * 55 + "\nAlek",
+            body_text="Hey Mike, your HVAC shop has great reviews. " + "word " * 55 + "\nAlek",
             prospect_name="Mike",
         )
         assert all("forbidden word" not in issue for issue in result["issues"])
@@ -128,6 +128,46 @@ class TestForbiddenWords:
         result = check_email_quality(
             subject="Hi Mike",
             body_text="Hey Mike, we can transform your lead response. " + "word " * 55 + "\nAlek",
+            prospect_name="Mike",
+        )
+        assert any("forbidden word" in issue for issue in result["issues"])
+
+    def test_solution_fails(self):
+        result = check_email_quality(
+            subject="Hi Mike",
+            body_text="Hey Mike, we have a solution for your HVAC business. " + "word " * 55 + "\nAlek",
+            prospect_name="Mike",
+        )
+        assert any("forbidden word" in issue for issue in result["issues"])
+
+    def test_platform_fails(self):
+        result = check_email_quality(
+            subject="Hi Mike",
+            body_text="Hey Mike, our platform helps HVAC shops respond faster. " + "word " * 55 + "\nAlek",
+            prospect_name="Mike",
+        )
+        assert any("forbidden word" in issue for issue in result["issues"])
+
+    def test_i_noticed_fails(self):
+        result = check_email_quality(
+            subject="Hi Mike",
+            body_text="Hey Mike, i noticed your HVAC shop in Austin. " + "word " * 55 + "\nAlek",
+            prospect_name="Mike",
+        )
+        assert any("forbidden word" in issue for issue in result["issues"])
+
+    def test_i_came_across_fails(self):
+        result = check_email_quality(
+            subject="Hi Mike",
+            body_text="Hey Mike, i came across your website recently. " + "word " * 55 + "\nAlek",
+            prospect_name="Mike",
+        )
+        assert any("forbidden word" in issue for issue in result["issues"])
+
+    def test_pain_point_fails(self):
+        result = check_email_quality(
+            subject="Hi Mike",
+            body_text="Hey Mike, slow response is a pain point for contractors. " + "word " * 55 + "\nAlek",
             prospect_name="Mike",
         )
         assert any("forbidden word" in issue for issue in result["issues"])

@@ -1616,15 +1616,15 @@ class TestSalesOutreachLearningContext:
     @patch("src.services.learning.get_best_send_time", new_callable=AsyncMock)
     @patch("src.services.learning.get_open_rate_by_dimension", new_callable=AsyncMock)
     async def test_learning_context_with_data(self, mock_open_rate, mock_best_time):
-        """Learning context with data should return formatted insights."""
+        """Learning context with data should return prescriptive instructions."""
         mock_open_rate.return_value = 0.35
         mock_best_time.return_value = "9am-12pm"
 
         result = await _get_learning_context("hvac", "TX")
 
-        assert "Performance insights" in result
-        assert "hvac" in result
-        assert "35%" in result
+        assert "Writing instructions from past performance" in result
+        # High open rate → prescriptive "keep" instruction
+        assert "working well" in result or "keep" in result
         assert "9am-12pm" in result
 
     @patch("src.services.learning.get_best_send_time", new_callable=AsyncMock)
@@ -1641,14 +1641,15 @@ class TestSalesOutreachLearningContext:
     @patch("src.services.learning.get_best_send_time", new_callable=AsyncMock)
     @patch("src.services.learning.get_open_rate_by_dimension", new_callable=AsyncMock)
     async def test_learning_context_only_open_rate(self, mock_open_rate, mock_best_time):
-        """Only open rate available should still return insights."""
+        """Only open rate available should still return prescriptive instructions."""
         mock_open_rate.return_value = 0.42
         mock_best_time.return_value = None
 
         result = await _get_learning_context("roofing", "FL")
 
-        assert "Performance insights" in result
-        assert "42%" in result
+        assert "Writing instructions from past performance" in result
+        # High open rate → keep approach
+        assert "working well" in result or "keep" in result
 
     @patch("src.services.learning.get_best_send_time", new_callable=AsyncMock)
     @patch("src.services.learning.get_open_rate_by_dimension", new_callable=AsyncMock)
@@ -1659,7 +1660,7 @@ class TestSalesOutreachLearningContext:
 
         result = await _get_learning_context("electrical", "NY")
 
-        assert "Performance insights" in result
+        assert "Writing instructions from past performance" in result
         assert "3pm-6pm" in result
 
     async def test_learning_context_import_error(self):
@@ -1681,7 +1682,7 @@ class TestSalesOutreachGenerate:
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_with_all_optional_fields(self, mock_ai, mock_learning):
         """All optional fields (rating, review_count, website) included."""
-        mock_learning.return_value = "Performance insights:\n- Best send time: 9am"
+        mock_learning.return_value = "Writing instructions from past performance:\n- Best send time: 9am"
         mock_ai.return_value = {
             "content": json.dumps({
                 "subject": "Quick question about your leads",
@@ -1714,7 +1715,7 @@ class TestSalesOutreachGenerate:
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_with_learning_context(self, mock_ai, mock_learning):
         """Learning context should be included in prompt when available."""
-        mock_learning.return_value = "Performance insights:\n- Avg open rate for hvac: 35%"
+        mock_learning.return_value = "Writing instructions from past performance:\n- Avg open rate for hvac: 35%"
         mock_ai.return_value = {
             "content": json.dumps({
                 "subject": "Your leads",
@@ -1807,7 +1808,7 @@ class TestSalesOutreachGenerate:
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_ai_error(self, mock_ai, mock_learning):
-        """AI error should return error dict."""
+        """AI error should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = {
             "content": "",
@@ -1824,14 +1825,15 @@ class TestSalesOutreachGenerate:
             state="TX",
         )
 
-        assert result["error"] == "Rate limit exceeded"
-        assert result["subject"] == ""
-        assert result["body_html"] == ""
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
+        assert result["body_html"] != ""
+        assert result["ai_cost_usd"] == 0.0
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_json_parse_error(self, mock_ai, mock_learning):
-        """Invalid JSON from AI should return error dict."""
+        """Invalid JSON from AI should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = {
             "content": "Not valid JSON here",
@@ -1848,13 +1850,14 @@ class TestSalesOutreachGenerate:
             state="TX",
         )
 
-        assert "error" in result
-        assert "JSON parse error" in result["error"]
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
+        assert result["body_html"] != ""
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_generate_empty_subject_or_body(self, mock_ai, mock_learning):
-        """Empty subject or body_html should return error."""
+        """Empty subject or body_html should fall back to deterministic email."""
         mock_learning.return_value = ""
         mock_ai.return_value = {
             "content": json.dumps({
@@ -1875,8 +1878,9 @@ class TestSalesOutreachGenerate:
             state="TX",
         )
 
-        assert "error" in result
-        assert "empty" in result["error"].lower()
+        assert result["fallback_used"] is True
+        assert result["subject"] != ""
+        assert result["body_html"] != ""
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)

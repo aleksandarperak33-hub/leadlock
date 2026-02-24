@@ -153,7 +153,7 @@ class TestQualityGateInSequencer:
         result = check_email_quality(
             subject="Saw your reviews, Mike",
             body_text=(
-                "Hey Mike, I noticed your HVAC shop has great reviews in Austin. "
+                "Hey Mike, your HVAC shop has great reviews in Austin. "
                 + "word " * 55
                 + "\nAlek"
             ),

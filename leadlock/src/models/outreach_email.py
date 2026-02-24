@@ -5,7 +5,7 @@ Records both outbound (sent by sales engine) and inbound (replies from prospects
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, Index
+from sqlalchemy import String, Text, Integer, Float, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database import Base
@@ -44,6 +44,11 @@ class OutreachEmail(Base):
     bounce_reason: Mapped[Optional[str]] = mapped_column(Text)
 
     ai_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Whether the deterministic fallback template was used instead of AI
+    fallback_used: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
     # A/B test variant assignment
     ab_variant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
