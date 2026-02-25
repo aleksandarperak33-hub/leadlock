@@ -95,7 +95,7 @@ export default function Dashboard() {
           {[...Array(4)].map((_, i) => (
             <div
               key={i}
-              className="h-32 rounded-2xl bg-white border border-gray-200/60 animate-pulse"
+              className="h-32 rounded-2xl bg-white border border-gray-200/50 animate-pulse"
             />
           ))}
         </div>
@@ -106,7 +106,7 @@ export default function Dashboard() {
   const periodActions = (
     <div className="flex items-center gap-4">
       <LiveIndicator />
-      <div className="flex rounded-xl p-1 bg-gray-100/80 border border-gray-200/60">
+      <div className="flex rounded-xl p-1 bg-gray-100/80 border border-gray-200/50">
         {PERIODS.map((p) => (
           <button
             key={p.id}
@@ -179,10 +179,10 @@ export default function Dashboard() {
 
       {/* Charts row */}
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <div className="flex items-center gap-2 mb-5">
             <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.75} />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900">
               Response Time Distribution
             </h3>
           </div>
@@ -191,10 +191,10 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <div className="flex items-center gap-2 mb-5">
             <PieChart className="w-4 h-4 text-gray-400" strokeWidth={1.75} />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900">
               Leads by Source
             </h3>
           </div>
@@ -204,13 +204,13 @@ export default function Dashboard() {
 
       {/* Leads per day */}
       {metrics?.leads_by_day?.length > 0 && (
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp
               className="w-4 h-4 text-gray-400"
               strokeWidth={1.75}
             />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900">
               Leads Per Day
             </h3>
           </div>
@@ -282,10 +282,10 @@ export default function Dashboard() {
       )}
 
       {/* Activity feed */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <div className="flex items-center gap-2 mb-5">
           <Activity className="w-4 h-4 text-gray-400" strokeWidth={1.75} />
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-gray-900">
             Recent Activity
           </h3>
         </div>

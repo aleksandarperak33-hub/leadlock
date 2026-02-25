@@ -30,7 +30,7 @@ function BarRow({ label, value, count }) {
 
 function InsightSection({ title, icon: Icon, children }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm mb-6">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card mb-6">
       <div className="flex items-center gap-2.5 mb-4">
         <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
           <Icon className="w-4 h-4 text-orange-500" />
@@ -92,7 +92,7 @@ export default function AdminInsights() {
       )}
 
       {!insights || insights.total_signals === 0 ? (
-        <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card">
           <EmptyState
             icon={LineChart}
             title="No insights yet"

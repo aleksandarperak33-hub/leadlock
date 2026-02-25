@@ -63,7 +63,7 @@ function ScrapeFormModal({ show, form, onChange, onSubmit, onClose, scraping }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm bg-white border border-gray-200/60 rounded-2xl shadow-lg p-6">
+      <div className="w-full max-w-sm bg-white border border-gray-200/50 rounded-2xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-gray-900">Run Manual Scrape</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -148,7 +148,7 @@ function MetricsTab({ metrics }) {
           color={metrics.emails?.bounced > 0 ? 'red' : 'brand'}
         />
       </div>
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4">Pipeline Breakdown</p>
         <div className="flex flex-wrap gap-4">
           {Object.entries(metrics.prospects?.by_status || {}).map(([status, count]) => (
@@ -301,7 +301,7 @@ function ProspectsTable({ prospects, selectedId, onSelect, maxSteps }) {
 
 function ProspectDetailPanel({ prospect, emails, onClose, onDelete, onBlacklist }) {
   return (
-    <div className="w-[400px] flex-shrink-0 bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-y-auto" style={{ maxHeight: '80vh' }}>
+    <div className="w-[400px] flex-shrink-0 bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-y-auto" style={{ maxHeight: '80vh' }}>
       <div className="p-5 border-b border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900">{prospect.prospect_name}</h3>
@@ -325,7 +325,7 @@ function ProspectDetailPanel({ prospect, emails, onClose, onDelete, onBlacklist 
           </button>
           <button
             onClick={() => onBlacklist(prospect.id)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200/60 hover:bg-gray-100 cursor-pointer transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200/50 hover:bg-gray-100 cursor-pointer transition-colors"
           >
             <Ban className="w-3 h-3" /> Blacklist
           </button>
@@ -346,7 +346,7 @@ function ProspectDetailPanel({ prospect, emails, onClose, onDelete, onBlacklist 
                 key={email.id}
                 className={`rounded-xl p-4 border ${
                   email.direction === 'outbound'
-                    ? 'bg-white border-gray-200/60'
+                    ? 'bg-white border-gray-200/50'
                     : 'bg-orange-50/50 border-orange-200/60'
                 }`}
               >
@@ -417,7 +417,7 @@ function StatusTab({ workerStatus }) {
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {workerStatus.workers && Object.entries(workerStatus.workers).map(([name, info]) => (
-          <div key={name} className="bg-white border border-gray-200/60 rounded-2xl p-5 shadow-sm">
+          <div key={name} className="bg-white border border-gray-200/50 rounded-2xl p-5 shadow-card">
             <div className="flex items-center gap-2 mb-3">
               <StatusDot color={HEALTH_DOT_MAP[info.health] || 'gray'} />
               <span className="text-sm font-medium capitalize text-gray-900">
@@ -443,7 +443,7 @@ function StatusTab({ workerStatus }) {
         ))}
       </div>
       {workerStatus.alerts && (
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Alerts</p>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">Bounce Rate:</span>

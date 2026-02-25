@@ -143,7 +143,7 @@ export default function Billing() {
       )}
 
       {/* Current plan */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 mb-8">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 mb-8">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -192,7 +192,7 @@ export default function Billing() {
               <div
                 key={plan.slug}
                 className={`bg-white border rounded-2xl p-6 relative flex flex-col ${
-                  plan.popular ? 'border-orange-300 ring-1 ring-orange-100' : 'border-gray-200/60'
+                  plan.popular ? 'border-orange-300 ring-1 ring-orange-100' : 'border-gray-200/50'
                 }`}
               >
                 {plan.popular && (

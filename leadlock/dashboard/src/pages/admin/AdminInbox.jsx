@@ -100,7 +100,7 @@ function ConversationItem({ conv, isActive, onSelect }) {
 
 function ThreadHeader({ prospect, onStatusChange, onBlacklist }) {
   return (
-    <div className="px-5 py-4 border-b border-gray-200/60 bg-white shrink-0">
+    <div className="px-5 py-4 border-b border-gray-200/50 bg-white shrink-0">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2.5">
@@ -177,7 +177,7 @@ function EmailMessage({ email }) {
       className={`rounded-xl border p-4 mb-3 ${
         isOutbound
           ? 'bg-orange-50/30 border-orange-200/40'
-          : 'bg-white border-gray-200/60'
+          : 'bg-white border-gray-200/50'
       }`}
     >
       <div className="flex items-center justify-between mb-2">
@@ -389,11 +389,11 @@ export default function AdminInbox() {
       )}
 
       <div
-        className="flex bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden"
+        className="flex bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-hidden"
         style={{ height: 'calc(100vh - 260px)' }}
       >
         {/* Left pane */}
-        <div className="w-[360px] border-r border-gray-200/60 flex flex-col shrink-0">
+        <div className="w-[360px] border-r border-gray-200/50 flex flex-col shrink-0">
           <div className="p-3 border-b border-gray-100 space-y-2">
             <div className="flex items-center gap-2">
               <Filter className="w-3.5 h-3.5 text-gray-400 shrink-0" />

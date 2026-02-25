@@ -193,7 +193,7 @@ function BookingCard({ booking, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="flex items-center gap-4 bg-white border border-gray-200/60 rounded-xl p-5 hover:bg-gray-50/50 transition-colors cursor-pointer"
+      className="flex items-center gap-4 bg-white border border-gray-200/50 rounded-xl p-5 hover:bg-gray-50/50 transition-colors cursor-pointer"
     >
       <div className="text-center w-14 flex-shrink-0">
         <p className="text-[10px] font-semibold uppercase text-gray-400">
@@ -277,7 +277,7 @@ function CalendarGrid({ bookings, onBookingClick }) {
     year === today.getFullYear();
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <div className="flex items-center justify-between mb-5">
         <button
           onClick={goToPrevMonth}

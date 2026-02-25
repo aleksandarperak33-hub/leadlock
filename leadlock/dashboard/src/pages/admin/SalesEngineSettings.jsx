@@ -24,11 +24,11 @@ export default function SalesEngineSettings({
   return (
     <div className="max-w-2xl space-y-6">
       {/* Target Locations */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <p className="text-lg font-semibold text-gray-900 mb-4">Target Locations</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {(config.target_locations || []).map((loc, i) => (
-            <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs bg-gray-50 text-gray-600 border border-gray-200/60 font-medium">
+            <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs bg-gray-50 text-gray-600 border border-gray-200/50 font-medium">
               {loc.city}, {loc.state}
               <button onClick={() => onRemoveLocation(i)} className="ml-0.5 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-3 h-3" />
@@ -62,7 +62,7 @@ export default function SalesEngineSettings({
       </div>
 
       {/* Target Trade Types */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <p className="text-lg font-semibold text-gray-900 mb-4">Target Trade Types</p>
         <div className="flex flex-wrap gap-2">
           {TRADE_TYPES.map((trade) => {
@@ -85,7 +85,7 @@ export default function SalesEngineSettings({
       </div>
 
       {/* Limits */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <p className="text-lg font-semibold text-gray-900 mb-4">Rate Limits</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -111,7 +111,7 @@ export default function SalesEngineSettings({
       </div>
 
       {/* Email Sender Config */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
         <p className="text-lg font-semibold text-gray-900 mb-4">Email Sender Config</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[

@@ -9,11 +9,11 @@ export default function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="flex justify-between items-start mb-8">
       <div>
-        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-gray-900">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
           {title}
         </h1>
         {subtitle && (
-          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          <p className="text-sm text-gray-500 mt-1.5">{subtitle}</p>
         )}
       </div>
       {actions && <div>{actions}</div>}

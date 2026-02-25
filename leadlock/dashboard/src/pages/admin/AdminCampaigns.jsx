@@ -38,7 +38,7 @@ function CampaignCard({ campaign, onToggle, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="bg-white border border-gray-200/60 rounded-2xl p-6 hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-white border border-gray-200/50 rounded-2xl p-6 hover:shadow-md transition-shadow cursor-pointer"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
@@ -59,7 +59,7 @@ function CampaignCard({ campaign, onToggle, onClick }) {
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onToggle(campaign); }}
-            className="p-2 rounded-xl bg-white border border-gray-200/60 hover:bg-gray-50 transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-white border border-gray-200/50 hover:bg-gray-50 transition-colors cursor-pointer"
           >
             {campaign.status === 'active'
               ? <Pause className="w-4 h-4 text-amber-500" />
@@ -130,7 +130,7 @@ function CreateModal({ form, onChange, onSubmit, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200/60">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50">
           <h2 className="text-lg font-semibold text-gray-900">Create Campaign</h2>
           <button
             onClick={onClose}
@@ -214,7 +214,7 @@ function CreateModal({ form, onChange, onSubmit, onClose }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/60">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/50">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -328,7 +328,7 @@ export default function AdminCampaigns() {
       )}
 
       {campaigns.length === 0 ? (
-        <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card">
           <EmptyState
             icon={Send}
             title="No campaigns yet"

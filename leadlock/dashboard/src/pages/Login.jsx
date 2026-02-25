@@ -42,7 +42,7 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-8 shadow-card">
           <h2 className="text-lg font-semibold text-center text-gray-900 mb-1">
             Welcome back
           </h2>

@@ -31,10 +31,10 @@ export default function DataTable({
   };
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl overflow-hidden shadow-card">
       <table className="w-full">
         <thead>
-          <tr className="bg-gray-50/80 border-b border-gray-200/60">
+          <tr className="border-b border-gray-100">
             {columns.map((column) => {
               const isSorted = sortKey === column.key;
               const SortIcon = isSorted && sortDir === 'desc' ? ChevronDown : ChevronUp;
@@ -48,8 +48,8 @@ export default function DataTable({
                   key={column.key}
                   scope="col"
                   aria-sort={ariaSort}
-                  className={`text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 ${alignClass} ${
-                    column.sortable ? 'cursor-pointer hover:text-gray-700 select-none' : ''
+                  className={`text-[11px] font-semibold text-gray-400 uppercase tracking-widest px-4 py-3.5 ${alignClass} ${
+                    column.sortable ? 'cursor-pointer hover:text-gray-600 select-none' : ''
                   }`}
                   onClick={() => handleHeaderClick(column)}
                 >
@@ -67,7 +67,7 @@ export default function DataTable({
         <tbody>
           {loading ? (
             [...Array(loadingRows)].map((_, i) => (
-              <tr key={`skeleton-${i}`} className="border-b border-gray-100 last:border-0">
+              <tr key={`skeleton-${i}`} className="border-b border-gray-50 last:border-0">
                 {columns.map((column) => (
                   <td key={column.key} className="px-4 py-3.5">
                     <div className="h-4 bg-gray-100 rounded-lg animate-pulse" />
@@ -85,7 +85,7 @@ export default function DataTable({
             data.map((row, rowIndex) => (
               <tr
                 key={row.id || rowIndex}
-                className={`border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors ${
+                className={`border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors ${
                   onRowClick ? 'cursor-pointer' : ''
                 }`}
                 onClick={() => onRowClick && onRowClick(row)}

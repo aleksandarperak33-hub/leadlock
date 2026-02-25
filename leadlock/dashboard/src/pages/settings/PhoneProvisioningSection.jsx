@@ -97,7 +97,7 @@ export default function PhoneProvisioningSection({ settings, onProvisioned }) {
       {numbers.length > 0 && (
         <div className="space-y-2">
           {numbers.map((num) => (
-            <div key={num.phone_number} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200/60 rounded-xl">
+            <div key={num.phone_number} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200/50 rounded-xl">
               <div>
                 <p className="text-sm font-medium text-gray-900">{num.friendly_name}</p>
                 <p className="text-xs text-gray-400">{num.locality}, {num.region}</p>

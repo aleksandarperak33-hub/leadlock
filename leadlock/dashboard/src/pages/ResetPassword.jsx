@@ -45,7 +45,7 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-[#FAFAFA]">
         <div className="w-full max-w-[400px] text-center">
-          <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm">
+          <div className="bg-white border border-gray-200/50 rounded-2xl p-8 shadow-card">
             <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Invalid Reset Link</h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -75,7 +75,7 @@ export default function ResetPassword() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-8 shadow-card">
           {success ? (
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">

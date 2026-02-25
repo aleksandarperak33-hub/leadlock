@@ -145,7 +145,7 @@ export default function LeadFeed() {
 
   const headerActions = (
     <div className="flex items-center gap-3">
-      <span className="text-xs font-mono text-gray-400 bg-gray-50 border border-gray-200/60 px-2.5 py-1 rounded-lg">
+      <span className="text-xs font-mono text-gray-400 bg-gray-50 border border-gray-200/50 px-2.5 py-1 rounded-lg">
         {total} total
       </span>
       <div className="w-64">
@@ -169,7 +169,7 @@ export default function LeadFeed() {
       />
 
       {loading && leads.length === 0 ? (
-        <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-hidden">
           {[...Array(5)].map((_, i) => (
             <div
               key={i}

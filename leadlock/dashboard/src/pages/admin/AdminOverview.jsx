@@ -150,7 +150,7 @@ export default function AdminOverview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Clients by Tier */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">Clients by Tier</h3>
           <div className="space-y-4">
             {sortedTiers.map(([tier, count], idx) => {
@@ -180,7 +180,7 @@ export default function AdminOverview() {
         </div>
 
         {/* Billing Status */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">Billing Status</h3>
           <div className="space-y-0.5">
             {Object.entries(billingData).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
@@ -203,14 +203,14 @@ export default function AdminOverview() {
         </div>
 
         {/* System Health */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm lg:col-span-2">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card lg:col-span-2">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">System Health</h3>
           {health ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {healthItems.map(({ label, value, color }) => (
                 <div
                   key={label}
-                  className="bg-white border border-gray-200/60 rounded-xl p-4 shadow-sm"
+                  className="bg-white border border-gray-200/50 rounded-xl p-4 shadow-card"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <StatusDot color={color} />

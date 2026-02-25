@@ -169,7 +169,7 @@ export default function AdminClientDetail() {
       </button>
 
       {/* Client Info Header */}
-      <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm mb-6">
+      <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">{client.business_name}</h1>

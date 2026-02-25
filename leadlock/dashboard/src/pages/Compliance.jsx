@@ -272,7 +272,7 @@ function MetricCard({ label, value, subtitle, icon: Icon, status, expanded, onCl
   const valueColor = METRIC_STATUS_COLORS[status] || 'text-gray-900';
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-hidden">
       <button
         onClick={onClick}
         className="w-full text-left p-6 cursor-pointer hover:bg-gray-50/50 transition-colors"
@@ -348,7 +348,7 @@ function ComplianceChecklist({ items }) {
   };
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-lg font-semibold text-gray-900 mb-5">
         Compliance Checklist
       </h2>

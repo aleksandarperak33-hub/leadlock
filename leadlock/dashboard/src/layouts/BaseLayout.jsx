@@ -38,7 +38,7 @@ export default function BaseLayout({
   const contentMargin = collapsed ? 'lg:ml-[72px]' : 'lg:ml-64';
 
   return (
-    <div className={`min-h-screen bg-[#FAFAFA] ${containerClass}`}>
+    <div className={`min-h-screen bg-[#F8F9FB] ${containerClass}`}>
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -49,22 +49,22 @@ export default function BaseLayout({
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200/60 transition-all duration-300 ${sidebarWidth} ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200/50 transition-all duration-300 ${sidebarWidth} ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-6">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center flex-shrink-0 shadow-sm">
             <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-gray-900 truncate">
+              <span className="text-[17px] font-bold text-gray-900 tracking-tight">
                 LeadLock
               </span>
               {brandBadge && (
-                <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                <span className="text-[10px] font-bold bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-md uppercase tracking-wider ring-1 ring-inset ring-orange-500/10">
                   {brandBadge}
                 </span>
               )}
@@ -90,14 +90,14 @@ export default function BaseLayout({
                     navigate(to);
                     setMobileOpen(false);
                   }}
-                  className={`flex items-center gap-3 mx-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer w-[calc(100%-24px)] ${
+                  className={`flex items-center gap-3 mx-3 px-3 py-2 rounded-xl text-[13px] font-medium transition-all cursor-pointer w-[calc(100%-24px)] ${
                     active
-                      ? 'text-orange-600 bg-orange-50/80 border-l-2 border-orange-500'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'text-gray-900 bg-gray-100/80'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                   }`}
                   aria-current={active ? 'page' : undefined}
                 >
-                  <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-orange-600' : ''}`} />
+                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-orange-600' : ''}`} strokeWidth={active ? 2 : 1.75} />
                   {!collapsed && <span className="truncate">{label}</span>}
                 </button>
                 {collapsed && (
@@ -111,13 +111,13 @@ export default function BaseLayout({
         </nav>
 
         {/* Bottom section */}
-        <div className="border-t border-gray-200/60">
+        <div className="border-t border-gray-100">
           <div className="flex items-center gap-3 px-5 py-4">
-            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
               {userInitial}
             </div>
             {!collapsed && (
-              <span className="text-sm font-medium text-gray-700 truncate">
+              <span className="text-sm font-medium text-gray-600 truncate">
                 {userName}
               </span>
             )}
@@ -125,15 +125,15 @@ export default function BaseLayout({
           <div className="px-3 pb-2">
             <button
               onClick={onLogout}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-gray-400 hover:text-red-500 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-[13px] font-medium text-gray-400 hover:text-red-500 hover:bg-red-50/50 transition-colors cursor-pointer"
             >
-              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
               {!collapsed && <span>Sign out</span>}
             </button>
           </div>
           <button
             onClick={() => setCollapsed((prev) => !prev)}
-            className="hidden lg:flex w-full justify-center py-3 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors border-t border-gray-200/60"
+            className="hidden lg:flex w-full justify-center py-3 text-gray-300 hover:text-gray-500 cursor-pointer transition-colors border-t border-gray-100"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? (
@@ -148,7 +148,7 @@ export default function BaseLayout({
       {/* Main content */}
       <div className={`transition-all duration-300 ${contentMargin}`}>
         {/* Mobile header */}
-        <div className="lg:hidden flex items-center gap-3 px-4 h-14 sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-200/60">
+        <div className="lg:hidden flex items-center gap-3 px-4 h-14 sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-200/50">
           <button
             onClick={() => setMobileOpen(true)}
             className="text-gray-500 cursor-pointer"
@@ -156,7 +156,7 @@ export default function BaseLayout({
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-sm font-semibold text-gray-900">
+          <span className="text-sm font-bold text-gray-900 tracking-tight">
             LeadLock{brandBadge ? ` ${brandBadge}` : ''}
           </span>
         </div>

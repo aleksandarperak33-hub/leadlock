@@ -43,7 +43,7 @@ export default function ForgotPassword() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-8 shadow-card">
           {sent ? (
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">

@@ -199,7 +199,7 @@ export default function AdminClients() {
       {/* New Client Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-start justify-center pt-24">
-          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-xl border border-gray-200/60">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-xl border border-gray-200/50">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-gray-900">New Client</h2>
               <button
@@ -297,14 +297,14 @@ export default function AdminClients() {
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setPage(p => Math.min(pages, p + 1))}
               disabled={page === pages}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white border border-transparent hover:border-gray-200/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

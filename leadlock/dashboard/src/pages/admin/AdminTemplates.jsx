@@ -20,7 +20,7 @@ function TemplateModal({ form, editing, onChange, onSave, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200/60">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50">
           <h2 className="text-lg font-semibold text-gray-900">
             {editing ? 'Edit Template' : 'Create Template'}
           </h2>
@@ -114,7 +114,7 @@ function TemplateModal({ form, editing, onChange, onSave, onClose }) {
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/60">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/50">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -136,7 +136,7 @@ function TemplateModal({ form, editing, onChange, onSave, onClose }) {
 
 function TemplateCard({ template, onEdit, onDelete }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-xl p-5 mb-3 hover:shadow-md transition-shadow">
+    <div className="bg-white border border-gray-200/50 rounded-xl p-5 mb-3 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -161,13 +161,13 @@ function TemplateCard({ template, onEdit, onDelete }) {
         <div className="flex items-center gap-1.5 ml-4 shrink-0">
           <button
             onClick={() => onEdit(template)}
-            className="p-2 rounded-xl bg-white border border-gray-200/60 hover:bg-gray-50 transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-white border border-gray-200/50 hover:bg-gray-50 transition-colors cursor-pointer"
           >
             <Pencil className="w-3.5 h-3.5 text-gray-400" />
           </button>
           <button
             onClick={() => onDelete(template.id)}
-            className="p-2 rounded-xl bg-white border border-gray-200/60 hover:bg-red-50 transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-white border border-gray-200/50 hover:bg-red-50 transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5 text-red-400" />
           </button>
@@ -292,7 +292,7 @@ export default function AdminTemplates() {
       )}
 
       {templates.length === 0 ? (
-        <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card">
           <EmptyState
             icon={FileText}
             title="No templates yet"

@@ -96,7 +96,7 @@ export default function Reports() {
 
   const headerActions = (
     <div className="flex items-center gap-3">
-      <div className="flex rounded-xl p-1 bg-gray-100/80 border border-gray-200/60">
+      <div className="flex rounded-xl p-1 bg-gray-100/80 border border-gray-200/50">
         {PERIOD_OPTIONS.map((p) => (
           <button
             key={p.id}
@@ -127,7 +127,7 @@ export default function Reports() {
 
       {/* Custom date range picker */}
       {period === 'custom' && (
-        <div className="flex items-end gap-3 mb-6 p-4 bg-white border border-gray-200/60 rounded-xl">
+        <div className="flex items-end gap-3 mb-6 p-4 bg-white border border-gray-200/50 rounded-xl">
           <div>
             <label htmlFor="report-start" className="text-xs font-medium text-gray-500 mb-1 block">Start Date</label>
             <input
@@ -220,13 +220,13 @@ function SourceTable({ title, entries }) {
   const sorted = Object.entries(entries || {}).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-hidden">
       <div className="px-6 pt-6 pb-4">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
       </div>
       <table className="w-full">
         <thead>
-          <tr className="bg-gray-50/80 border-b border-gray-200/60">
+          <tr className="bg-gray-50/80 border-b border-gray-200/50">
             <th scope="col" className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
               {title.includes('Source') ? 'Source' : 'State'}
             </th>
@@ -282,7 +282,7 @@ function ResponseTimeDistribution({ buckets, totalLeads }) {
           return (
             <div
               key={bucket.bucket}
-              className="bg-white border border-gray-200/60 rounded-xl p-4"
+              className="bg-white border border-gray-200/50 rounded-xl p-4"
             >
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                 {bucket.bucket}

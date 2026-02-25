@@ -10,5 +10,5 @@ export function SectionHeader({ title, description }) {
 }
 
 export function SectionDivider() {
-  return <div className="border-b border-gray-200/60 pb-8 mb-8" />;
+  return <div className="border-b border-gray-200/50 pb-8 mb-8" />;
 }

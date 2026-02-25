@@ -2,18 +2,18 @@
  * Variant-to-class mapping for badge colors.
  */
 const VARIANT_CLASSES = {
-  success: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
-  warning: 'bg-amber-50 text-amber-700 border border-amber-200/60',
-  danger: 'bg-red-50 text-red-700 border border-red-200/60',
-  info: 'bg-blue-50 text-blue-700 border border-blue-200/60',
-  neutral: 'bg-gray-100 text-gray-600 border border-gray-200/60',
+  success: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10',
+  warning: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/10',
+  danger: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/10',
+  info: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/10',
+  neutral: 'bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-500/10',
 };
 
 /**
  * Size-to-class mapping for badge dimensions.
  */
 const SIZE_CLASSES = {
-  sm: 'text-xs px-2 py-0.5 rounded-md font-medium',
+  sm: 'text-[11px] px-2 py-0.5 rounded-md font-medium',
   md: 'text-xs px-2.5 py-1 rounded-lg font-medium',
 };
 
@@ -29,7 +29,7 @@ export default function Badge({ variant = 'neutral', size = 'sm', children }) {
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.sm;
 
   return (
-    <span className={`inline-flex items-center ${sizeClass} ${variantClass}`}>
+    <span className={`inline-flex items-center whitespace-nowrap ${sizeClass} ${variantClass}`}>
       {children}
     </span>
   );

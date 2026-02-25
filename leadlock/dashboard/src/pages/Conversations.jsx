@@ -92,8 +92,8 @@ export default function Conversations() {
 
       <div className="flex h-[calc(100vh-180px)]">
         {/* Left panel - Lead list */}
-        <div className="w-80 flex-shrink-0 border-r border-gray-200/60 bg-white hidden lg:flex lg:flex-col">
-          <div className="p-3 border-b border-gray-200/60">
+        <div className="w-80 flex-shrink-0 border-r border-gray-200/50 bg-white hidden lg:flex lg:flex-col">
+          <div className="p-3 border-b border-gray-200/50">
             <SearchInput
               value={searchQuery}
               onChange={setSearchQuery}
@@ -157,7 +157,7 @@ export default function Conversations() {
             <>
               {/* Conversation header */}
               {leadDetail?.lead && (
-                <div className="px-6 py-4 border-b border-gray-200/60 bg-white">
+                <div className="px-6 py-4 border-b border-gray-200/50 bg-white">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
@@ -223,7 +223,7 @@ export default function Conversations() {
 
               {/* Timeline */}
               {leadDetail?.events?.length > 0 && (
-                <div className="px-6 py-3 max-h-28 overflow-y-auto border-t border-gray-200/60 bg-white">
+                <div className="px-6 py-3 max-h-28 overflow-y-auto border-t border-gray-200/50 bg-white">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
                     Timeline
                   </p>
@@ -286,7 +286,7 @@ function ReplyCompose({ leadId, onSent }) {
   };
 
   return (
-    <div className="px-6 py-3 border-t border-gray-200/60 bg-white">
+    <div className="px-6 py-3 border-t border-gray-200/50 bg-white">
       {error && (
         <p className="text-xs text-red-500 mb-2">{error}</p>
       )}

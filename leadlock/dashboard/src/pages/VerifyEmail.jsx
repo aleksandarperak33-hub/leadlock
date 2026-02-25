@@ -43,7 +43,7 @@ export default function VerifyEmail() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-8 shadow-sm text-center">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-8 shadow-card text-center">
           {status === 'loading' && (
             <>
               <div className="w-10 h-10 border-3 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4" />

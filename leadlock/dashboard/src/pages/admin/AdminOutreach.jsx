@@ -44,7 +44,7 @@ function ConfirmDialog({ action, onCancel, onConfirm }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm bg-white border border-gray-200/60 rounded-2xl shadow-lg p-6">
+      <div className="w-full max-w-sm bg-white border border-gray-200/50 rounded-2xl shadow-lg p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">
           {isDelete ? 'Delete Prospect' : 'Convert to Client'}
         </h2>
@@ -90,7 +90,7 @@ function ProspectFormModal({ show, editingId, form, onFormChange, onSave, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md bg-white border border-gray-200/60 rounded-2xl shadow-lg p-6">
+      <div className="w-full max-w-md bg-white border border-gray-200/50 rounded-2xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-gray-900">
             {editingId ? 'Edit Prospect' : 'New Prospect'}
@@ -177,7 +177,7 @@ function KanbanBoard({ grouped, onEdit, onDelete, onConvert, canConvert }) {
             {(grouped[status] || []).map((prospect) => (
               <div
                 key={prospect.id}
-                className="bg-white border border-gray-200/60 rounded-xl p-4 shadow-sm cursor-pointer hover:border-gray-300 transition-colors"
+                className="bg-white border border-gray-200/50 rounded-xl p-4 shadow-card cursor-pointer hover:border-gray-300 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1" onClick={() => onEdit(prospect)}>
@@ -324,7 +324,7 @@ function PipelineSummary({ prospects, total }) {
   const wonCount = prospects.filter((p) => p.status === 'won').length;
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-5 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-5 shadow-card">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pipeline</span>

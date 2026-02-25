@@ -10,7 +10,7 @@ export default function ShortcutHelpModal({ shortcuts, onClose }) {
         className="fixed inset-0 bg-black/20 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full border border-gray-200/60 animate-fade-up">
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full border border-gray-200/50 animate-fade-up">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Keyboard className="w-4 h-4 text-gray-400" />

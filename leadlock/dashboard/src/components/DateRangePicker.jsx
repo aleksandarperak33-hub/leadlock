@@ -1,6 +1,6 @@
 export default function DateRangePicker({ value, onChange, options = [] }) {
   return (
-    <div className="flex rounded-lg p-0.5 bg-gray-100/80 border border-gray-200/60">
+    <div className="flex rounded-lg p-0.5 bg-gray-100/80 border border-gray-200/50">
       {options.map(opt => (
         <button
           key={opt}

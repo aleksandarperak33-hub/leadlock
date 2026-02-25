@@ -104,7 +104,7 @@ export default function AdminRevenue() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* MRR by Tier */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">MRR by Tier</h3>
           <div className="space-y-4">
             {sortedTiers.map(([tier, mrr], idx) => {
@@ -135,7 +135,7 @@ export default function AdminRevenue() {
         </div>
 
         {/* Top Clients by Revenue */}
-        <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
           <h3 className="text-lg font-semibold text-gray-900 mb-5">Top Clients by Revenue</h3>
           <div className="space-y-0.5">
             {topClients.map((client, i) => (

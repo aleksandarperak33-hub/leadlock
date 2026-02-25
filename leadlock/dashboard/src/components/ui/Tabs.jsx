@@ -37,7 +37,7 @@ export default function Tabs({ tabs, activeId, onChange }) {
 
   return (
     <div
-      className="flex items-center gap-1 border-b border-gray-200/60 mb-6"
+      className="flex items-center gap-0.5 border-b border-gray-200/50 mb-6"
       role="tablist"
     >
       {tabs.map((tab, index) => {
@@ -54,16 +54,18 @@ export default function Tabs({ tabs, activeId, onChange }) {
             tabIndex={isActive ? 0 : -1}
             className={`px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors relative ${
               isActive
-                ? 'text-orange-600'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'text-gray-900'
+                : 'text-gray-400 hover:text-gray-600'
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className="text-xs text-gray-400 ml-1.5">{tab.count}</span>
+              <span className={`text-[11px] ml-1.5 font-mono ${isActive ? 'text-gray-500' : 'text-gray-300'}`}>
+                {tab.count}
+              </span>
             )}
             {isActive && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full" />
+              <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-gray-900 rounded-full" />
             )}
           </button>
         );

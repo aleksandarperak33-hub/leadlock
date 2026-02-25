@@ -86,7 +86,7 @@ function SystemInfoBar({ system }) {
   if (!system) return null;
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-5 shadow-sm mb-6">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-5 shadow-card mb-6">
       <div className="mb-3">
         <WorkerStatusBar workers={system.workers} />
       </div>
@@ -122,7 +122,7 @@ function PipelineFunnel({ funnel }) {
   const funnelMax = Math.max(...FUNNEL_STAGES.map((s) => funnel?.[s.key] || 0), 1);
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Users className="w-3.5 h-3.5" /> Prospect Pipeline
       </h2>
@@ -150,7 +150,7 @@ function PipelineFunnel({ funnel }) {
 
 function ActivityFeed({ activity }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Activity className="w-3.5 h-3.5" /> Live Activity
       </h2>
@@ -192,7 +192,7 @@ function SequenceChart({ sequencePerformance }) {
   }));
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <BarChart3 className="w-3.5 h-3.5" /> Sequence Step Performance
       </h2>
@@ -230,7 +230,7 @@ function SequenceChart({ sequencePerformance }) {
 
 function AlertsPanel({ alerts }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Shield className="w-3.5 h-3.5" /> Alerts & Issues
       </h2>
@@ -251,7 +251,7 @@ function AlertsPanel({ alerts }) {
             : alert.severity === 'warning' ? 'warning'
             : 'info';
           return (
-            <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border border-gray-200/60 border-l-4 ${borderColor}`}>
+            <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border border-gray-200/50 border-l-4 ${borderColor}`}>
               <Badge variant={variant} size="sm">
                 {alert.severity}
               </Badge>
@@ -268,14 +268,14 @@ function GeoPerformanceTable({ geoPerformance }) {
   if ((geoPerformance || []).length === 0) return null;
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <MapPin className="w-3.5 h-3.5" /> Geographic Performance
       </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-200/60">
+            <tr className="bg-gray-50/80 border-b border-gray-200/50">
               <th className="text-left py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
               <th className="text-left py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
               <th className="text-right py-3 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Prospects</th>
@@ -304,7 +304,7 @@ function GeoPerformanceTable({ geoPerformance }) {
 
 function ScraperStatus({ scraper }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Globe className="w-3.5 h-3.5" /> Scraper Status
       </h2>
@@ -329,7 +329,7 @@ function ScraperStatus({ scraper }) {
       {(scraper?.locations || []).length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {scraper.locations.map((loc, i) => (
-            <span key={i} className="text-xs px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 font-medium border border-gray-200/60">
+            <span key={i} className="text-xs px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 font-medium border border-gray-200/50">
               {typeof loc === 'string' ? loc : `${loc.city}, ${loc.state}`}
             </span>
           ))}
@@ -341,7 +341,7 @@ function ScraperStatus({ scraper }) {
 
 function RecentEmails({ recentEmails, expandedEmail, setExpandedEmail }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-gray-200/50 rounded-2xl p-6 shadow-card">
       <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Mail className="w-3.5 h-3.5" /> Recent Emails
       </h2>
@@ -353,7 +353,7 @@ function RecentEmails({ recentEmails, expandedEmail, setExpandedEmail }) {
             const isExpanded = expandedEmail === email.id;
             const ts = email.sent_at ? new Date(email.sent_at) : null;
             return (
-              <div key={email.id} className="border border-gray-200/60 rounded-xl overflow-hidden">
+              <div key={email.id} className="border border-gray-200/50 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setExpandedEmail(isExpanded ? null : email.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/50 transition-colors cursor-pointer"

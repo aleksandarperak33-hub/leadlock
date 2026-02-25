@@ -51,7 +51,7 @@ const FUNNEL_STAGES = [
 
 function SequenceTab({ steps, templates, saving, onUpdate, onAdd, onRemove, onSave }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm p-6">
+    <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-semibold text-gray-900">Sequence Steps</h2>
         <button
@@ -76,7 +76,7 @@ function SequenceTab({ steps, templates, saving, onUpdate, onAdd, onRemove, onSa
                   {step.step}
                 </span>
               </div>
-              <div className="flex-1 bg-white border border-gray-200/60 rounded-xl p-5">
+              <div className="flex-1 bg-white border border-gray-200/50 rounded-xl p-5">
                 <div className="flex items-center gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
@@ -132,7 +132,7 @@ function AssignModal({ filters, onChange, onAssign, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200/60">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50">
           <h3 className="text-lg font-semibold text-gray-900">Assign Prospects</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer">
             <X className="w-4 h-4 text-gray-400" />
@@ -167,7 +167,7 @@ function AssignModal({ filters, onChange, onAssign, onClose }) {
             </select>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/60">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200/50">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 cursor-pointer">Cancel</button>
           <button onClick={onAssign} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 cursor-pointer">Assign Matching</button>
         </div>
@@ -178,7 +178,7 @@ function AssignModal({ filters, onChange, onAssign, onClose }) {
 
 function ProspectsTab({ prospects, total, page, search, showAssign, assignFilters, onSearch, onPage, onShowAssign, onAssignChange, onAssign, onCloseAssign }) {
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card overflow-hidden">
       <div className="flex items-center justify-between p-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-56">
@@ -206,7 +206,7 @@ function ProspectsTab({ prospects, total, page, search, showAssign, assignFilter
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-200/60">
+            <tr className="bg-gray-50/80 border-b border-gray-200/50">
               {['Name', 'Company', 'Email', 'Step', 'Status', 'Last Sent', 'Activity'].map((h) => (
                 <th key={h} className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">{h}</th>
               ))}
@@ -271,7 +271,7 @@ function AnalyticsTab({ metrics }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm p-6">
+      <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Step Performance</h2>
         {metrics.step_performance?.length > 0 ? (
           <ResponsiveContainer width="100%" height={240}>
@@ -288,7 +288,7 @@ function AnalyticsTab({ metrics }) {
         )}
       </div>
 
-      <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm p-6">
+      <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Daily Send Volume (14 days)</h2>
         {metrics.daily_sends?.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
@@ -304,7 +304,7 @@ function AnalyticsTab({ metrics }) {
         )}
       </div>
 
-      <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm p-6">
+      <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Campaign Funnel</h2>
         {metrics.funnel ? (
           <div className="space-y-3">
@@ -335,7 +335,7 @@ function SettingsTab({ form, onChange, onSave, onDelete }) {
   if (!form) return null;
 
   return (
-    <div className="bg-white border border-gray-200/60 rounded-2xl shadow-sm p-6">
+    <div className="bg-white border border-gray-200/50 rounded-2xl shadow-card p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-6">Campaign Settings</h2>
       <div className="space-y-5">
         <div>
@@ -529,7 +529,7 @@ export default function AdminCampaignDetail() {
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate('/campaigns')} className="p-2 rounded-xl bg-white border border-gray-200/60 hover:bg-gray-50 transition-colors cursor-pointer">
+        <button onClick={() => navigate('/campaigns')} className="p-2 rounded-xl bg-white border border-gray-200/50 hover:bg-gray-50 transition-colors cursor-pointer">
           <ArrowLeft className="w-4 h-4 text-gray-500" />
         </button>
         <div className="flex-1">

@@ -10,29 +10,38 @@
   }
 
   body {
-    background: #FAFAFA;
+    background: #F8F9FB;
     color: #111827;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.011em;
+    font-feature-settings: "cv11", "ss01";
   }
 
-  /* Fixed-width digits for all monospace elements (stats, tables, rates) */
+  /* Tabular figures for all monospace elements */
   .font-mono {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Metric number styling — large display numbers */
+  .metric-value {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "cv11", "tnum";
+    letter-spacing: -0.03em;
   }
 }
 
 /* ========== SCROLLBAR ========== */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+::-webkit-scrollbar-thumb { background: #d4d7dd; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
 /* ========== SELECTION ========== */
 ::selection {
-  background: rgba(249, 115, 22, 0.15);
+  background: rgba(249, 115, 22, 0.12);
   color: #431407;
 }
 
@@ -42,10 +51,10 @@
   --accent-hover: #c2410c;
 }
 .admin-theme ::selection {
-  background: rgba(234, 88, 12, 0.15);
+  background: rgba(234, 88, 12, 0.12);
 }
 
-/* ========== GRADIENT TEXT (used by Login page) ========== */
+/* ========== GRADIENT TEXT ========== */
 .gradient-text {
   background: linear-gradient(135deg, #f97316, #fb923c);
   -webkit-background-clip: text;
@@ -56,15 +65,15 @@
 /* ========== COMPONENT CLASSES ========== */
 @layer components {
   .glass-card {
-    @apply bg-white border border-gray-200/60 rounded-2xl shadow-sm;
+    @apply bg-white border border-gray-200/50 rounded-2xl shadow-card;
   }
 
   .gradient-border {
-    @apply border border-gray-200/60;
+    @apply border border-gray-200/50;
   }
 
   .card-hover-lift {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover;
   }
 
   .card-accent-top {
@@ -179,7 +188,7 @@
 
   background: var(--ld-bg);
   color: var(--ld-text);
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .landing-dark ::selection {
