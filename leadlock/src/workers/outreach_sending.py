@@ -607,8 +607,9 @@ async def _run_quality_gate(
                 retry_result = {
                     **retry_result,
                     "subject": sanitize_dashes(retry_result.get("subject", "")),
-                    "body_html": sanitize_dashes(retry_result.get("body_html", "")),
+                    "body_html": auto_link_urls(sanitize_dashes(retry_result.get("body_html", ""))),
                     "body_text": sanitize_dashes(retry_result.get("body_text", "")),
+                    "cta_variant": email_result.get("cta_variant"),
                 }
                 retry_quality = check_email_quality(
                     subject=retry_result["subject"],
@@ -637,8 +638,9 @@ async def _run_quality_gate(
             result = {
                 **fallback,
                 "subject": sanitize_dashes(fallback["subject"]),
-                "body_html": sanitize_dashes(fallback["body_html"]),
+                "body_html": auto_link_urls(sanitize_dashes(fallback["body_html"])),
                 "body_text": sanitize_dashes(fallback["body_text"]),
+                "cta_variant": email_result.get("cta_variant"),
             }
             # Preserve A/B variant ID so tracking isn't silently lost
             if email_result.get("ab_variant_id"):

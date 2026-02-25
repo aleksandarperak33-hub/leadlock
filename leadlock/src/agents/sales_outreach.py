@@ -29,7 +29,7 @@ CONTENT:
 - HOOK FIRST: Your first real sentence (after the greeting) should hit hard with a specific dollar amount or stat. Examples: "Most [trade] contractors lose about $8,000 a month in leads that go to whoever picks up first" or "78% of homeowners book with the first contractor who responds."
 - Reference something SPECIFIC about their business - their Google rating, their city, their trade
 - One pain point per email: slow lead response kills revenue
-- Soft CTA - ask a genuine question about their business, don't push a demo. Make the question specific to their workflow, not generic.
+- CTA: Follow the step-specific CTA instructions exactly. If a booking_url is in the prospect details, you MUST include it as a clickable link. If no booking_url, ask a genuine question about their workflow.
 
 FORMATTING:
 - No exclamation marks. No "game-changer", "revolutionary", "transform", or "unlock"
