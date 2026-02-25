@@ -415,12 +415,13 @@ async def send_sequence_email(
             )
         return
 
-    # Sanitize dashes from AI-generated content
+    # Sanitize dashes from AI-generated content and attach CTA variant for tracking
     email_result = {
         **email_result,
         "subject": sanitize_dashes(email_result.get("subject", "")),
         "body_html": sanitize_dashes(email_result.get("body_html", "")),
         "body_text": sanitize_dashes(email_result.get("body_text", "")),
+        "cta_variant": cta_variant,
     }
 
     # Quality gate
@@ -700,7 +701,7 @@ async def _record_send(
         ai_cost_usd=email_result.get("ai_cost_usd", 0.0),
         fallback_used=email_result.get("fallback_used", False),
         ab_variant_id=ab_variant_uuid,
-        cta_variant=cta_variant,
+        cta_variant=email_result.get("cta_variant"),
     )
     db.add(email_record)
 
