@@ -238,6 +238,12 @@ async def get_ab_test_results() -> dict:
     return await _cached_query(cache_key, _query)
 
 
+PIPELINE_STAGE_ORDER = [
+    "cold", "contacted", "demo_scheduled", "demo_completed",
+    "proposal_sent", "won", "lost",
+]
+
+
 async def get_pipeline_waterfall(
     tenant_id: Optional[uuid.UUID] = None,
 ) -> dict:
@@ -246,7 +252,6 @@ async def get_pipeline_waterfall(
 
     async def _query():
         async with async_session_factory() as db:
-            # Count by status
             result = await db.execute(
                 select(
                     Outreach.status,
@@ -256,10 +261,21 @@ async def get_pipeline_waterfall(
                 ).group_by(Outreach.status)
             )
             rows = result.fetchall()
+            raw = {row[0]: row[1] for row in rows}
 
-            return {
-                "stages": {row[0]: row[1] for row in rows},
-            }
+            # Return stages in correct funnel order, including unlisted statuses at end
+            ordered = []
+            seen = set()
+            for stage in PIPELINE_STAGE_ORDER:
+                if stage in raw:
+                    ordered.append({"stage": stage, "count": raw[stage]})
+                    seen.add(stage)
+            for stage, count in raw.items():
+                if stage not in seen:
+                    ordered.append({"stage": stage, "count": count})
+
+            total = sum(row[1] for row in rows)
+            return {"stages": ordered, "total": total}
 
     return await _cached_query(cache_key, _query)
 

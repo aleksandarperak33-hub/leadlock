@@ -171,7 +171,7 @@ export default function AdminAnalytics() {
     ? abTests
     : abTests?.experiments || (abTests ? [abTests] : []);
 
-  // Pipeline: backend returns {stages: {status: count}}
+  // Pipeline: backend returns {stages: [{stage, count}, ...], total}
   const pipelineStages = pipeline?.stages || pipeline;
 
   return (

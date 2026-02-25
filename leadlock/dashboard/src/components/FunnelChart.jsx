@@ -17,7 +17,7 @@ export default function FunnelChart({ stages, className = '' }) {
     );
   }
 
-  const topCount = entries[0]?.[1] || 1;
+  const topCount = Math.max(...entries.map(([, v]) => v), 1);
 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>

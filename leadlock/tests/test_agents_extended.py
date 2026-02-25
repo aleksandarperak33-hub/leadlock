@@ -309,7 +309,8 @@ class TestConductorComplianceBlocked:
 
         assert "compliance_blocked" in result["status"]
         assert result["lead_id"] is not None
-        db.commit.assert_called_once()
+        # Two commits: split commit (lead+consent) + compliance-blocked state
+        assert db.commit.call_count == 2
 
 
 # ============================================================
