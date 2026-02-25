@@ -335,15 +335,22 @@ async def submit_tollfree_verification(
     business_name: str,
     email: str,
     website: Optional[str] = None,
+    opt_in_image_urls: Optional[list[str]] = None,
 ) -> dict:
     """
     Submit a toll-free number for verification.
 
     Args:
         phone_sid: The Twilio phone number SID (PNxxxx).
+        business_name: Business display name.
+        email: Contact/notification email.
+        website: Business website URL.
+        opt_in_image_urls: URLs to screenshots showing SMS opt-in mechanism.
 
     Returns: {"result": {"verification_sid": str}, "error": str|None}
     """
+    default_opt_in_urls = ["https://leadlock.org/sms-consent.svg"]
+
     try:
         twilio = _get_twilio_client()
         verification = await _run_sync(
@@ -356,7 +363,8 @@ async def submit_tollfree_verification(
             use_case_categories=["CUSTOMER_CARE"],
             use_case_summary=(
                 "Automated lead response and appointment booking for home services. "
-                "Homeowners request service via web forms and receive SMS confirmations."
+                "Homeowners request service via web forms and receive SMS confirmations. "
+                "Consent is collected via a dedicated checkbox on the service request form."
             ),
             production_message_sample=(
                 f"Hi! This is Sarah from {business_name}. "
@@ -365,10 +373,13 @@ async def submit_tollfree_verification(
                 "Reply STOP to opt out."
             ),
             opt_in_type="VERBAL",
+            opt_in_image_urls=opt_in_image_urls or default_opt_in_urls,
             message_volume="1,000",
             additional_information=(
                 "AI-powered speed-to-lead platform for home services contractors. "
-                "All messages include opt-out instructions."
+                "All messages include STOP opt-out instructions and business name. "
+                "SMS consent is collected separately via checkbox, not bundled with "
+                "other terms. Maximum 3 follow-up messages per lead."
             ),
         )
         logger.info("Toll-free verification submitted: %s", verification.sid)
