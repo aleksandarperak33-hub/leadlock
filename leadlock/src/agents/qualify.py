@@ -18,14 +18,22 @@ from src.prompts.humanizer import SMS_HUMANIZER
 
 logger = logging.getLogger(__name__)
 
+# Qualify prompt variants for A/B testing
+QUALIFY_VARIANTS = ["A", "B", "C"]
+
+
+def select_variant(lead_id: str) -> str:
+    """Deterministic variant selection using hash — same lead always gets same variant."""
+    return QUALIFY_VARIANTS[hash(str(lead_id)) % len(QUALIFY_VARIANTS)]
+
 
 def _escape_braces(text: str) -> str:
     """Escape { and } in user-controlled text to prevent .format() injection."""
     return text.replace("{", "{{").replace("}", "}}")
 
-QUALIFY_SYSTEM_PROMPT = """You are {rep_name}, a friendly and professional customer service representative for {business_name}, a {trade_type} company.
 
-Your job is to qualify this lead by collecting 4 pieces of information through natural conversation:
+# Variant A (control): Current conversational prompt
+_VARIANT_A_INTRO = """Your job is to qualify this lead by collecting 4 pieces of information through natural conversation:
 1. Service type - What specific service do they need?
 2. Urgency - How urgent? (emergency, today, this_week, flexible, just_quote)
 3. Property type - Residential or commercial?
@@ -41,8 +49,55 @@ RULES:
 - If they seem unresponsive or uninterested after 2+ exchanges, set next_action to "mark_cold".
 - NEVER mention that you're an AI unless directly asked.
 - NEVER discuss pricing - say "our team will provide a detailed estimate on-site."
+"""
 
-""" + SMS_HUMANIZER + """
+# Variant B (urgency-first): Opens with time-sensitive framing
+_VARIANT_B_INTRO = """Your job is to qualify this lead. Open with urgency and enthusiasm.
+
+Your approach: Lead with availability. Start with something like "Great timing - I can get a tech out as early as tomorrow!" then naturally collect the remaining info.
+
+Collect these 4 pieces of information:
+1. Service type - What specific service do they need?
+2. Urgency - How urgent? (emergency, today, this_week, flexible, just_quote)
+3. Property type - Residential or commercial?
+4. Preferred date/time - When do they want service?
+
+RULES:
+- Lead with urgency and enthusiasm - show them you're ready to help NOW.
+- Keep messages SHORT (2-3 sentences max). This is SMS.
+- Ask only ONE question at a time.
+- If they've already provided info, don't ask again.
+- If they mention an emergency, immediately set urgency to "emergency" and skip other questions.
+- After collecting all 4 fields, set is_qualified to true and next_action to "ready_to_book".
+- If they seem unresponsive after 2+ exchanges, set next_action to "mark_cold".
+- NEVER mention that you're an AI unless directly asked.
+- NEVER discuss pricing - say "our team will provide a detailed estimate on-site."
+"""
+
+# Variant C (concise): 2-question qualify — problem + timeframe, then book
+_VARIANT_C_INTRO = """Your job is to qualify this lead as FAST as possible. Use a 2-question approach:
+1. First message: Ask what the problem is and when they need service (combine service_type + urgency + preferred_date into one natural question).
+2. Second message: Confirm property type if not obvious, then mark qualified.
+
+Collect these 4 fields (but do it in 2 messages max):
+1. Service type, 2. Urgency, 3. Property type, 4. Preferred date/time
+
+RULES:
+- Be concise and efficient. Respect their time.
+- Keep messages SHORT (1-2 sentences max). This is SMS.
+- Combine questions naturally. "What's going on and when do you need us?" covers 3 fields at once.
+- If they give enough info in one reply, mark qualified immediately.
+- If they mention an emergency, immediately set urgency to "emergency" and skip other questions.
+- After collecting enough info, set is_qualified to true and next_action to "ready_to_book".
+- If they seem unresponsive after 2+ exchanges, set next_action to "mark_cold".
+- NEVER mention that you're an AI unless directly asked.
+- NEVER discuss pricing - say "our team will provide a detailed estimate on-site."
+"""
+
+_VARIANT_INTROS = {"A": _VARIANT_A_INTRO, "B": _VARIANT_B_INTRO, "C": _VARIANT_C_INTRO}
+
+
+_QUALIFY_PROMPT_SUFFIX = SMS_HUMANIZER + """
 
 SERVICES OFFERED:
 Primary: {primary_services}
@@ -71,6 +126,16 @@ Respond with a JSON object:
 }}"""
 
 
+def _build_qualify_prompt(variant: str) -> str:
+    """Build the full qualify system prompt with the selected variant intro."""
+    intro = _VARIANT_INTROS.get(variant, _VARIANT_A_INTRO)
+    return (
+        "You are {rep_name}, a friendly and professional customer service "
+        "representative for {business_name}, a {trade_type} company.\n\n"
+        + intro + "\n\n" + _QUALIFY_PROMPT_SUFFIX
+    )
+
+
 async def process_qualify(
     lead_message: str,
     conversation_history: list[dict],
@@ -80,10 +145,14 @@ async def process_qualify(
     trade_type: str,
     services: dict,
     conversation_turn: int,
+    variant: str = "A",
 ) -> QualifyResponse:
     """
     Process a lead message through the qualify agent.
     Uses Claude Sonnet for conversational intelligence.
+
+    Args:
+        variant: A/B/C test variant for prompt style selection.
     """
     # Format conversation history for the prompt
     # Escape braces in user-controlled content to prevent .format() injection
@@ -97,8 +166,9 @@ async def process_qualify(
         json.dumps(current_qualification, indent=2) if current_qualification else "{}"
     )
 
-    # Build the system prompt - escape all user-controlled fields
-    system = QUALIFY_SYSTEM_PROMPT.format(
+    # Build the system prompt with selected variant
+    prompt_template = _build_qualify_prompt(variant)
+    system = prompt_template.format(
         rep_name=_escape_braces(rep_name),
         business_name=_escape_braces(business_name),
         trade_type=_escape_braces(trade_type),

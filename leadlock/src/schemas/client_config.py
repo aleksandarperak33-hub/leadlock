@@ -85,3 +85,5 @@ class ClientConfig(BaseModel):
     emergency_keywords: list[str] = Field(default_factory=list)
     lead_sources: dict = Field(default_factory=dict)
     scheduling: SchedulingConfig = Field(default_factory=SchedulingConfig)
+    booking_url: Optional[str] = None  # e.g. "https://calendly.com/acme-hvac"
+    avg_job_value: Optional[float] = None  # For ROI calculations

@@ -171,8 +171,8 @@ class TestHandleStuckLead:
             assert lead.state == "cold"
             assert lead.current_agent == "followup"
 
-    async def test_booking_over_2hr_alerts_admin_no_state_change(self):
-        """booking lead stuck >2hr logs an admin alert but does NOT change state."""
+    async def test_booking_over_2hr_schedules_escalation_and_alerts(self):
+        """booking lead stuck >2hr schedules a FollowupTask and logs an admin alert."""
         now = datetime.now(timezone.utc)
         lead = _make_lead(
             state="booking",
@@ -191,11 +191,12 @@ class TestHandleStuckLead:
 
             # State should NOT change
             assert lead.state == original_state
-            # An alert event should be added
-            db.add.assert_called_once()
-            # Verify the EventLog was created with alert action
+            # Both a FollowupTask and an EventLog should be added
+            assert db.add.call_count == 2
+            # First call is the FollowupTask (booking_escalation)
+            followup_task = db.add.call_args_list[0][0][0]
+            assert followup_task.task_type == "booking_escalation"
+            # Second call is the EventLog with escalation action
             event_kwargs = mock_event_cls.call_args
-            assert event_kwargs.kwargs.get("action") == "stuck_lead_alert" or (
-                len(event_kwargs.args) == 0
-                and "ALERT" in str(event_kwargs.kwargs.get("message", ""))
-            )
+            assert event_kwargs.kwargs.get("action") == "booking_escalation_scheduled"
+            assert "escalation" in event_kwargs.kwargs.get("message", "").lower()

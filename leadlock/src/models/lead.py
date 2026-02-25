@@ -54,6 +54,9 @@ class Lead(Base):
     problem_description: Mapped[Optional[str]] = mapped_column(Text)
     qualification_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
 
+    # A/B test variant for qualify agent prompts
+    qualify_variant: Mapped[Optional[str]] = mapped_column(String(10))
+
     # AI agent tracking
     current_agent: Mapped[Optional[str]] = mapped_column(
         String(30)

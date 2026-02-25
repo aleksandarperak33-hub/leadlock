@@ -31,6 +31,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const LeadFeed = lazy(() => import('./pages/LeadFeed'));
 const Conversations = lazy(() => import('./pages/Conversations'));
 const Reports = lazy(() => import('./pages/Reports'));
+const ROI = lazy(() => import('./pages/ROI'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Bookings = lazy(() => import('./pages/Bookings'));
 const Compliance = lazy(() => import('./pages/Compliance'));
@@ -145,6 +146,7 @@ function App() {
           <Route path="/conversations/:leadId?" element={<Page component={Conversations} />} />
           <Route path="/bookings" element={<Page component={Bookings} />} />
           <Route path="/reports" element={<Page component={Reports} />} />
+          <Route path="/roi" element={<Page component={ROI} />} />
           <Route path="/compliance" element={<Page component={Compliance} />} />
           <Route path="/settings" element={<Page component={Settings} />} />
           <Route path="/billing" element={<Page component={Billing} />} />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, MessageSquare, Calendar, BarChart3,
-  Shield, Settings2, CreditCard, AlertTriangle, Mail, X, Zap,
+  TrendingUp, Shield, Settings2, CreditCard, AlertTriangle, Mail, X, Zap,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import BaseLayout from './BaseLayout';
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/conversations', icon: MessageSquare, label: 'Conversations' },
   { to: '/bookings', icon: Calendar, label: 'Bookings' },
   { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/roi', icon: TrendingUp, label: 'ROI' },
   { to: '/compliance', icon: Shield, label: 'Compliance' },
   { to: '/billing', icon: CreditCard, label: 'Billing' },
   { to: '/settings', icon: Settings2, label: 'Settings' },

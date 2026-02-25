@@ -181,6 +181,66 @@ FOLLOWUP_TEMPLATES = {
     },
 }
 
+# === BOOKING ESCALATION TEMPLATES ===
+BOOKING_ESCALATION_TEMPLATES = {
+    "booking_escalation": {
+        "A": (
+            "Hi {first_name}, we're still holding your spot! "
+            "Book here: {booking_url} or reply to confirm."
+        ),
+        "B": (
+            "Hey {first_name}, just wanted to make sure we don't lose your spot. "
+            "You can book directly here: {booking_url} — or just reply and we'll get it locked in!"
+        ),
+    },
+}
+
+# === SAME-DAY REMINDER TEMPLATES ===
+SAME_DAY_REMINDER_TEMPLATES = {
+    "same_day_reminder": {
+        "A": (
+            "Reminder: Your {service_type} appointment with {business_name} "
+            "is today at {time_window}. "
+            "Reply YES to confirm or call us to reschedule!"
+        ),
+        "B": (
+            "Hi {first_name}! Just a reminder - your {service_type} appointment "
+            "with {business_name} is today at {time_window}. "
+            "See you soon! Reply to confirm."
+        ),
+    },
+}
+
+# === NO-SHOW RECOVERY TEMPLATES ===
+NO_SHOW_RECOVERY_TEMPLATES = {
+    "no_show_recovery": {
+        "A": (
+            "We missed you today, {first_name}! Want to reschedule your {service_type}? "
+            "Reply YES or book here: {booking_url}"
+        ),
+        "B": (
+            "Hi {first_name}, looks like we missed connecting today. "
+            "No worries - want to reschedule? Reply or book here: {booking_url}"
+        ),
+    },
+}
+
+# === REVIEW REQUEST WITH LINK TEMPLATES ===
+REVIEW_REQUEST_LINK_TEMPLATES = {
+    "review_request_with_link": {
+        "A": (
+            "Hi {first_name}! How did your {service_type} go? "
+            "If you had a great experience, a quick review would mean the world to us: "
+            "{review_url}"
+        ),
+        "B": (
+            "Hey {first_name}, {business_name} here! "
+            "Hope your {service_type} went well. "
+            "If you have a moment, we'd appreciate a quick review: {review_url}"
+        ),
+    },
+}
+
 # === AI DISCLOSURE (California SB 1001) ===
 AI_DISCLOSURE = "This is an AI assistant helping schedule your appointment."
 
@@ -199,6 +259,10 @@ def render_template(
         "intake": INTAKE_TEMPLATES,
         "booking": BOOKING_TEMPLATES,
         "followup": FOLLOWUP_TEMPLATES,
+        "booking_escalation": BOOKING_ESCALATION_TEMPLATES,
+        "same_day_reminder": SAME_DAY_REMINDER_TEMPLATES,
+        "no_show_recovery": NO_SHOW_RECOVERY_TEMPLATES,
+        "review_request_link": REVIEW_REQUEST_LINK_TEMPLATES,
     }
 
     category_templates = templates.get(category, {})

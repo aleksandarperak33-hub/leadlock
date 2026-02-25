@@ -54,7 +54,7 @@ async def _heartbeat():
 
 
 async def run_sms_dispatch():
-    """Main loop — process followup tasks, then booking reminders."""
+    """Main loop — process followup tasks, then booking reminders, then same-day reminders."""
     logger.info("SMS dispatch worker started (poll every %ds)", POLL_INTERVAL_SECONDS)
 
     while True:
@@ -62,8 +62,11 @@ async def run_sms_dispatch():
             # Phase 1: Due followup tasks
             await _process_due_followups()
 
-            # Phase 2: Booking reminders (cheap check — returns immediately when nothing due)
+            # Phase 2: Day-before booking reminders
             await _send_due_reminders()
+
+            # Phase 3: Same-day reminders (2h before appointment)
+            await _send_same_day_reminders()
         except Exception as e:
             logger.error("SMS dispatch error: %s", str(e))
 
@@ -239,6 +242,19 @@ async def _execute_followup_task(db: AsyncSession, task: FollowupTask):
         logger.info("Followup skipped for lead %s: %s", str(lead.id)[:8], compliance.reason)
         return
 
+    # Resolve booking_url for escalation/no-show templates
+    task_booking_url = None
+    if task.task_type in ("booking_escalation", "no_show_recovery"):
+        task_booking_url = config.booking_url
+        if not task_booking_url:
+            try:
+                from src.services.config_cache import get_sales_config
+                sales_cfg = await get_sales_config(tenant_id=client.id)
+                if sales_cfg:
+                    task_booking_url = sales_cfg.get("booking_url")
+            except (KeyError, TypeError, ValueError, OSError):
+                pass
+
     # Generate followup message
     response = await process_followup(
         lead_first_name=lead.first_name,
@@ -247,6 +263,7 @@ async def _execute_followup_task(db: AsyncSession, task: FollowupTask):
         rep_name=config.persona.rep_name,
         followup_type=task.task_type,
         sequence_number=task.sequence_number,
+        booking_url=task_booking_url,
     )
 
     # Send via shared compliance helper
@@ -395,6 +412,114 @@ async def _send_single_reminder(db: AsyncSession, booking: Booking) -> bool:
         client_id=client.id,
         action="booking_reminder_sent",
         message=f"Day-before reminder sent for {booking.appointment_date}",
+    ))
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Same-day reminders (2h before appointment)
+# ---------------------------------------------------------------------------
+
+async def _send_same_day_reminders():
+    """Find and send same-day reminders for today's bookings 2h before appointment."""
+    today = date.today()
+    now = datetime.now(timezone.utc)
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(Booking)
+            .where(
+                and_(
+                    Booking.appointment_date == today,
+                    Booking.status == "confirmed",
+                    Booking.same_day_reminder_sent == False,  # noqa: E712
+                    Booking.time_window_start.isnot(None),
+                )
+            )
+            .limit(50)
+            .with_for_update(skip_locked=True)
+        )
+        bookings = result.scalars().all()
+
+        if not bookings:
+            return 0
+
+        sent_count = 0
+        for booking in bookings:
+            # Check if we're within 2h of appointment time
+            try:
+                appt_dt = datetime.combine(
+                    booking.appointment_date,
+                    booking.time_window_start,
+                    tzinfo=timezone.utc,
+                )
+                hours_until = (appt_dt - now).total_seconds() / 3600
+                if hours_until > 2 or hours_until < 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+
+            try:
+                success = await _send_single_same_day_reminder(db, booking)
+                if success:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to send same-day reminder for booking %s: %s",
+                    str(booking.id)[:8], str(e),
+                )
+
+        if sent_count > 0:
+            logger.info("Sent %d same-day reminders", sent_count)
+
+        await db.commit()
+
+    return sent_count
+
+
+async def _send_single_same_day_reminder(db: AsyncSession, booking: Booking) -> bool:
+    """Send a same-day reminder for a single booking. Returns True if sent."""
+    lead = await db.get(Lead, booking.lead_id)
+    client = await db.get(Client, booking.client_id)
+
+    if not lead or not client:
+        return False
+
+    if lead.state == "opted_out":
+        booking.same_day_reminder_sent = True
+        return False
+
+    config = ClientConfig(**client.config) if client.config else ClientConfig()
+
+    # Build time window string
+    time_window = None
+    if booking.time_window_start:
+        start_str = booking.time_window_start.strftime("%I:%M %p")
+        end_str = booking.time_window_end.strftime("%I:%M %p") if booking.time_window_end else ""
+        time_window = f"{start_str} - {end_str}" if end_str else start_str
+
+    response = await process_followup(
+        lead_first_name=lead.first_name,
+        service_type=booking.service_type,
+        business_name=client.business_name,
+        rep_name=config.persona.rep_name,
+        followup_type="same_day_reminder",
+        sequence_number=1,
+        time_window=time_window,
+    )
+
+    sms_result = await _send_compliant_sms(db, lead, client, response.message)
+    if sms_result is None:
+        return False
+
+    booking.same_day_reminder_sent = True
+
+    db.add(EventLog(
+        lead_id=lead.id,
+        client_id=client.id,
+        action="same_day_reminder_sent",
+        message=f"Same-day reminder sent for {booking.appointment_date} at {time_window}",
     ))
 
     return True

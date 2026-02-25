@@ -69,6 +69,39 @@ async def record_signal(
     )
 
 
+async def record_lead_signal(
+    lead_id: str,
+    signal_type: str,
+    metadata: dict,
+) -> None:
+    """
+    Record a lead lifecycle signal for the SMS conversion learning loop.
+
+    Args:
+        lead_id: UUID string of the lead
+        signal_type: lead_qualified, lead_booked, lead_went_cold, lead_reengaged
+        metadata: Context data (qualify_variant, response_count, time_to_qualify_seconds, source)
+    """
+    dimensions = {
+        "lead_id": lead_id,
+        **metadata,
+    }
+
+    # Positive signals: qualified, booked, reengaged. Negative: went_cold.
+    value = 0.0 if signal_type == "lead_went_cold" else 1.0
+
+    await record_signal(
+        signal_type=signal_type,
+        dimensions=dimensions,
+        value=value,
+    )
+
+    logger.info(
+        "Lead signal recorded: type=%s lead=%s meta=%s",
+        signal_type, lead_id[:8], metadata,
+    )
+
+
 async def get_best_send_time(trade: str, state: str) -> Optional[str]:
     """
     Query the best time bucket for email sends based on open rate signals.

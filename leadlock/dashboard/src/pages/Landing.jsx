@@ -789,7 +789,9 @@ export default function Landing() {
                   Our <span className="text-orange-400 font-semibold">Growth Program</span> combines AI-powered lead generation with instant response. We run the ads, build the funnels, and LeadLock closes. Typical ROI: 5-8x.
                 </p>
                 <a
-                  href="mailto:growth@leadlock.org?subject=Growth%20Program%20Inquiry"
+                  href="https://cal.com/aleksandar-perak-b1yxds/30min"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="ld-btn-primary px-8 py-3.5 text-sm font-semibold inline-flex items-center gap-2"
                 >
                   Talk to Sales <ArrowRight className="w-4 h-4" />

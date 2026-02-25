@@ -258,6 +258,11 @@ class TestRunStuckLeadSweeper:
                 return_value=0,
             ),
             patch(
+                "src.workers.lead_state_manager._detect_no_shows",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "src.workers.lead_state_manager._archive_old_leads",
                 new_callable=AsyncMock,
                 return_value=0,
@@ -316,6 +321,11 @@ class TestRunStuckLeadSweeper:
             ),
             patch(
                 "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._detect_no_shows",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -416,6 +426,11 @@ class TestRunStuckLeadSweeper:
             ),
             patch(
                 "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._detect_no_shows",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -705,11 +720,15 @@ class TestRunLeadLifecycle:
     """run_lead_state_manager() - main loop behaviour."""
 
     async def test_loop_calls_subroutines_then_heartbeat_then_sleeps(self):
-        """One iteration: complete + archive + dead + recycle -> _heartbeat -> sleep."""
+        """One iteration: complete + no_shows + archive + dead + recycle -> _heartbeat -> sleep."""
         call_order = []
 
         async def fake_complete():
             call_order.append("complete")
+            return 0
+
+        async def fake_no_shows():
+            call_order.append("no_shows")
             return 0
 
         async def fake_archive():
@@ -742,6 +761,10 @@ class TestRunLeadLifecycle:
                 side_effect=fake_complete,
             ),
             patch(
+                "src.workers.lead_state_manager._detect_no_shows",
+                side_effect=fake_no_shows,
+            ),
+            patch(
                 "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fake_archive,
             ),
@@ -772,6 +795,7 @@ class TestRunLeadLifecycle:
 
         assert call_order == [
             "complete",
+            "no_shows",
             "archive",
             "dead",
             "recycle",
@@ -801,6 +825,11 @@ class TestRunLeadLifecycle:
             ),
             patch(
                 "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._detect_no_shows",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -855,6 +884,11 @@ class TestRunLeadLifecycle:
             ),
             patch(
                 "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._detect_no_shows",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -925,6 +959,11 @@ class TestRunLeadLifecycle:
                 return_value=0,
             ),
             patch(
+                "src.workers.lead_state_manager._detect_no_shows",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fail_archive,
             ),
@@ -977,6 +1016,11 @@ class TestRunLeadLifecycle:
             ),
             patch(
                 "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._detect_no_shows",
                 new_callable=AsyncMock,
                 return_value=0,
             ),

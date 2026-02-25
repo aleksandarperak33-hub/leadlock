@@ -71,16 +71,19 @@ async def run_lead_state_manager():
             # Phase 2: Complete booked leads past appointment date
             completed = await _complete_booked_leads()
 
+            # Phase 2b: Detect no-shows (2h after missed appointment)
+            no_shows = await _detect_no_shows()
+
             # Phase 3-5: Lifecycle transitions
             archived = await _archive_old_leads()
             dead = await _mark_dead_leads()
             recycled = await _schedule_cold_recycling()
 
-            total = stuck + completed + archived + dead + recycled
+            total = stuck + completed + no_shows + archived + dead + recycled
             if total > 0:
                 logger.info(
-                    "Lead state manager: stuck=%d completed=%d archived=%d dead=%d recycled=%d",
-                    stuck, completed, archived, dead, recycled,
+                    "Lead state manager: stuck=%d completed=%d no_shows=%d archived=%d dead=%d recycled=%d",
+                    stuck, completed, no_shows, archived, dead, recycled,
                 )
         except Exception as e:
             logger.error("Lead state manager error: %s", str(e), exc_info=True)
@@ -152,11 +155,19 @@ def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:
         ))
 
     elif state == "booking":
+        # Schedule booking escalation SMS via FollowupTask
+        db.add(FollowupTask(
+            lead_id=lead.id,
+            client_id=lead.client_id,
+            task_type="booking_escalation",
+            scheduled_at=now,
+            sequence_number=1,
+        ))
         db.add(EventLog(
             lead_id=lead.id,
             client_id=lead.client_id,
-            action="stuck_lead_alert",
-            message=f"ALERT: Lead stuck in booking for {age_minutes}min - needs admin attention",
+            action="booking_escalation_scheduled",
+            message=f"Booking escalation scheduled — lead stuck in booking for {age_minutes}min",
             data={"alert_type": "stuck_booking", "age_minutes": age_minutes},
         ))
 
@@ -255,6 +266,93 @@ async def _complete_booked_leads() -> int:
         if count > 0:
             await db.commit()
             logger.info("Completed %d booked leads past appointment date", count)
+
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Phase 2b: Detect no-shows (2h after missed appointment)
+# ---------------------------------------------------------------------------
+
+NO_SHOW_WINDOW_HOURS = 2  # Mark as no-show 2h after appointment time
+
+
+async def _detect_no_shows() -> int:
+    """Detect no-shows: bookings where appointment_time was >2h ago and not completed."""
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    count = 0
+
+    async with async_session_factory() as db:
+        # Find confirmed bookings for today with time windows that have passed
+        result = await db.execute(
+            select(Lead, Booking).join(
+                Booking, Booking.lead_id == Lead.id
+            ).where(
+                and_(
+                    Lead.state == "booked",
+                    Lead.archived == False,  # noqa: E712
+                    Booking.status == "confirmed",
+                    Booking.appointment_date == today,
+                    Booking.time_window_start.isnot(None),
+                )
+            ).limit(50)
+        )
+        rows = result.all()
+
+        for lead, booking in rows:
+            # Check if appointment time + 2h has passed
+            try:
+                appt_dt = datetime.combine(
+                    booking.appointment_date,
+                    booking.time_window_end or booking.time_window_start,
+                    tzinfo=timezone.utc,
+                )
+                hours_since = (now - appt_dt).total_seconds() / 3600
+                if hours_since < NO_SHOW_WINDOW_HOURS:
+                    continue
+            except (TypeError, ValueError):
+                continue
+
+            # Mark as no-show
+            booking.status = "no_show"
+            count += 1
+
+            # Schedule no-show recovery SMS via FollowupTask
+            existing_recovery = await db.execute(
+                select(FollowupTask).where(
+                    and_(
+                        FollowupTask.lead_id == lead.id,
+                        FollowupTask.task_type == "no_show_recovery",
+                        FollowupTask.status == "pending",
+                    )
+                ).limit(1)
+            )
+            if not existing_recovery.scalar_one_or_none():
+                db.add(FollowupTask(
+                    lead_id=lead.id,
+                    client_id=lead.client_id,
+                    task_type="no_show_recovery",
+                    scheduled_at=now,
+                    sequence_number=1,
+                ))
+
+            db.add(EventLog(
+                lead_id=lead.id,
+                client_id=lead.client_id,
+                action="no_show_detected",
+                message=f"No-show detected: appointment was {booking.appointment_date} at {booking.time_window_start}",
+                data={"hours_since": round(hours_since, 1)},
+            ))
+
+            logger.info(
+                "No-show detected: lead=%s booking=%s",
+                str(lead.id)[:8], str(booking.id)[:8],
+            )
+
+        if count > 0:
+            await db.commit()
+            logger.info("Detected %d no-shows", count)
 
     return count
 

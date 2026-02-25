@@ -20,6 +20,8 @@ async def process_followup(
     appointment_date: Optional[str] = None,
     time_window: Optional[str] = None,
     tech_name: Optional[str] = None,
+    booking_url: Optional[str] = None,
+    review_url: Optional[str] = None,
 ) -> FollowupResponse:
     """
     Generate a follow-up message based on type and sequence.
@@ -88,6 +90,72 @@ async def process_followup(
             followup_type="review_request",
             sequence_number=1,
             internal_notes="Post-service review request",
+        )
+
+    elif followup_type == "booking_escalation":
+        message = render_template(
+            template_key="booking_escalation",
+            category="booking_escalation",
+            first_name=display_name,
+            business_name=business_name,
+            booking_url=booking_url or business_name,
+        )
+
+        return FollowupResponse(
+            message=message,
+            followup_type="booking_escalation",
+            sequence_number=1,
+            internal_notes="Booking escalation - lead stuck in booking state",
+        )
+
+    elif followup_type == "same_day_reminder":
+        message = render_template(
+            template_key="same_day_reminder",
+            category="same_day_reminder",
+            first_name=display_name,
+            business_name=business_name,
+            service_type=display_service,
+            time_window=time_window or "your scheduled time",
+        )
+
+        return FollowupResponse(
+            message=message,
+            followup_type="same_day_reminder",
+            sequence_number=1,
+            internal_notes="Same-day appointment reminder (2h before)",
+        )
+
+    elif followup_type == "no_show_recovery":
+        message = render_template(
+            template_key="no_show_recovery",
+            category="no_show_recovery",
+            first_name=display_name,
+            service_type=display_service,
+            booking_url=booking_url or business_name,
+        )
+
+        return FollowupResponse(
+            message=message,
+            followup_type="no_show_recovery",
+            sequence_number=1,
+            internal_notes="No-show recovery message",
+        )
+
+    elif followup_type == "review_request_with_link":
+        message = render_template(
+            template_key="review_request_with_link",
+            category="review_request_link",
+            first_name=display_name,
+            business_name=business_name,
+            service_type=display_service,
+            review_url=review_url or "",
+        )
+
+        return FollowupResponse(
+            message=message,
+            followup_type="review_request_with_link",
+            sequence_number=1,
+            internal_notes="Post-service review request with link",
         )
 
     else:

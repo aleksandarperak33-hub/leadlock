@@ -78,6 +78,7 @@ export const api = {
     }),
 
   getMetrics: (period = '7d') => request(`/metrics?period=${period}`),
+  getROI: (period = '30d') => request(`/roi?period=${period}`),
 
   getLeads: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

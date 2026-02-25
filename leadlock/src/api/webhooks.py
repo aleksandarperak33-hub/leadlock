@@ -34,6 +34,14 @@ from src.services.phone_validation import normalize_phone
 from src.utils.webhook_signatures import validate_webhook_source, compute_payload_hash
 from src.utils.rate_limiter import check_webhook_rate_limits
 from src.utils.logging import get_correlation_id
+from src.api.webhook_sources import (
+    parse_google_lsa_lead,
+    parse_angi_lead,
+    parse_facebook_leads,
+    parse_missed_call_lead,
+    parse_thumbtack_lead,
+    parse_yelp_lead,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webhook", tags=["webhooks"])
@@ -396,47 +404,19 @@ async def google_lsa_webhook(
     )
 
     try:
-        # Billing / phone gate
         client = await db.get(Client, uuid.UUID(client_id))
         gate_result = await _enforce_billing_gate(client, client_id)
         if gate_result:
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
-        phone = normalize_phone(payload.phone_number)
-        if not phone:
+        try:
+            envelope, phone = parse_google_lsa_lead(payload, client_id)
+        except ValueError:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
             raise HTTPException(status_code=400, detail="Invalid phone number")
 
-        first_name = None
-        last_name = None
-        if payload.customer_name:
-            parts = payload.customer_name.strip().split(" ", 1)
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else None
-
         event.processing_status = "processing"
-
-        envelope = LeadEnvelope(
-            source="google_lsa",
-            client_id=client_id,
-            lead=NormalizedLead(
-                phone=phone,
-                first_name=first_name,
-                last_name=last_name,
-                email=payload.email,
-                zip_code=payload.postal_code,
-                service_type=payload.job_type,
-            ),
-            metadata=LeadMetadata(
-                source_lead_id=payload.lead_id,
-                source_timestamp=None,
-                raw_payload=payload.model_dump(),
-            ),
-            consent_type="pec",
-            consent_method="google_lsa",
-        )
-
         result = await handle_new_lead(db, envelope)
         await _complete_webhook_event(event)
         return WebhookPayloadResponse(
@@ -480,43 +460,19 @@ async def angi_webhook(
     )
 
     try:
-        # Billing / phone gate
         client = await db.get(Client, uuid.UUID(client_id))
         gate_result = await _enforce_billing_gate(client, client_id)
         if gate_result:
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
-        phone = normalize_phone(payload.phone)
-        if not phone:
+        try:
+            envelope, phone = parse_angi_lead(payload, client_id)
+        except ValueError:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
             raise HTTPException(status_code=400, detail="Invalid phone number")
 
         event.processing_status = "processing"
-
-        envelope = LeadEnvelope(
-            source="angi",
-            client_id=client_id,
-            lead=NormalizedLead(
-                phone=phone,
-                first_name=payload.firstName,
-                last_name=payload.lastName,
-                email=payload.email,
-                zip_code=payload.zipCode,
-                city=payload.city,
-                state_code=payload.state,
-                service_type=payload.serviceDescription,
-                urgency=payload.urgency,
-                property_type=payload.propertyType,
-            ),
-            metadata=LeadMetadata(
-                source_lead_id=payload.leadId,
-                raw_payload=payload.model_dump(),
-            ),
-            consent_type="pec",
-            consent_method="angi",
-        )
-
         result = await handle_new_lead(db, envelope)
         await _complete_webhook_event(event)
         return WebhookPayloadResponse(
@@ -558,64 +514,28 @@ async def facebook_webhook(
     )
 
     try:
-        # Billing / phone gate
         client = await db.get(Client, uuid.UUID(client_id))
         gate_result = await _enforce_billing_gate(client, client_id)
         if gate_result:
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
-        entries = payload.get("entry", [])
-        if not entries:
+        envelopes = parse_facebook_leads(payload, client_id)
+        if not envelopes:
             await _complete_webhook_event(event)
-            return WebhookPayloadResponse(status="accepted", message="No entries")
+            return WebhookPayloadResponse(status="accepted", message="No valid leads found")
 
         event.processing_status = "processing"
-        processed_count = 0
         last_result = None
-
-        for entry in entries:
-            changes = entry.get("changes", [])
-            for change in changes:
-                value = change.get("value", {})
-                lead_data = value.get("leadgen_data", {}) if "leadgen_data" in value else value
-
-                phone = lead_data.get("phone", lead_data.get("phone_number", ""))
-                if not phone:
-                    continue
-
-                normalized = normalize_phone(phone)
-                if not normalized:
-                    continue
-
-                envelope = LeadEnvelope(
-                    source="facebook",
-                    client_id=client_id,
-                    lead=NormalizedLead(
-                        phone=normalized,
-                        first_name=lead_data.get("first_name"),
-                        last_name=lead_data.get("last_name"),
-                        email=lead_data.get("email"),
-                    ),
-                    metadata=LeadMetadata(
-                        source_lead_id=lead_data.get("leadgen_id", lead_data.get("id")),
-                        raw_payload=payload,
-                    ),
-                    consent_type="pewc",
-                    consent_method="facebook",
-                )
-
-                last_result = await handle_new_lead(db, envelope)
-                processed_count += 1
+        for envelope in envelopes:
+            last_result = await handle_new_lead(db, envelope)
 
         await _complete_webhook_event(event)
-        if processed_count > 0 and last_result:
-            return WebhookPayloadResponse(
-                status="accepted",
-                lead_id=last_result.get("lead_id"),
-                message=f"Processed {processed_count} lead(s)",
-            )
-        return WebhookPayloadResponse(status="accepted", message="No valid leads found")
+        return WebhookPayloadResponse(
+            status="accepted",
+            lead_id=last_result.get("lead_id") if last_result else None,
+            message=f"Processed {len(envelopes)} lead(s)",
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -652,43 +572,19 @@ async def missed_call_webhook(
     )
 
     try:
-        # Billing / phone gate
         client = await db.get(Client, uuid.UUID(client_id))
         gate_result = await _enforce_billing_gate(client, client_id)
         if gate_result:
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
-        phone = normalize_phone(payload.caller_phone)
-        if not phone:
+        try:
+            envelope, phone = parse_missed_call_lead(payload, client_id)
+        except ValueError:
             await _complete_webhook_event(event, "failed", "Invalid phone number")
             raise HTTPException(status_code=400, detail="Invalid phone number")
 
-        first_name = None
-        last_name = None
-        if payload.caller_name:
-            parts = payload.caller_name.strip().split(" ", 1)
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else None
-
         event.processing_status = "processing"
-
-        envelope = LeadEnvelope(
-            source="missed_call",
-            client_id=client_id,
-            lead=NormalizedLead(
-                phone=phone,
-                first_name=first_name,
-                last_name=last_name,
-                city=payload.caller_city,
-                state_code=payload.caller_state,
-                zip_code=payload.caller_zip,
-            ),
-            metadata=LeadMetadata(raw_payload=payload.model_dump()),
-            consent_type="pec",
-            consent_method="missed_call",
-        )
-
         result = await handle_new_lead(db, envelope)
         await _complete_webhook_event(event)
         return WebhookPayloadResponse(
@@ -737,17 +633,19 @@ async def thumbtack_webhook(
     )
 
     try:
-        # Billing / phone gate
         client = await db.get(Client, uuid.UUID(client_id))
         gate_result = await _enforce_billing_gate(client, client_id)
         if gate_result:
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
-        # Thumbtack may or may not include phone — check customer_phone field
-        phone_raw = payload.customer_phone
-        if not phone_raw:
-            # No phone in payload — store the lead for reference but can't SMS
+        try:
+            envelope, phone = parse_thumbtack_lead(payload, payload_dict, client_id)
+        except ValueError:
+            await _complete_webhook_event(event, "failed", "Invalid phone number")
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+
+        if envelope is None:
             await _complete_webhook_event(event, "completed", "No phone number in Thumbtack payload")
             logger.info(
                 "Thumbtack lead %s for client %s — no phone, stored for reference",
@@ -758,70 +656,7 @@ async def thumbtack_webhook(
                 message="Lead received but no phone number — respond via Thumbtack Messages API",
             )
 
-        phone = normalize_phone(phone_raw)
-        if not phone:
-            await _complete_webhook_event(event, "failed", "Invalid phone number")
-            raise HTTPException(status_code=400, detail="Invalid phone number")
-
-        # Parse customer name
-        first_name = None
-        last_name = None
-        if payload.customer and payload.customer.name:
-            parts = payload.customer.name.strip().split(" ", 1)
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else None
-
-        # Extract location
-        city = None
-        state_code = None
-        zip_code = None
-        if payload.request and payload.request.location:
-            loc = payload.request.location
-            city = loc.city
-            state_code = loc.state
-            zip_code = loc.zipCode
-
-        # Extract service type
-        service_type = None
-        if payload.request:
-            service_type = payload.request.category or payload.request.title
-
-        # Build problem description from details Q&A
-        problem_parts = []
-        if payload.request:
-            if payload.request.description:
-                problem_parts.append(payload.request.description)
-            if payload.request.schedule:
-                problem_parts.append(f"Schedule: {payload.request.schedule}")
-            for detail in payload.request.details:
-                if detail.question and detail.answer:
-                    problem_parts.append(f"{detail.question}: {detail.answer}")
-        problem_description = "\n".join(problem_parts) if problem_parts else None
-
         event.processing_status = "processing"
-
-        envelope = LeadEnvelope(
-            source="thumbtack",
-            client_id=client_id,
-            lead=NormalizedLead(
-                phone=phone,
-                first_name=first_name,
-                last_name=last_name,
-                email=payload.customer_email,
-                city=city,
-                state_code=state_code,
-                zip_code=zip_code,
-                service_type=service_type,
-                problem_description=problem_description,
-            ),
-            metadata=LeadMetadata(
-                source_lead_id=payload.leadID,
-                raw_payload=payload_dict,
-            ),
-            consent_type="pec",
-            consent_method="thumbtack",
-        )
-
         result = await handle_new_lead(db, envelope)
         await _complete_webhook_event(event)
         return WebhookPayloadResponse(
@@ -834,4 +669,58 @@ async def thumbtack_webhook(
     except Exception as e:
         await _complete_webhook_event(event, "failed", str(e))
         logger.error("Thumbtack webhook error: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal processing error")
+
+
+@router.post("/yelp/{client_id}", response_model=WebhookPayloadResponse)
+async def yelp_webhook(
+    client_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Yelp Leads API webhook — receives leads from Yelp."""
+    await _enforce_rate_limit(request, client_id)
+
+    body = await request.body()
+    await _validate_signature("yelp", request, body)
+
+    payload_hash = compute_payload_hash(body)
+
+    import json
+    try:
+        payload_dict = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = await _record_webhook_event(
+        db, source="yelp", event_type="lead",
+        raw_payload=payload_dict, payload_hash=payload_hash, client_id=client_id,
+    )
+
+    try:
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
+        try:
+            envelope, phone = parse_yelp_lead(payload_dict, client_id)
+        except ValueError:
+            await _complete_webhook_event(event, "failed", "Invalid phone number")
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+
+        event.processing_status = "processing"
+        result = await handle_new_lead(db, envelope)
+        await _complete_webhook_event(event)
+        return WebhookPayloadResponse(
+            status="accepted",
+            lead_id=result.get("lead_id"),
+            message=f"Processed in {result.get('response_ms', 0)}ms",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await _complete_webhook_event(event, "failed", str(e))
+        logger.error("Yelp webhook error: %s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Internal processing error")

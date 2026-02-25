@@ -11,6 +11,7 @@ import PersonaSection from './PersonaSection';
 import BusinessHoursSection from './BusinessHoursSection';
 import ServicesSection from './ServicesSection';
 import EmergencyKeywordsSection from './EmergencyKeywordsSection';
+import BusinessMetricsSection from './BusinessMetricsSection';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -125,6 +126,8 @@ export default function SettingsPage() {
         )}
         <SectionDivider />
         <CRMConnectionSection settings={settings} />
+        <SectionDivider />
+        <BusinessMetricsSection config={config} updateConfig={updateConfig} />
         <SectionDivider />
         <PersonaSection persona={persona} updateConfig={updateConfig} />
         <SectionDivider />

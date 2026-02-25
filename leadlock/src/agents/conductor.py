@@ -419,9 +419,22 @@ async def _process_reply_locked(
 
     # Re-engage cold leads
     if lead.state in ("cold", "dead"):
+        previous = lead.state
         lead.state = "qualifying"
         lead.current_agent = "qualify"
         lead.score = max(lead.score, 50)
+
+        # Learning signal: lead re-engaged from cold/dead
+        from src.services.learning import record_lead_signal
+        asyncio.ensure_future(record_lead_signal(
+            lead_id=str(lead.id),
+            signal_type="lead_reengaged",
+            metadata={
+                "previous_state": previous,
+                "source": lead.source,
+                "trade": client.trade_type,
+            },
+        ))
 
     # Enforce conversation turn limit (max 10 turns of AI conversation)
     from src.config import get_settings
@@ -517,6 +530,11 @@ async def _route_to_qualify(
     db: AsyncSession, lead: Lead, client: Client, config: ClientConfig, message: str
 ) -> dict:
     """Route lead to the qualify agent."""
+    # Assign qualify variant if not yet set (deterministic per lead)
+    if not lead.qualify_variant:
+        from src.agents.qualify import select_variant
+        lead.qualify_variant = select_variant(str(lead.id))
+
     # Build conversation history
     conversations = []
     for conv in lead.conversations:
@@ -534,6 +552,7 @@ async def _route_to_qualify(
         trade_type=client.trade_type,
         services=config.services.model_dump() if config.services else {},
         conversation_turn=lead.conversation_turn,
+        variant=lead.qualify_variant,
     )
 
     # Update lead with qualification data
@@ -559,9 +578,33 @@ async def _route_to_qualify(
     if result.next_action == "ready_to_book":
         lead.state = "qualified"
         lead.current_agent = "book"
+        # Learning signal: lead qualified
+        from src.services.learning import record_lead_signal
+        asyncio.ensure_future(record_lead_signal(
+            lead_id=str(lead.id),
+            signal_type="lead_qualified",
+            metadata={
+                "qualify_variant": getattr(lead, "qualify_variant", None),
+                "response_count": lead.conversation_turn,
+                "source": lead.source,
+                "trade": client.trade_type,
+            },
+        ))
     elif result.next_action == "mark_cold":
         lead.state = "cold"
         lead.current_agent = "followup"
+        # Learning signal: lead went cold
+        from src.services.learning import record_lead_signal
+        asyncio.ensure_future(record_lead_signal(
+            lead_id=str(lead.id),
+            signal_type="lead_went_cold",
+            metadata={
+                "qualify_variant": getattr(lead, "qualify_variant", None),
+                "response_count": lead.conversation_turn,
+                "source": lead.source,
+                "trade": client.trade_type,
+            },
+        ))
     elif result.next_action == "escalate_emergency":
         lead.is_emergency = True
         lead.urgency = "emergency"
@@ -585,16 +628,16 @@ async def _route_to_book(
         for c in lead.conversations
     ]
 
-    # Look up booking_url from SalesEngineConfig for calendar link
-    # Uses httpx for Brave API (no TLS impersonation needed)
-    booking_url = None
-    try:
-        from src.services.config_cache import get_sales_config
-        sales_config = await get_sales_config(tenant_id=client.id)
-        if sales_config:
-            booking_url = sales_config.get("booking_url")
-    except (KeyError, TypeError, ValueError, OSError):
-        pass  # Non-critical — proceed without booking URL
+    # Resolve booking_url: ClientConfig first, then SalesEngineConfig fallback
+    booking_url = config.booking_url
+    if not booking_url:
+        try:
+            from src.services.config_cache import get_sales_config
+            sales_config = await get_sales_config(tenant_id=client.id)
+            if sales_config:
+                booking_url = sales_config.get("booking_url")
+        except (KeyError, TypeError, ValueError, OSError):
+            pass  # Non-critical — proceed without booking URL
 
     result = await process_booking(
         lead_message=message,
@@ -640,6 +683,19 @@ async def _route_to_book(
             client_id=client.id,
             action="booking_confirmed",
             message=f"Appointment booked for {result.appointment_date}",
+        ))
+
+        # Learning signal: lead booked
+        from src.services.learning import record_lead_signal
+        asyncio.ensure_future(record_lead_signal(
+            lead_id=str(lead.id),
+            signal_type="lead_booked",
+            metadata={
+                "qualify_variant": getattr(lead, "qualify_variant", None),
+                "response_count": lead.conversation_turn,
+                "source": lead.source,
+                "trade": client.trade_type,
+            },
         ))
     elif result.needs_human_handoff:
         lead.state = "booking"

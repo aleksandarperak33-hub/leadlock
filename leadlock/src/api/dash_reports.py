@@ -3,11 +3,11 @@ Dashboard reports, metrics, activity, compliance, settings, onboarding, and book
 """
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_, func, desc, case, text
 
 from src.database import get_db
 from src.api.dash_auth import get_current_client
@@ -331,6 +331,208 @@ async def get_bookings(
             for b in bookings
         ],
         "total": len(bookings),
+    }
+
+
+# === ROI DASHBOARD ===
+
+@router.get("/api/v1/dashboard/roi")
+async def get_roi_dashboard(
+    period: str = Query(default="30d", pattern="^(7d|30d|90d|all)$"),
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Get comprehensive ROI dashboard data — the showpiece endpoint."""
+    if period == "all":
+        since = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    else:
+        days = {"7d": 7, "30d": 30, "90d": 90}[period]
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    cid = client.id
+    config = client.config or {}
+    avg_job_value = config.get("avg_job_value") or 500.0
+
+    # --- Hero KPIs (single pass for core counts) ---
+    base_filter = and_(Lead.client_id == cid, Lead.created_at >= since)
+
+    total_leads = (await db.execute(
+        select(func.count(Lead.id)).where(base_filter)
+    )).scalar() or 0
+
+    leads_booked = (await db.execute(
+        select(func.count(Lead.id)).where(
+            and_(base_filter, Lead.state.in_(["booked", "completed"]))
+        )
+    )).scalar() or 0
+
+    booking_rate = leads_booked / total_leads if total_leads > 0 else 0.0
+    estimated_revenue = leads_booked * avg_job_value
+
+    # Cost aggregates
+    cost_row = (await db.execute(
+        select(
+            func.coalesce(func.sum(Lead.total_sms_cost_usd), 0.0),
+            func.coalesce(func.sum(Lead.total_ai_cost_usd), 0.0),
+        ).where(base_filter)
+    )).one()
+    total_sms_cost = float(cost_row[0])
+    total_ai_cost = float(cost_row[1])
+    total_cost = total_sms_cost + total_ai_cost
+
+    cost_per_booked = total_cost / leads_booked if leads_booked > 0 else 0.0
+    roi_multiplier = estimated_revenue / total_cost if total_cost > 0 else 0.0
+
+    # Average response time
+    avg_response = (await db.execute(
+        select(func.avg(Lead.first_response_ms)).where(
+            and_(base_filter, Lead.first_response_ms.isnot(None))
+        )
+    )).scalar()
+    avg_response_seconds = (float(avg_response) / 1000) if avg_response else 0.0
+
+    # Leads under 10s
+    leads_with_response = (await db.execute(
+        select(func.count(Lead.id)).where(
+            and_(base_filter, Lead.first_response_ms.isnot(None))
+        )
+    )).scalar() or 0
+    leads_under_10s = (await db.execute(
+        select(func.count(Lead.id)).where(
+            and_(base_filter, Lead.first_response_ms.isnot(None), Lead.first_response_ms < 10000)
+        )
+    )).scalar() or 0
+    leads_under_10s_pct = leads_under_10s / leads_with_response if leads_with_response > 0 else 0.0
+
+    hero_kpis = {
+        "total_leads": total_leads,
+        "leads_booked": leads_booked,
+        "booking_rate": round(booking_rate, 3),
+        "estimated_revenue": round(estimated_revenue, 2),
+        "cost_per_booked_lead": round(cost_per_booked, 2),
+        "roi_multiplier": round(roi_multiplier, 1),
+        "avg_response_time_seconds": round(avg_response_seconds, 1),
+        "leads_under_10s": round(leads_under_10s_pct, 2),
+    }
+
+    # --- Funnel ---
+    funnel_result = await db.execute(
+        select(Lead.state, func.count(Lead.id))
+        .where(base_filter)
+        .group_by(Lead.state)
+    )
+    funnel_raw = {row[0]: row[1] for row in funnel_result.all()}
+    funnel = {
+        state: funnel_raw.get(state, 0)
+        for state in ["new", "intake_sent", "qualifying", "qualified", "booking", "booked", "completed"]
+    }
+
+    # --- Revenue by source ---
+    source_result = await db.execute(
+        select(
+            Lead.source,
+            func.count(Lead.id).label("leads"),
+            func.count(case((Lead.state.in_(["booked", "completed"]), Lead.id))).label("booked"),
+        )
+        .where(base_filter)
+        .group_by(Lead.source)
+        .order_by(desc("leads"))
+    )
+    revenue_by_source = [
+        {
+            "source": row.source,
+            "leads": row.leads,
+            "booked": row.booked,
+            "revenue": round(row.booked * avg_job_value, 2),
+        }
+        for row in source_result.all()
+    ]
+
+    # --- Revenue by month ---
+    month_result = await db.execute(
+        select(
+            func.to_char(func.date_trunc("month", Lead.created_at), "YYYY-MM").label("month"),
+            func.count(Lead.id).label("leads"),
+            func.count(case((Lead.state.in_(["booked", "completed"]), Lead.id))).label("booked"),
+        )
+        .where(base_filter)
+        .group_by(text("1"))
+        .order_by(text("1"))
+    )
+    revenue_by_month = [
+        {
+            "month": row.month,
+            "leads": row.leads,
+            "booked": row.booked,
+            "revenue": round(row.booked * avg_job_value, 2),
+        }
+        for row in month_result.all()
+    ]
+
+    # --- Per-lead economics ---
+    avg_sms_per_lead = total_sms_cost / total_leads if total_leads > 0 else 0.0
+    avg_ai_per_lead = total_ai_cost / total_leads if total_leads > 0 else 0.0
+    avg_total_per_lead = avg_sms_per_lead + avg_ai_per_lead
+    cost_to_revenue = avg_total_per_lead / avg_job_value if avg_job_value > 0 else 0.0
+
+    per_lead_economics = {
+        "avg_sms_cost": round(avg_sms_per_lead, 3),
+        "avg_ai_cost": round(avg_ai_per_lead, 3),
+        "avg_total_cost": round(avg_total_per_lead, 3),
+        "avg_job_value": avg_job_value,
+        "cost_to_revenue_ratio": round(cost_to_revenue, 6),
+    }
+
+    # --- Response time distribution ---
+    rt_result = await db.execute(
+        select(Lead.first_response_ms).where(
+            and_(base_filter, Lead.first_response_ms.isnot(None))
+        )
+    )
+    rt_buckets = {"0-5s": 0, "5-10s": 0, "10-30s": 0, "30s+": 0}
+    for (ms,) in rt_result.all():
+        if ms < 5000:
+            rt_buckets["0-5s"] += 1
+        elif ms < 10000:
+            rt_buckets["5-10s"] += 1
+        elif ms < 30000:
+            rt_buckets["10-30s"] += 1
+        else:
+            rt_buckets["30s+"] += 1
+
+    response_time_distribution = [
+        {"bucket": k, "count": v} for k, v in rt_buckets.items()
+    ]
+
+    # --- Qualify variant performance ---
+    variant_result = await db.execute(
+        select(
+            Lead.qualify_variant,
+            func.count(Lead.id).label("leads"),
+            func.count(case((Lead.state.in_(["booked", "completed"]), Lead.id))).label("booked"),
+        )
+        .where(and_(base_filter, Lead.qualify_variant.isnot(None)))
+        .group_by(Lead.qualify_variant)
+        .order_by(Lead.qualify_variant)
+    )
+    qualify_variant_performance = [
+        {
+            "variant": row.qualify_variant,
+            "leads": row.leads,
+            "booked": row.booked,
+            "rate": round(row.booked / row.leads, 3) if row.leads > 0 else 0.0,
+        }
+        for row in variant_result.all()
+    ]
+
+    return {
+        "hero_kpis": hero_kpis,
+        "funnel": funnel,
+        "revenue_by_source": revenue_by_source,
+        "revenue_by_month": revenue_by_month,
+        "per_lead_economics": per_lead_economics,
+        "response_time_distribution": response_time_distribution,
+        "qualify_variant_performance": qualify_variant_performance,
     }
 
 

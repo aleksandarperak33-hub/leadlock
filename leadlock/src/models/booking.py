@@ -4,7 +4,7 @@ Booking model - confirmed appointments with CRM sync tracking.
 import uuid
 from datetime import datetime, timezone, date, time
 from typing import Optional
-from sqlalchemy import String, Text, Boolean, DateTime, Date, Time, ForeignKey, Index
+from sqlalchemy import String, Text, Boolean, Integer, DateTime, Date, Time, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.database import Base
@@ -56,6 +56,11 @@ class Booking(Base):
     # Reminders
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    same_day_reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Review tracking
+    review_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    review_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Metadata
     extra_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)

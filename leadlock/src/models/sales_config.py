@@ -54,7 +54,7 @@ class SalesEngineConfig(Base):
     booking_url: Mapped[Optional[str]] = mapped_column(String(500))  # Cal.com or Calendly link
 
     # SMS after email reply
-    sms_after_email_reply: Mapped[bool] = mapped_column(Boolean, default=False)
+    sms_after_email_reply: Mapped[bool] = mapped_column(Boolean, default=True)
     sms_from_phone: Mapped[Optional[str]] = mapped_column(String(20))
 
     # Custom email templates (overrides AI generation)
