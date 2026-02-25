@@ -149,6 +149,17 @@ async def validate_webhook_source(
         sig = request.headers.get("X-Hub-Signature-256", "")
         return validate_hmac_sha256(secret, sig, body)
 
+    if source == "thumbtack":
+        secret = settings.webhook_secret_thumbtack
+        if not secret:
+            logger.warning(
+                "WEBHOOK_SECRET_THUMBTACK not set - accepting %s webhook without "
+                "signature verification. Configure for production.", source,
+            )
+            return True
+        sig = request.headers.get("X-Webhook-Signature", "")
+        return validate_hmac_sha256(secret, sig, body)
+
     # Generic: use webhook_signing_key if configured
     if settings.webhook_signing_key:
         sig = request.headers.get("X-Webhook-Signature", "")

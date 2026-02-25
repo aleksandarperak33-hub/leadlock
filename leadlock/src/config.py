@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     webhook_secret_google: str = ""
     webhook_secret_angi: str = ""
     webhook_secret_facebook: str = ""
+    webhook_secret_thumbtack: str = ""
     webhook_signing_key: str = ""
 
     # Encryption

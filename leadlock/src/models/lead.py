@@ -76,6 +76,10 @@ class Lead(Base):
     is_emergency: Mapped[bool] = mapped_column(Boolean, default=False)
     emergency_type: Mapped[Optional[str]] = mapped_column(String(50))
 
+    # AI disclosure (CA SB 1001 compliance)
+    ai_disclosure_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_disclosure_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     # Performance tracking
     first_response_ms: Mapped[Optional[int]] = mapped_column(Integer)
     total_messages_sent: Mapped[int] = mapped_column(Integer, default=0)

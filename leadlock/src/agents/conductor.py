@@ -256,9 +256,11 @@ async def handle_new_lead(
 
     # California SB 1001: Prepend AI disclosure on first message to CA numbers
     sms_body = intake_response.message
-    if needs_ai_disclosure(phone, state_code=lead.state_code, ai_disclosure_sent=False):
+    if needs_ai_disclosure(phone, state_code=lead.state_code, ai_disclosure_sent=lead.ai_disclosure_sent):
         disclosure = get_ai_disclosure(client.business_name)
         sms_body = disclosure + sms_body
+        lead.ai_disclosure_sent = True
+        lead.ai_disclosure_sent_at = datetime.now(timezone.utc)
         logger.info("CA SB 1001: AI disclosure prepended for lead %s", str(lead.id)[:8])
 
     # SEND THE SMS - this is the critical path

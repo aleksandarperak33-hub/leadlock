@@ -253,6 +253,11 @@ class TestRunStuckLeadSweeper:
                 side_effect=fake_sweep,
             ),
             patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "src.workers.lead_state_manager._archive_old_leads",
                 new_callable=AsyncMock,
                 return_value=0,
@@ -308,6 +313,11 @@ class TestRunStuckLeadSweeper:
             patch(
                 "src.workers.lead_state_manager._sweep_stuck_leads",
                 side_effect=fake_sweep,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
             ),
             patch(
                 "src.workers.lead_state_manager._archive_old_leads",
@@ -401,6 +411,11 @@ class TestRunStuckLeadSweeper:
         with (
             patch(
                 "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -690,8 +705,12 @@ class TestRunLeadLifecycle:
     """run_lead_state_manager() - main loop behaviour."""
 
     async def test_loop_calls_subroutines_then_heartbeat_then_sleeps(self):
-        """One iteration: archive + dead + recycle -> _heartbeat -> sleep."""
+        """One iteration: complete + archive + dead + recycle -> _heartbeat -> sleep."""
         call_order = []
+
+        async def fake_complete():
+            call_order.append("complete")
+            return 0
 
         async def fake_archive():
             call_order.append("archive")
@@ -717,6 +736,10 @@ class TestRunLeadLifecycle:
                 "src.workers.lead_state_manager._sweep_stuck_leads",
                 new_callable=AsyncMock,
                 return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
+                side_effect=fake_complete,
             ),
             patch(
                 "src.workers.lead_state_manager._archive_old_leads",
@@ -748,6 +771,7 @@ class TestRunLeadLifecycle:
                 await run_lead_state_manager()
 
         assert call_order == [
+            "complete",
             "archive",
             "dead",
             "recycle",
@@ -756,7 +780,7 @@ class TestRunLeadLifecycle:
         ]
 
     async def test_loop_logs_summary_when_work_done(self, caplog):
-        """When archived + dead + recycled > 0, summary info is logged."""
+        """When completed + archived + dead + recycled > 0, summary info is logged."""
         async def fake_archive():
             return 2
 
@@ -772,6 +796,11 @@ class TestRunLeadLifecycle:
         with (
             patch(
                 "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -821,6 +850,11 @@ class TestRunLeadLifecycle:
         with (
             patch(
                 "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
@@ -886,6 +920,11 @@ class TestRunLeadLifecycle:
                 return_value=0,
             ),
             patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "src.workers.lead_state_manager._archive_old_leads",
                 side_effect=fail_archive,
             ),
@@ -933,6 +972,11 @@ class TestRunLeadLifecycle:
         with (
             patch(
                 "src.workers.lead_state_manager._sweep_stuck_leads",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "src.workers.lead_state_manager._complete_booked_leads",
                 new_callable=AsyncMock,
                 return_value=0,
             ),

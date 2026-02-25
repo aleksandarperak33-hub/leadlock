@@ -26,6 +26,7 @@ from src.schemas.webhook_payloads import (
     GoogleLsaPayload,
     AngiPayload,
     MissedCallPayload,
+    ThumbtackLeadPayload,
 )
 from src.schemas.api_responses import WebhookPayloadResponse
 from src.agents.conductor import handle_new_lead, handle_inbound_reply
@@ -700,4 +701,137 @@ async def missed_call_webhook(
     except Exception as e:
         await _complete_webhook_event(event, "failed", str(e))
         logger.error("Missed call webhook error: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal processing error")
+
+
+@router.post("/thumbtack/{client_id}", response_model=WebhookPayloadResponse)
+async def thumbtack_webhook(
+    client_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Thumbtack NegotiationCreatedV4 webhook — receives leads from Thumbtack.
+
+    Thumbtack typically does NOT include phone/email in the webhook payload.
+    When a custom integration provides customer_phone, we create a full lead.
+    Otherwise, we store the lead data for manual follow-up via Thumbtack Messages API.
+    """
+    await _enforce_rate_limit(request, client_id)
+
+    body = await request.body()
+    await _validate_signature("thumbtack", request, body)
+
+    payload_hash = compute_payload_hash(body)
+
+    import json
+    try:
+        payload_dict = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    payload = ThumbtackLeadPayload(**payload_dict)
+
+    event = await _record_webhook_event(
+        db, source="thumbtack", event_type="lead",
+        raw_payload=payload_dict, payload_hash=payload_hash, client_id=client_id,
+    )
+
+    try:
+        # Billing / phone gate
+        client = await db.get(Client, uuid.UUID(client_id))
+        gate_result = await _enforce_billing_gate(client, client_id)
+        if gate_result:
+            await _complete_webhook_event(event, "rejected", gate_result["status"])
+            return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
+
+        # Thumbtack may or may not include phone — check customer_phone field
+        phone_raw = payload.customer_phone
+        if not phone_raw:
+            # No phone in payload — store the lead for reference but can't SMS
+            await _complete_webhook_event(event, "completed", "No phone number in Thumbtack payload")
+            logger.info(
+                "Thumbtack lead %s for client %s — no phone, stored for reference",
+                payload.leadID, client_id[:8],
+            )
+            return WebhookPayloadResponse(
+                status="accepted",
+                message="Lead received but no phone number — respond via Thumbtack Messages API",
+            )
+
+        phone = normalize_phone(phone_raw)
+        if not phone:
+            await _complete_webhook_event(event, "failed", "Invalid phone number")
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+
+        # Parse customer name
+        first_name = None
+        last_name = None
+        if payload.customer and payload.customer.name:
+            parts = payload.customer.name.strip().split(" ", 1)
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else None
+
+        # Extract location
+        city = None
+        state_code = None
+        zip_code = None
+        if payload.request and payload.request.location:
+            loc = payload.request.location
+            city = loc.city
+            state_code = loc.state
+            zip_code = loc.zipCode
+
+        # Extract service type
+        service_type = None
+        if payload.request:
+            service_type = payload.request.category or payload.request.title
+
+        # Build problem description from details Q&A
+        problem_parts = []
+        if payload.request:
+            if payload.request.description:
+                problem_parts.append(payload.request.description)
+            if payload.request.schedule:
+                problem_parts.append(f"Schedule: {payload.request.schedule}")
+            for detail in payload.request.details:
+                if detail.question and detail.answer:
+                    problem_parts.append(f"{detail.question}: {detail.answer}")
+        problem_description = "\n".join(problem_parts) if problem_parts else None
+
+        event.processing_status = "processing"
+
+        envelope = LeadEnvelope(
+            source="thumbtack",
+            client_id=client_id,
+            lead=NormalizedLead(
+                phone=phone,
+                first_name=first_name,
+                last_name=last_name,
+                email=payload.customer_email,
+                city=city,
+                state_code=state_code,
+                zip_code=zip_code,
+                service_type=service_type,
+                problem_description=problem_description,
+            ),
+            metadata=LeadMetadata(
+                source_lead_id=payload.leadID,
+                raw_payload=payload_dict,
+            ),
+            consent_type="pec",
+            consent_method="thumbtack",
+        )
+
+        result = await handle_new_lead(db, envelope)
+        await _complete_webhook_event(event)
+        return WebhookPayloadResponse(
+            status="accepted",
+            lead_id=result.get("lead_id"),
+            message=f"Processed in {result.get('response_ms', 0)}ms",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await _complete_webhook_event(event, "failed", str(e))
+        logger.error("Thumbtack webhook error: %s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Internal processing error")

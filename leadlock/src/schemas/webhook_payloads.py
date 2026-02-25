@@ -94,3 +94,61 @@ class MissedCallPayload(BaseModel):
     caller_state: Optional[str] = None
     caller_zip: Optional[str] = None
     voicemail_url: Optional[str] = None
+
+
+# --- Thumbtack ---
+
+class ThumbLocationPayload(BaseModel):
+    """Location from Thumbtack lead."""
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zipCode: Optional[str] = None
+
+
+class ThumbDetailPayload(BaseModel):
+    """Question/answer detail from Thumbtack lead."""
+    question: Optional[str] = None
+    answer: Optional[str] = None
+
+
+class ThumbRequestPayload(BaseModel):
+    """Service request details from Thumbtack."""
+    requestID: Optional[str] = None
+    category: Optional[str] = None
+    categoryID: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    schedule: Optional[str] = None
+    location: Optional[ThumbLocationPayload] = None
+    travelPreferences: Optional[str] = None
+    details: list[ThumbDetailPayload] = Field(default_factory=list)
+
+
+class ThumbCustomerPayload(BaseModel):
+    """Customer info from Thumbtack."""
+    customerID: Optional[str] = None
+    name: Optional[str] = None
+
+
+class ThumbBusinessPayload(BaseModel):
+    """Business info from Thumbtack."""
+    businessID: Optional[str] = None
+    name: Optional[str] = None
+
+
+class ThumbtackLeadPayload(BaseModel):
+    """Thumbtack NegotiationCreatedV4 webhook payload.
+
+    Note: Thumbtack does not include customer phone/email in the webhook.
+    Communication happens through their Messages API. When a phone number
+    is provided separately (via custom integration), use 'customer_phone'.
+    """
+    leadID: str
+    createTimestamp: Optional[str] = None
+    price: Optional[str] = None
+    request: Optional[ThumbRequestPayload] = None
+    customer: Optional[ThumbCustomerPayload] = None
+    business: Optional[ThumbBusinessPayload] = None
+    # Extended fields (some custom integrations include these)
+    customer_phone: Optional[str] = None
+    customer_email: Optional[str] = None

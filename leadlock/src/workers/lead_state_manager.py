@@ -5,9 +5,10 @@ stuck-sweep and lifecycle transitions.
 
 Phases per cycle:
 1. Sweep stuck leads (from stuck_lead_sweeper)
-2. Archive old leads (from lead_lifecycle)
-3. Mark dead leads (from lead_lifecycle)
-4. Schedule cold recycling (from lead_lifecycle)
+2. Complete booked leads past appointment date
+3. Archive old leads (from lead_lifecycle)
+4. Mark dead leads (from lead_lifecycle)
+5. Schedule cold recycling (from lead_lifecycle)
 """
 import asyncio
 import logging
@@ -17,6 +18,7 @@ from sqlalchemy import select, and_, update
 
 from src.database import async_session_factory
 from src.models.lead import Lead
+from src.models.booking import Booking
 from src.models.client import Client
 from src.models.followup import FollowupTask
 from src.models.event_log import EventLog
@@ -39,6 +41,8 @@ ARCHIVE_AFTER_DAYS = 90
 COLD_TO_DEAD_DAYS = 30
 COLD_RECYCLE_DAYS = 7
 MAX_COLD_OUTREACH = 3
+COMPLETE_AFTER_DAYS = 1  # Mark booked→completed 1 day after appointment
+REVIEW_REQUEST_DELAY_HOURS = 24  # Send review request 24h after completion
 
 
 async def _heartbeat():
@@ -64,16 +68,19 @@ async def run_lead_state_manager():
             # Phase 1: Sweep stuck leads
             stuck = await _sweep_stuck_leads()
 
-            # Phase 2-4: Lifecycle transitions
+            # Phase 2: Complete booked leads past appointment date
+            completed = await _complete_booked_leads()
+
+            # Phase 3-5: Lifecycle transitions
             archived = await _archive_old_leads()
             dead = await _mark_dead_leads()
             recycled = await _schedule_cold_recycling()
 
-            total = stuck + archived + dead + recycled
+            total = stuck + completed + archived + dead + recycled
             if total > 0:
                 logger.info(
-                    "Lead state manager: stuck=%d archived=%d dead=%d recycled=%d",
-                    stuck, archived, dead, recycled,
+                    "Lead state manager: stuck=%d completed=%d archived=%d dead=%d recycled=%d",
+                    stuck, completed, archived, dead, recycled,
                 )
         except Exception as e:
             logger.error("Lead state manager error: %s", str(e), exc_info=True)
@@ -155,7 +162,105 @@ def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: Archive old leads (from lead_lifecycle)
+# Phase 2: Complete booked leads past appointment date
+# ---------------------------------------------------------------------------
+
+async def _complete_booked_leads() -> int:
+    """Transition booked leads to completed after appointment date has passed.
+
+    Also schedules a review_request follow-up task for the next day.
+    """
+    today = datetime.now(timezone.utc).date()
+    cutoff_date = today - timedelta(days=COMPLETE_AFTER_DAYS)
+    now = datetime.now(timezone.utc)
+    count = 0
+
+    async with async_session_factory() as db:
+        # Find booked leads with appointments that have passed
+        result = await db.execute(
+            select(Lead, Booking).join(
+                Booking, Booking.lead_id == Lead.id
+            ).where(
+                and_(
+                    Lead.state == "booked",
+                    Lead.archived == False,  # noqa: E712
+                    Booking.status == "confirmed",
+                    Booking.appointment_date <= cutoff_date,
+                )
+            ).limit(50)
+        )
+        rows = result.all()
+
+        for lead, booking in rows:
+            lead.previous_state = lead.state
+            lead.state = "completed"
+            lead.current_agent = None
+            booking.status = "completed"
+            count += 1
+
+            # Cancel any pending follow-up tasks (cold_nurture, etc.)
+            await db.execute(
+                update(FollowupTask)
+                .where(
+                    FollowupTask.lead_id == lead.id,
+                    FollowupTask.status == "pending",
+                    FollowupTask.task_type != "review_request",
+                )
+                .values(status="cancelled", skip_reason="Lead completed")
+            )
+
+            db.add(EventLog(
+                lead_id=lead.id,
+                client_id=lead.client_id,
+                action="lead_completed",
+                message=(
+                    f"Auto-completed: appointment was {booking.appointment_date.isoformat()}, "
+                    f"service={booking.service_type}"
+                ),
+            ))
+
+            # Schedule review request (only if no existing pending review task)
+            existing_review = await db.execute(
+                select(FollowupTask).where(
+                    and_(
+                        FollowupTask.lead_id == lead.id,
+                        FollowupTask.task_type == "review_request",
+                        FollowupTask.status == "pending",
+                    )
+                ).limit(1)
+            )
+            if not existing_review.scalar_one_or_none():
+                review_at = now + timedelta(hours=REVIEW_REQUEST_DELAY_HOURS)
+                db.add(FollowupTask(
+                    lead_id=lead.id,
+                    client_id=lead.client_id,
+                    task_type="review_request",
+                    scheduled_at=review_at,
+                    sequence_number=1,
+                ))
+                lead.next_followup_at = review_at
+
+                db.add(EventLog(
+                    lead_id=lead.id,
+                    client_id=lead.client_id,
+                    action="review_request_scheduled",
+                    message=f"Review request scheduled for {review_at.isoformat()}",
+                ))
+
+            logger.info(
+                "Lead %s completed (appointment %s, service=%s)",
+                str(lead.id)[:8], booking.appointment_date, booking.service_type,
+            )
+
+        if count > 0:
+            await db.commit()
+            logger.info("Completed %d booked leads past appointment date", count)
+
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Archive old leads (from lead_lifecycle)
 # ---------------------------------------------------------------------------
 
 async def _archive_old_leads() -> int:
@@ -181,7 +286,7 @@ async def _archive_old_leads() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3: Mark dead leads (from lead_lifecycle)
+# Phase 4: Mark dead leads (from lead_lifecycle)
 # ---------------------------------------------------------------------------
 
 async def _mark_dead_leads() -> int:
@@ -233,7 +338,7 @@ async def _mark_dead_leads() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4: Schedule cold recycling (from lead_lifecycle)
+# Phase 5: Schedule cold recycling (from lead_lifecycle)
 # ---------------------------------------------------------------------------
 
 async def _schedule_cold_recycling() -> int:
