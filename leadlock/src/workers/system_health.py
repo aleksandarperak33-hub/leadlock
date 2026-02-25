@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 300  # 5 minutes
 
+# Minimum SMS sends in 24h before delivery rate alerts fire.
+# Prevents alert spam when volume is too low for meaningful metrics
+# (e.g. 0/1 delivered from a rejected toll-free number).
+SMS_MIN_ALERT_SAMPLE = 5
+
 
 async def _heartbeat():
     """Store heartbeat timestamp in Redis."""
@@ -100,7 +105,20 @@ async def _check_deliverability():
         overall_rate = summary.get("overall_delivery_rate")
         total_sent = summary.get("total_sent_24h", 0)
 
-        if total_sent == 0 or overall_rate is None:
+        if overall_rate is None:
+            return
+
+        # Skip alerting when sample size is too small for meaningful metrics.
+        # Still log at INFO so the condition is observable without alarm.
+        if total_sent < SMS_MIN_ALERT_SAMPLE:
+            if total_sent > 0:
+                logger.info(
+                    "SMS deliverability: sample too small for alerting "
+                    "(sent=%d, min=%d, rate=%.1f%%)",
+                    total_sent,
+                    SMS_MIN_ALERT_SAMPLE,
+                    (overall_rate or 0) * 100,
+                )
             return
 
         logger.info(

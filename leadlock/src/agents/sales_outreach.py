@@ -17,29 +17,26 @@ SYSTEM_PROMPT = """You write cold outreach emails from {sender_name} at LeadLock
 VOICE:
 - You ARE {sender_name}. Write like a real person texting a colleague, not a marketer.
 - Casual, direct, zero fluff. Talk like you'd talk to a buddy in the trades.
-- If you have their first name, open with it: "Hey Mike," or "Mike,"
-- If you only have a company name (no first name), open casually with the company: "Hey [Company] team," or just "Hey," and reference the company in the first sentence instead
-- NEVER use "Hey there," - it screams mass email
+- GREETING RULE (non-negotiable): If you have their first name, open with "Hey [first_name]," — if you only have a company name, open with "Hey [Company] team," — NEVER use "Hey there," or just "Hey," alone
 - ALWAYS sign off with just "{sender_name}" on its own line at the end. No "Best," or "Thanks," prefix - just the name.
 
 IDENTITY:
-- {sender_name} works with home services contractors on their lead response. Briefly establish this in the first email.
-- Sound like you've looked at their business specifically, not like you're blasting a list.
-- One line of credibility is enough: "I work with a handful of [trade] shops in [city/state]" or "we've been helping contractors in [city] respond faster"
+- {sender_name} works with home services contractors on their lead response.
+- Sound like you know their world. Use phrases like "I work with [trade] teams in [city/state]" or "I help a handful of [trade] shops in [area]."
+- One line of credibility is enough - don't oversell yourself.
 
 CONTENT:
+- HOOK FIRST: Your first real sentence (after the greeting) should hit hard with a specific dollar amount or stat. Examples: "Most [trade] contractors lose about $8,000 a month in leads that go to whoever picks up first" or "78% of homeowners book with the first contractor who responds."
 - Reference something SPECIFIC about their business - their Google rating, their city, their trade
 - One pain point per email: slow lead response kills revenue
-- Include one specific number or stat that sounds researched, not made up (e.g. "$2,400/month in missed revenue" or "78% of homeowners go with the first contractor who calls back")
-- Subject lines should create curiosity or reference a specific observation - never generic. Examples: "saw your 3.8 rating, Mike" or "Austin HVAC shops losing $12k/month"
-- Soft CTA - ask a question, don't push a demo
+- Soft CTA - ask a genuine question about their business, don't push a demo. Make the question specific to their workflow, not generic.
 
 FORMATTING:
 - No exclamation marks. No "game-changer", "revolutionary", "transform", or "unlock"
 - No emojis
 - NEVER use em dashes or en dashes. Use hyphens (-) or commas instead
 - NEVER use ellipsis (...)
-- Subject lines must be unique and specific - reference their company name, city, or trade. NEVER reuse the same subject across prospects
+- Subject lines must be unique and specific - reference their company name, city, first name, or trade. NEVER reuse the same subject across prospects
 - In body_text, include "If this isn't relevant, just reply 'stop' and I won't reach out again." as the second-to-last line (before {sender_name}). This is NOT needed in body_html (the footer handles it).
 - body_text must have proper line breaks between paragraphs (use \\n\\n). Do NOT output a single blob of text.
 - Output valid JSON only
@@ -48,7 +45,7 @@ ANTI-REPETITION (critical):
 - NEVER open with "I noticed", "I came across", "I found your", "I was looking at", "I saw that"
 - NEVER start two emails in the same sequence with the same sentence structure
 - NEVER reuse subject line angles across steps
-- Alternative openers: start with a question, a stat, their name + direct observation, or "Quick question"
+- Alternative openers: start with their name + a stat, a question, a dollar amount, or a direct observation
 
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
@@ -199,48 +196,49 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
 
 STEP_INSTRUCTIONS = {
     1: """STEP 1 — CURIOSITY / PAIN (first contact).
-Angle: Lead with a question or observation about THEIR business specifically.
-- Reference one concrete detail: their Google rating, their city, or their trade.
-- Mention a specific dollar amount contractors lose from slow lead response (e.g. "$2,400/month in missed revenue").
-- End with a genuine question about their business, not a pitch.
-- Subject line must create curiosity or reference a specific observation about them.
-- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-Under 120 words. Subject under 50 chars - must include their company name or city.""",
+GREETING: Start with "Hey {first_name}," if a first name is available. If no first name, use "Hey {company} team," — NEVER "Hey there,".
+HOOK: Your very first sentence after the greeting MUST reference a specific dollar amount contractors lose from slow lead response. Use a number like "$8,000/month" or "$6,500/month" — frame it as "leads that go to the first contractor who picks up the phone" or "leads that went cold waiting for a callback". Make it feel like a fact you know, not a sales pitch.
+CREDIBILITY: Include one line like "I work with {trade} teams in {city}" or "I help a few {trade} shops in {state} with this" — establish you know their world.
+REFERENCE: Mention something specific about THEIR business — their Google rating, their city, their trade, their website.
+CTA: End with a genuine, specific question about their business (e.g. "How fast is your crew getting back to new leads right now?" or "Is your team responding same-day?"). NOT "would you be interested?" or "can I show you?"
+SUBJECT: Must create curiosity or reference a specific observation about them. Must include their company name, city, or first name.
+BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
+Under 100 words. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
-Angle: Do NOT rehash the pain point from step 1. Lead with what similar contractors are doing.
-- Share what other contractors in their trade or city are doing differently.
-- Include a specific result or stat (e.g. "78% of homeowners go with the first contractor who calls back").
-- Ask a different question than step 1 - focus on their team's workflow, not revenue.
-- Subject line must use a completely different angle than step 1.
-- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-- Do NOT mention that you emailed before or "following up" - just lead with the new angle.
-Under 90 words. Subject under 50 chars.""",
+GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
+HOOK: Lead with a specific stat: "78% of homeowners book with the first contractor who responds" or similar. This is the FIRST sentence after the greeting — no preamble between greeting and hook.
+ANGLE: Do NOT rehash the pain point from step 1. Talk about what similar contractors in their area or trade are already doing differently. Frame it as "a few {trade} shops in {city} already respond in under 60 seconds" or similar.
+CTA: Ask a different question than step 1 — focus on their team's workflow, not revenue (e.g. "Is your team getting to new inquiries same-day right now?").
+SUBJECT: Completely different angle than step 1. Reference what similar teams are doing.
+BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
+BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
+Under 80 words. Subject under 50 chars.""",
 
     3: """STEP 3 — FAREWELL (final email).
-Angle: Short and final. No new stats, no new value props.
-- 3-4 sentences max. State this is the last email.
-- No selling. Just "if this ever matters, reply."
-- Subject line should feel short and final.
-- Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-Under 60 words. Subject under 40 chars.""",
+GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
+TONE: "Last note from me" energy. 2-3 sentences max.
+CONTENT: State this is the last email. No selling, no stats, no new value props. Just leave the door open: "if faster lead response ever becomes a priority, just reply and I'll circle back."
+SUBJECT: Should feel short and final.
+BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
+Under 50 words. Subject under 40 chars.""",
 }
 
 STEP_SUBJECT_EXAMPLES = {
     1: [
-        "Quick question for {company}",
-        "{city} {trade} shops losing $12k/month",
-        "saw your {rating} rating, {first_name}",
+        "contractors in {city} losing $8k/month",
+        "{first_name}, quick question about {company}",
+        "{trade} leads going cold in {city}",
     ],
     2: [
-        "what {trade} teams in {city} are doing differently",
-        "78% stat that surprised me, {first_name}",
+        "what {city} {trade} shops are doing differently",
+        "78% of homeowners go with whoever calls first",
         "{trade} response times in {city}",
     ],
     3: [
         "closing the loop, {first_name}",
         "last note from me",
-        "one more thing, {first_name}",
+        "wrapping up, {first_name}",
     ],
 }
 
@@ -346,63 +344,66 @@ def _build_fallback_outreach_email(
 ) -> dict:
     """Deterministic fallback when AI providers are unavailable."""
     first_name = _extract_first_name(prospect_name)
-    greeting = f"Hey {first_name}," if first_name else "Hey,"
+    company = (company_name or "your business").strip()
+    greeting = f"Hey {first_name}," if first_name else f"Hey {company} team,"
 
     location = ", ".join([v for v in [city, state] if v])
     trade = (trade_type or "home services").strip()
-    company = (company_name or "your business").strip()
 
     # Trade-specific revenue stats for fallback variation
     _trade_stats = {
-        "hvac": ("$3,200", "AC repair"),
-        "plumbing": ("$2,800", "emergency plumbing"),
-        "roofing": ("$4,100", "roof replacement"),
-        "electrical": ("$2,600", "electrical"),
-        "solar": ("$5,500", "solar install"),
+        "hvac": ("$8,200", "AC repair"),
+        "plumbing": ("$7,500", "emergency plumbing"),
+        "roofing": ("$9,400", "roof replacement"),
+        "electrical": ("$6,800", "electrical"),
+        "solar": ("$11,000", "solar install"),
     }
     monthly_loss, trade_service = _trade_stats.get(
-        trade.lower(), ("$2,400", "service")
+        trade.lower(), ("$8,000", "service")
     )
-
-    # Build a rating hook when data is available
-    rating_line = ""
-    if rating and review_count:
-        rating_line = (
-            f"Your {rating}/5 rating with {review_count} reviews caught my eye."
-        )
-    elif rating:
-        rating_line = f"Your {rating}/5 Google rating stood out."
 
     step = min(max(sequence_step, 1), 3)
     if step == 1:
-        subject = f"Quick question for {company}"[:60]
-        if rating_line:
-            step_line = rating_line
-        else:
-            step_line = (
-                f"I work with {trade} teams in {location or 'your market'} "
-                f"and {company} came up."
-            )
-        value_line = (
+        subject_name = first_name or company
+        subject = f"{subject_name}, quick question"[:60]
+        hook_line = (
             f"Most {trade} contractors lose about {monthly_loss} a month "
-            f"because leads wait too long for a callback."
+            f"in leads that go to whoever picks up the phone first."
         )
-        ask_line = "How fast is your team currently getting back to brand-new leads?"
+        credibility_line = (
+            f"I work with {trade} teams in {location or 'your market'} "
+            f"on exactly this."
+        )
+        value_line = ""
+        if rating and review_count:
+            value_line = (
+                f"Your {rating}/5 rating across {review_count} reviews tells me "
+                f"you do solid work - just a matter of getting to leads faster."
+            )
+        elif rating:
+            value_line = (
+                f"Your {rating}/5 Google rating tells me you do solid work "
+                f"- just a matter of getting to leads faster."
+            )
+        step_line = f"{hook_line}\n\n{credibility_line}"
+        if value_line:
+            step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
+        ask_line = "How fast is your crew getting back to new leads right now?"
     elif step == 2:
-        subject = f"{trade.capitalize()} teams in {city or 'your area'}"[:60]
+        subject = f"what {city or 'local'} {trade} shops are doing differently"[:60]
         step_line = (
-            "78% of homeowners go with the first contractor who calls back."
+            "78% of homeowners book with the first contractor who responds."
         )
         value_line = (
-            f"A few {trade} shops in {location or 'your area'} already reply "
-            f"to every lead in under 60 seconds."
+            f"A few {trade} shops in {location or 'your area'} already "
+            f"respond to every lead in under 60 seconds."
         )
-        ask_line = "Is your crew getting to new inquiries same-day right now?"
+        ask_line = "Is your team getting to new inquiries same-day right now?"
     else:
-        subject = f"Closing the loop, {first_name or company}"[:60]
+        subject = f"closing the loop, {first_name or company}"[:60]
         step_line = (
-            f"Last note from me. If faster lead response ever becomes a "
-            f"priority for {company}, just reply and I will circle back."
+            f"Last note from me. If faster lead response ever becomes "
+            f"a priority for {company}, just reply and I'll circle back."
         )
         value_line = ""
         ask_line = ""
@@ -489,11 +490,18 @@ async def generate_outreach_email(
             if not decision_maker_name:
                 effective_name = email_name
 
+    greeting_instruction = (
+        f'Open with: "Hey {first_name},"'
+        if first_name
+        else f'Open with: "Hey {company_name} team,"'
+    )
+
     prospect_details = f"""Prospect details:
-- First name: {first_name or '(no first name available - use company name in greeting)'}
+- First name: {first_name or '(unavailable)'}
 - Company: {company_name}
 - Trade: {trade_type}
-- Location: {city}, {state}"""
+- Location: {city}, {state}
+- GREETING: {greeting_instruction}"""
 
     if website:
         prospect_details += f"\n- Website: {website}"

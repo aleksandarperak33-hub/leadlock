@@ -218,10 +218,11 @@ async def _generate_email_with_template(
 
     if template and not template.is_ai_generated and template.body_template:
         # Static template with variable substitution
+        company_fallback = prospect.prospect_company or prospect.prospect_name or ""
         substitutions = {
             "{prospect_name}": prospect.prospect_name or "",
-            "{first_name}": first_name or "there",
-            "{company}": prospect.prospect_company or prospect.prospect_name or "",
+            "{first_name}": first_name or f"{company_fallback} team",
+            "{company}": company_fallback,
             "{city}": prospect.city or "",
             "{trade}": prospect.prospect_trade_type or "home services",
             "{sender_name}": sender_name,

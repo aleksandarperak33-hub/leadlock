@@ -87,6 +87,11 @@ class Outreach(Base):
         UUID(as_uuid=True), nullable=True
     )
 
+    # Email discovery tracking
+    email_discovery_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # Raw enrichment data
     enrichment_data: Mapped[Optional[dict]] = mapped_column(JSONB)
 
@@ -106,6 +111,7 @@ class Outreach(Base):
               postgresql_where="source_place_id IS NOT NULL"),
         Index("ix_outreach_sequence_step", "outreach_sequence_step"),
         Index("ix_outreach_winback", "winback_eligible", "winback_sent_at"),
+        Index("ix_outreach_email_discovery_attempted_at", "email_discovery_attempted_at"),
     )
 
     def __repr__(self) -> str:

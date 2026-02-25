@@ -41,6 +41,174 @@ class TestCheckDeliverabilityNoSends:
             mock_alert.assert_not_awaited()
 
 
+
+# ---------------------------------------------------------------------------
+# _check_deliverability - low sample size (alert suppression)
+# ---------------------------------------------------------------------------
+
+class TestCheckDeliverabilityLowSample:
+    """Tests for minimum sample size threshold (SMS_MIN_ALERT_SAMPLE).
+
+    When SMS volume is below the minimum threshold, delivery rate alerts
+    should be suppressed to avoid alert spam from statistically insignificant
+    data (e.g. 0/1 delivered from a rejected toll-free number).
+    """
+
+    async def test_one_send_zero_delivered_no_alert(self):
+        """1 send with 0% delivery rate should NOT fire alert (sample too small)."""
+        summary = {
+            "overall_delivery_rate": 0.0,
+            "total_sent_24h": 1,
+            "total_delivered_24h": 0,
+            "numbers": [],
+        }
+
+        with (
+            patch(
+                "src.workers.system_health.get_deliverability_summary",
+                new_callable=AsyncMock,
+                return_value=summary,
+            ),
+            patch(
+                "src.workers.system_health.send_alert",
+                new_callable=AsyncMock,
+            ) as mock_alert,
+            patch(
+                "src.workers.system_health.get_email_reputation",
+                new_callable=AsyncMock,
+                return_value={
+                    "status": "good",
+                    "score": 90.0,
+                    "metrics": {"sent": 0, "delivered": 0, "opened": 0},
+                    "throttle": "normal",
+                },
+            ),
+            patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
+        ):
+            from src.workers.system_health import _check_deliverability
+
+            await _check_deliverability()
+
+            # No SMS delivery alert should fire for 1 send
+            mock_alert.assert_not_awaited()
+
+    async def test_four_sends_below_threshold_no_alert(self):
+        """4 sends (below SMS_MIN_ALERT_SAMPLE=5) should NOT fire alert."""
+        summary = {
+            "overall_delivery_rate": 0.25,
+            "total_sent_24h": 4,
+            "total_delivered_24h": 1,
+            "numbers": [],
+        }
+
+        with (
+            patch(
+                "src.workers.system_health.get_deliverability_summary",
+                new_callable=AsyncMock,
+                return_value=summary,
+            ),
+            patch(
+                "src.workers.system_health.send_alert",
+                new_callable=AsyncMock,
+            ) as mock_alert,
+            patch(
+                "src.workers.system_health.get_email_reputation",
+                new_callable=AsyncMock,
+                return_value={
+                    "status": "good",
+                    "score": 90.0,
+                    "metrics": {"sent": 0, "delivered": 0, "opened": 0},
+                    "throttle": "normal",
+                },
+            ),
+            patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
+        ):
+            from src.workers.system_health import _check_deliverability
+
+            await _check_deliverability()
+
+            mock_alert.assert_not_awaited()
+
+    async def test_five_sends_at_threshold_fires_alert(self):
+        """5 sends (at SMS_MIN_ALERT_SAMPLE) with bad rate SHOULD fire alert."""
+        summary = {
+            "overall_delivery_rate": 0.20,
+            "total_sent_24h": 5,
+            "total_delivered_24h": 1,
+            "numbers": [],
+        }
+
+        with (
+            patch(
+                "src.workers.system_health.get_deliverability_summary",
+                new_callable=AsyncMock,
+                return_value=summary,
+            ),
+            patch(
+                "src.workers.system_health.send_alert",
+                new_callable=AsyncMock,
+            ) as mock_alert,
+            patch(
+                "src.workers.system_health.get_email_reputation",
+                new_callable=AsyncMock,
+                return_value={
+                    "status": "good",
+                    "score": 90.0,
+                    "metrics": {"sent": 0, "delivered": 0, "opened": 0},
+                    "throttle": "normal",
+                },
+            ),
+            patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
+        ):
+            from src.workers.system_health import _check_deliverability
+
+            await _check_deliverability()
+
+            # Should fire the SMS delivery alert at threshold
+            assert mock_alert.await_count >= 1
+
+    async def test_low_sample_logs_info(self, caplog):
+        """Low sample size logs INFO message for observability."""
+        summary = {
+            "overall_delivery_rate": 0.0,
+            "total_sent_24h": 2,
+            "total_delivered_24h": 0,
+            "numbers": [],
+        }
+
+        with (
+            patch(
+                "src.workers.system_health.get_deliverability_summary",
+                new_callable=AsyncMock,
+                return_value=summary,
+            ),
+            patch(
+                "src.workers.system_health.send_alert",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "src.workers.system_health.get_email_reputation",
+                new_callable=AsyncMock,
+                return_value={
+                    "status": "good",
+                    "score": 90.0,
+                    "metrics": {"sent": 0, "delivered": 0, "opened": 0},
+                    "throttle": "normal",
+                },
+            ),
+            patch("src.utils.dedup.get_redis", new_callable=AsyncMock),
+        ):
+            from src.workers.system_health import _check_deliverability
+
+            with caplog.at_level(logging.INFO, logger="src.workers.system_health"):
+                await _check_deliverability()
+
+            assert any(
+                "sample too small" in r.message
+                for r in caplog.records
+            )
+
+
 # ---------------------------------------------------------------------------
 # _check_deliverability - delivery rate alerts
 # ---------------------------------------------------------------------------

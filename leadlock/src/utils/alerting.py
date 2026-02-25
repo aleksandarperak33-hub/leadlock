@@ -5,18 +5,35 @@ Alert channels:
 1. Structured log (always) - at ERROR level
 2. Webhook (configurable) - Discord/Slack URL via ALERT_WEBHOOK_URL env var
 
-Rate limiting: Max 1 alert per type per 5 minutes to prevent alert storms.
+Rate limiting: Per-type cooldowns to prevent alert storms.
 Cooldowns stored in Redis (survives restarts, prevents post-deploy alert spam).
+Default cooldown is 5 minutes; high-frequency alerts use longer cooldowns.
 """
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-ALERT_COOLDOWN_SECONDS = 300  # 5 minutes
+ALERT_COOLDOWN_SECONDS = 300  # 5 minutes (default)
+
+# Per-type cooldown overrides (seconds). Alerts that fire on periodic metrics
+# checks use longer cooldowns to avoid spamming on persistent conditions.
+ALERT_COOLDOWN_OVERRIDES: dict[str, int] = {
+    "sms_delivery_failed": 3600,        # 1 hour — persistent metric, not transient
+    "high_bounce_rate": 3600,           # 1 hour
+    "outreach_reputation_paused": 3600, # 1 hour
+    "outreach_reputation_critical": 3600,  # 1 hour
+    "outreach_zero_sends": 3600,        # 1 hour
+    "outreach_low_open_rate": 3600,     # 1 hour
+}
 
 # In-memory fallback when Redis is down (cleared on restart, but prevents alert storms)
 _local_cooldowns: dict[str, float] = {}  # alert_type → expiry timestamp
+
+
+def _get_cooldown_seconds(alert_type: str) -> int:
+    """Get cooldown duration for an alert type (per-type override or default)."""
+    return ALERT_COOLDOWN_OVERRIDES.get(alert_type, ALERT_COOLDOWN_SECONDS)
 
 
 class AlertType:
@@ -48,7 +65,7 @@ async def send_alert(
 ) -> None:
     """
     Send an alert through all configured channels.
-    Rate-limited to prevent alert storms.
+    Rate-limited per alert type to prevent alert storms.
     """
     # Atomic rate limit check + record (SET NX EX in Redis, in-memory fallback)
     if not await _acquire_cooldown(alert_type):
@@ -91,8 +108,12 @@ async def _acquire_cooldown(alert_type: str) -> bool:
 
     Uses Redis SET NX EX (atomic) to eliminate the race between check and record.
     Falls back to in-memory dict when Redis is unavailable.
+
+    Cooldown duration is per-type: see ALERT_COOLDOWN_OVERRIDES.
     """
     import time
+
+    cooldown = _get_cooldown_seconds(alert_type)
 
     # Try Redis first (atomic SET NX EX)
     try:
@@ -100,7 +121,7 @@ async def _acquire_cooldown(alert_type: str) -> bool:
         redis = await get_redis()
         cooldown_key = f"leadlock:alert_cooldown:{alert_type}"
         # SET NX EX: only sets if key doesn't exist, with TTL — atomic check+record
-        acquired = await redis.set(cooldown_key, "1", nx=True, ex=ALERT_COOLDOWN_SECONDS)
+        acquired = await redis.set(cooldown_key, "1", nx=True, ex=cooldown)
         return bool(acquired)
     except Exception as e:
         # Redis down — use in-memory fallback to prevent alert storms
@@ -109,7 +130,7 @@ async def _acquire_cooldown(alert_type: str) -> bool:
         expiry = _local_cooldowns.get(alert_type, 0)
         if now < expiry:
             return False
-        _local_cooldowns[alert_type] = now + ALERT_COOLDOWN_SECONDS
+        _local_cooldowns[alert_type] = now + cooldown
         return True
 
 

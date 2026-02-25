@@ -207,3 +207,98 @@ class TestSendEmailAlert:
             )
 
             mock_email.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Per-type cooldown overrides
+# ---------------------------------------------------------------------------
+
+class TestCooldownOverrides:
+    """Tests for per-alert-type cooldown durations."""
+
+    def test_sms_delivery_failed_has_1_hour_cooldown(self):
+        """SMS delivery failed uses 1-hour cooldown instead of default 5 minutes."""
+        from src.utils.alerting import (
+            _get_cooldown_seconds,
+            ALERT_COOLDOWN_SECONDS,
+        )
+
+        cooldown = _get_cooldown_seconds("sms_delivery_failed")
+        assert cooldown == 3600
+        assert cooldown > ALERT_COOLDOWN_SECONDS
+
+    def test_default_cooldown_for_unknown_type(self):
+        """Unknown alert types use the default 5-minute cooldown."""
+        from src.utils.alerting import (
+            _get_cooldown_seconds,
+            ALERT_COOLDOWN_SECONDS,
+        )
+
+        cooldown = _get_cooldown_seconds("some_unknown_type")
+        assert cooldown == ALERT_COOLDOWN_SECONDS
+
+    def test_health_check_failed_uses_default(self):
+        """Health check alerts use the short default cooldown (infrastructure issues)."""
+        from src.utils.alerting import (
+            _get_cooldown_seconds,
+            ALERT_COOLDOWN_SECONDS,
+        )
+
+        cooldown = _get_cooldown_seconds("health_check_failed")
+        assert cooldown == ALERT_COOLDOWN_SECONDS
+
+    def test_all_overrides_are_longer_than_default(self):
+        """Every cooldown override should be longer than the default."""
+        from src.utils.alerting import (
+            ALERT_COOLDOWN_OVERRIDES,
+            ALERT_COOLDOWN_SECONDS,
+        )
+
+        for alert_type, override in ALERT_COOLDOWN_OVERRIDES.items():
+            assert override > ALERT_COOLDOWN_SECONDS, (
+                f"{alert_type} override ({override}s) should be > default ({ALERT_COOLDOWN_SECONDS}s)"
+            )
+
+    async def test_acquire_cooldown_uses_override_in_redis(self):
+        """_acquire_cooldown passes the per-type TTL to Redis SET NX EX."""
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
+
+        with patch(
+            "src.utils.dedup.get_redis",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ):
+            from src.utils.alerting import _acquire_cooldown
+
+            result = await _acquire_cooldown("sms_delivery_failed")
+
+            assert result is True
+            mock_redis.set.assert_called_once_with(
+                "leadlock:alert_cooldown:sms_delivery_failed",
+                "1",
+                nx=True,
+                ex=3600,  # 1-hour override, not 300s default
+            )
+
+    async def test_acquire_cooldown_uses_default_for_unknown(self):
+        """_acquire_cooldown uses default cooldown for types without overrides."""
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
+
+        with patch(
+            "src.utils.dedup.get_redis",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ):
+            from src.utils.alerting import _acquire_cooldown
+
+            result = await _acquire_cooldown("lead_processing_failed")
+
+            assert result is True
+            mock_redis.set.assert_called_once_with(
+                "leadlock:alert_cooldown:lead_processing_failed",
+                "1",
+                nx=True,
+                ex=300,  # default 5-minute cooldown
+            )

@@ -181,17 +181,17 @@ class TestStepInstructions:
     def test_step_1_is_curiosity_pain(self):
         assert "STEP 1" in STEP_INSTRUCTIONS[1]
         assert "CURIOSITY" in STEP_INSTRUCTIONS[1]
-        assert "120 words" in STEP_INSTRUCTIONS[1]
+        assert "100 words" in STEP_INSTRUCTIONS[1]
 
     def test_step_2_is_social_proof(self):
         assert "STEP 2" in STEP_INSTRUCTIONS[2]
         assert "SOCIAL PROOF" in STEP_INSTRUCTIONS[2]
-        assert "90 words" in STEP_INSTRUCTIONS[2]
+        assert "80 words" in STEP_INSTRUCTIONS[2]
 
     def test_step_3_is_farewell(self):
         assert "STEP 3" in STEP_INSTRUCTIONS[3]
         assert "FAREWELL" in STEP_INSTRUCTIONS[3]
-        assert "60 words" in STEP_INSTRUCTIONS[3]
+        assert "50 words" in STEP_INSTRUCTIONS[3]
 
     def test_each_step_has_distinct_angle(self):
         """Each step should have a unique angle keyword."""
@@ -423,7 +423,7 @@ class TestGenerateOutreachEmail:
         )
 
         user_msg = mock_ai.call_args.kwargs.get("user_message", "")
-        assert "no first name available" in user_msg
+        assert "(unavailable)" in user_msg
 
 
 class TestClassifyReply:
@@ -468,18 +468,18 @@ class TestClassifyReply:
         assert result["classification"] == "auto_reply"
 
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
-    async def test_unknown_classification_defaults_to_interested(self, mock_ai):
-        """Unknown AI output should default to 'interested' (safe fallback)."""
+    async def test_unknown_classification_defaults_to_auto_reply(self, mock_ai):
+        """Unknown AI output should default to 'auto_reply' (safe fallback)."""
         mock_ai.return_value = _mock_ai_response("maybe_later")
         result = await classify_reply("We might be interested in Q3")
-        assert result["classification"] == "interested"
+        assert result["classification"] == "auto_reply"
 
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
-    async def test_ai_error_defaults_to_interested(self, mock_ai):
-        """AI failure should default to 'interested' to avoid missing leads."""
+    async def test_ai_error_defaults_to_auto_reply(self, mock_ai):
+        """AI failure should default to 'auto_reply' (safe, avoids false positives)."""
         mock_ai.return_value = _mock_ai_response("", error="Timeout")
         result = await classify_reply("Some reply text")
-        assert result["classification"] == "interested"
+        assert result["classification"] == "auto_reply"
 
     def test_valid_classifications_complete(self):
         """All expected classifications should be in the set."""
@@ -595,7 +595,7 @@ class TestFallbackTemplateEnhanced:
         assert result["ai_cost_usd"] == 0.0
 
     def test_step_1_without_rating(self):
-        """Step 1 fallback without rating should still work."""
+        """Step 1 fallback without rating should use hook and credibility line."""
         result = _build_fallback_outreach_email(
             prospect_name="Mike Johnson",
             company_name="Cool Air HVAC",
@@ -605,7 +605,9 @@ class TestFallbackTemplateEnhanced:
             sequence_step=1,
             sender_name="Alek",
         )
-        assert "Cool Air HVAC" in result["body_text"]
+        assert "Hey Mike," in result["body_text"]
+        assert "$8,200" in result["body_text"]
+        assert "I work with hvac teams in Austin, TX" in result["body_text"]
         assert result["fallback_used"] is True
 
     def test_step_2_social_proof_angle(self):
