@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { AlertCircle, Zap, ArrowRight } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -30,6 +31,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#FAFAFA] animate-[fade-up_0.4s_ease-out]">
+      <SEO
+        title="Login"
+        description="Sign in to your LeadLock dashboard to manage leads, view analytics, and configure your AI speed-to-lead platform."
+        path="/login"
+      />
+
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">

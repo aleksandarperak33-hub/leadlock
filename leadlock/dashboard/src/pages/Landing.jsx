@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 import {
   Zap, MessageSquare, Clock, Shield, Calendar, BarChart3,
   CheckCircle2, ChevronDown, ChevronRight, ArrowRight, Star,
   Phone, Bot, Users, TrendingUp, Lock, Globe, Headphones,
   Menu, X, Rocket,
 } from 'lucide-react';
+import SEO from '../components/SEO';
 
 // ─── Animation Helpers ──────────────────────────────────────────────────────
 
@@ -346,8 +348,56 @@ export default function Landing() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ_ITEMS.map(item => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  };
+
+  const orgJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'LeadLock',
+    url: 'https://leadlock.org',
+    logo: 'https://leadlock.org/favicon.svg',
+    contactPoint: {
+      '@type': 'ContactPoint',
+      email: 'support@leadlock.org',
+      contactType: 'customer service',
+    },
+  };
+
+  const softwareJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'LeadLock',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    offers: {
+      '@type': 'AggregateOffer',
+      lowPrice: '297',
+      highPrice: '1497',
+      priceCurrency: 'USD',
+    },
+  };
+
   return (
     <div className="landing-dark min-h-screen">
+      <SEO
+        title="AI Speed-to-Lead for Home Services"
+        description="Respond to every lead in under 60 seconds with AI-powered SMS. LeadLock qualifies leads, books appointments, and integrates with your CRM. Built for home services contractors."
+        path="/"
+      />
+      <Helmet>
+        <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
+        <script type="application/ld+json">{JSON.stringify(orgJsonLd)}</script>
+        <script type="application/ld+json">{JSON.stringify(softwareJsonLd)}</script>
+      </Helmet>
+
       {/* ═══ 1. STICKY NAV ═══ */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled ? 'ld-nav-glass' : 'bg-transparent'

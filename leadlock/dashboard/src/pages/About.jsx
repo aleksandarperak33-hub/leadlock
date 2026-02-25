@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Zap, ArrowLeft, MessageSquare, Bot, Calendar, TrendingUp, Mail, MapPin, ExternalLink } from 'lucide-react';
+import SEO from '../components/SEO';
 
 const STEPS = [
   {
@@ -29,6 +30,12 @@ export default function About() {
 
   return (
     <div className="landing-dark min-h-screen">
+      <SEO
+        title="About LeadLock"
+        description="AI-powered speed-to-lead platform built for home services contractors. Respond to every lead in under 60 seconds, qualify with AI, and book appointments automatically."
+        path="/about"
+      />
+
       {/* Nav */}
       <nav className="border-b border-[#222230]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

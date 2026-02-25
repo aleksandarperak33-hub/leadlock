@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+
+Disallow: /dashboard
+Disallow: /dashboard/*
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /onboarding
+Disallow: /onboarding/*
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+
+Sitemap: https://leadlock.org/sitemap.xml

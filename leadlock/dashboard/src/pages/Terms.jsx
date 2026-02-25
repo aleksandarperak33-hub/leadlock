@@ -1,9 +1,16 @@
 import { Link } from 'react-router-dom';
 import { Zap, ArrowLeft } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Terms() {
   return (
     <div className="landing-dark min-h-screen">
+      <SEO
+        title="Terms of Service"
+        description="Terms governing use of the LeadLock AI speed-to-lead platform. Billing, SMS compliance, AI disclosure, and service agreements."
+        path="/terms"
+      />
+
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">

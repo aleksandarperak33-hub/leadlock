@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Zap, ArrowLeft, Mail, MapPin, ExternalLink, Send } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Contact() {
   const year = new Date().getFullYear();
@@ -17,6 +18,12 @@ export default function Contact() {
 
   return (
     <div className="landing-dark min-h-screen">
+      <SEO
+        title="Contact Us"
+        description="Get in touch with the LeadLock team. Schedule a demo, ask questions, or get support for your AI speed-to-lead platform."
+        path="/contact"
+      />
+
       {/* Nav */}
       <nav className="border-b border-[#222230]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

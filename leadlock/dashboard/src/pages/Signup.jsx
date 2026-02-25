@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle, Zap, ArrowRight, CheckCircle2 } from 'lucide-react';
+import SEO from '../components/SEO';
 
 const TRADE_TYPES = [
   'HVAC',
@@ -122,6 +123,12 @@ export default function Signup() {
 
   return (
     <div className="landing-dark min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <SEO
+        title="Get Started"
+        description="Create your LeadLock account and start responding to every lead in under 60 seconds. Set up takes 2 minutes."
+        path="/signup"
+      />
+
       <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-orange-500/[0.04] blur-3xl" />
       <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-500/[0.03] blur-3xl" />
 

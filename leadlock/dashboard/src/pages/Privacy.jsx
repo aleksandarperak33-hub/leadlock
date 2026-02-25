@@ -1,11 +1,18 @@
 import { Link } from 'react-router-dom';
 import { Zap, ArrowLeft } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Privacy() {
   const year = new Date().getFullYear();
 
   return (
     <div className="landing-dark min-h-screen">
+      <SEO
+        title="Privacy Policy"
+        description="How LeadLock collects, uses, and protects your data. TCPA-compliant SMS practices, data retention policies, and your privacy rights."
+        path="/privacy"
+      />
+
       {/* Nav */}
       <nav className="border-b border-[#222230]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
