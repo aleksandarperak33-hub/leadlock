@@ -200,7 +200,7 @@ GREETING: Start with "Hey {first_name}," if a first name is available. If no fir
 HOOK: Your very first sentence after the greeting MUST reference a specific dollar amount contractors lose from slow lead response. Use a number like "$8,000/month" or "$6,500/month" — frame it as "leads that go to the first contractor who picks up the phone" or "leads that went cold waiting for a callback". Make it feel like a fact you know, not a sales pitch.
 CREDIBILITY: Include one line like "I work with {trade} teams in {city}" or "I help a few {trade} shops in {state} with this" — establish you know their world.
 REFERENCE: Mention something specific about THEIR business — their Google rating, their city, their trade, their website.
-CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it with an audit angle: "I can pull your actual response times and show you exactly where leads are slipping — grab 10 min here: {booking_url}". If no booking_url, end with a genuine question about their workflow (e.g. "How fast is your crew getting back to new leads right now?"). NEVER say "would you be interested?" or "can I show you?"
+CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it: "I can show you exactly how much revenue is slipping through on slow follow-ups — takes 10 min: {booking_url}". If no booking_url, end with a genuine question about their workflow (e.g. "How fast is your crew getting back to new leads right now?"). NEVER say "would you be interested?" or "can I show you?"
 SUBJECT: Must create curiosity or reference a specific observation about them. Must include their company name, city, or first name.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 100 words. Subject under 50 chars.""",
@@ -209,7 +209,7 @@ Under 100 words. Subject under 50 chars.""",
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
 HOOK: Lead with a specific stat: "78% of homeowners book with the first contractor who responds" or similar. This is the FIRST sentence after the greeting — no preamble between greeting and hook.
 ANGLE: Do NOT rehash the pain point from step 1. Talk about what similar contractors in their area or trade are already doing differently. Frame it as "a few {trade} shops in {city} already respond in under 60 seconds" or similar.
-CTA: If a booking_url is provided, use a short nudge: "Worth a quick look? {booking_url}". If no booking_url, ask a different question than step 1 focused on their workflow.
+CTA: If a booking_url is provided, use a short nudge: "Happy to show you how it works — 10 min: {booking_url}". If no booking_url, ask a different question than step 1 focused on their workflow.
 SUBJECT: Completely different angle than step 1. Reference what similar teams are doing.
 BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
@@ -391,8 +391,8 @@ def _build_fallback_outreach_email(
             step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
         if booking_url:
             ask_line = (
-                f"I can pull your actual response times and show you exactly "
-                f"where leads are slipping - grab 10 min here: {booking_url}"
+                f"I can show you exactly how much revenue is slipping through "
+                f"on slow follow-ups - takes 10 min: {booking_url}"
             )
         else:
             ask_line = "How fast is your crew getting back to new leads right now?"
@@ -406,7 +406,7 @@ def _build_fallback_outreach_email(
             f"respond to every lead in under 60 seconds."
         )
         if booking_url:
-            ask_line = f"Worth a quick look? {booking_url}"
+            ask_line = f"Happy to show you how it works - 10 min: {booking_url}"
         else:
             ask_line = "Is your team getting to new inquiries same-day right now?"
     else:
