@@ -195,12 +195,7 @@ async def process_qualify(
         return fallback
 
     # Parse JSON response - strip markdown fences if present
-    raw = result["content"].strip()
-    if raw.startswith("```"):
-        # Remove ```json ... ``` wrapper
-        lines = raw.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        raw = "\n".join(lines).strip()
+    raw = _strip_markdown_fences(result["content"].strip())
 
     ai_cost = result.get("cost_usd", 0.0)
     ai_latency = result.get("latency_ms", 0)
@@ -222,14 +217,48 @@ async def process_qualify(
         return response
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         logger.warning("Failed to parse qualify response: %s. Content: %s", str(e), raw[:200])
-        # Try to extract just the message from the response
-        response = QualifyResponse(
-            message=raw[:300] if raw else _fallback_response(conversation_turn).message,
-            internal_notes=f"Parse error: {str(e)}",
-        )
+        # Try to extract the "message" field via string search before giving up
+        extracted = _extract_message_field(raw)
+        if extracted:
+            response = QualifyResponse(
+                message=extracted,
+                internal_notes=f"Extracted message from malformed JSON: {str(e)}",
+            )
+        else:
+            # Fall back to a safe canned response — NEVER send raw JSON to leads
+            response = _fallback_response(conversation_turn)
+            response.internal_notes = f"AI parse failure, used fallback. Raw: {raw[:200]}"
         response.ai_cost_usd = ai_cost
         response.ai_latency_ms = ai_latency
         return response
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Robustly strip markdown code fences from AI responses."""
+    import re
+    # Match ```json ... ``` or ``` ... ``` (possibly with language tag)
+    match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # Fallback: strip leading/trailing ``` lines
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        return "\n".join(lines).strip()
+    return text
+
+
+def _extract_message_field(raw: str) -> str | None:
+    """Try to extract the 'message' value from malformed JSON using regex."""
+    import re
+    match = re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+    if match:
+        # Unescape JSON string escapes
+        try:
+            return json.loads(f'"{match.group(1)}"')
+        except (json.JSONDecodeError, ValueError):
+            return match.group(1)
+    return None
 
 
 def _fallback_response(turn: int) -> QualifyResponse:

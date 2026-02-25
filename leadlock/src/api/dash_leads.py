@@ -376,3 +376,98 @@ async def update_lead_notes(
         lead.notes = notes
     lead.updated_at = datetime.now(timezone.utc)
     return {"status": "updated"}
+
+
+# === REPLY ===
+
+@router.post("/api/v1/dashboard/leads/{lead_id}/reply")
+async def reply_to_lead(
+    lead_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Send a manual SMS reply to a lead from the dashboard."""
+    try:
+        lead_uuid = uuid.UUID(lead_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid lead ID format")
+    lead = await db.get(Lead, lead_uuid)
+    if not lead or lead.client_id != client.id:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    message = (payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
+    if len(message) > 1600:
+        raise HTTPException(status_code=400, detail="Message too long (max 1600 chars)")
+
+    if not lead.phone:
+        raise HTTPException(status_code=400, detail="Lead has no phone number")
+
+    # Compliance check before sending
+    from src.services.compliance import full_compliance_check
+    compliance = full_compliance_check(
+        has_consent=True,
+        consent_type="express",
+        is_opted_out=lead.state == "opted_out",
+        state_code=lead.state_code,
+        is_emergency=False,
+        message=message,
+        is_first_message=False,
+        business_name=client.business_name,
+    )
+    if not compliance:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Compliance blocked: {compliance.reason}",
+        )
+
+    # Send SMS
+    from src.services.sms import send_sms
+    sms_result = await send_sms(
+        to=lead.phone,
+        body=message,
+        from_phone=client.twilio_phone,
+        messaging_service_sid=client.twilio_messaging_service_sid,
+    )
+
+    if sms_result.get("error") and not sms_result.get("sid"):
+        raise HTTPException(
+            status_code=502,
+            detail=f"SMS send failed: {sms_result['error']}",
+        )
+
+    # Record conversation
+    conv = Conversation(
+        lead_id=lead.id,
+        client_id=client.id,
+        direction="outbound",
+        agent_id="human",
+        content=message,
+        from_phone=client.twilio_phone or "",
+        to_phone=lead.phone,
+        delivery_status=sms_result.get("status", "sent"),
+        twilio_sid=sms_result.get("sid"),
+    )
+    db.add(conv)
+
+    # Update lead counters
+    lead.total_messages_sent = (lead.total_messages_sent or 0) + 1
+    lead.updated_at = datetime.now(timezone.utc)
+
+    # Log event
+    db.add(EventLog(
+        lead_id=lead.id,
+        client_id=client.id,
+        action="manual_sms_sent",
+        message=f"Manual reply sent from dashboard ({len(message)} chars)",
+    ))
+
+    await db.commit()
+
+    return {
+        "status": "sent",
+        "sid": sms_result.get("sid"),
+        "segments": sms_result.get("segments", 1),
+    }

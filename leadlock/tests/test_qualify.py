@@ -308,8 +308,8 @@ class TestProcessQualify:
         assert resp.message  # Not empty
 
     @pytest.mark.asyncio
-    async def test_json_parse_error_returns_raw_message(self):
-        """When AI returns non-JSON, the raw content becomes the message."""
+    async def test_json_parse_error_uses_safe_fallback(self):
+        """When AI returns non-JSON without extractable message, safe fallback is used."""
         ai_result = {
             "content": "Sorry, I can't help with that right now.",
             "cost_usd": 0.002,
@@ -320,9 +320,23 @@ class TestProcessQualify:
             resp = await process_qualify(**_DEFAULT_KWARGS)
 
         assert isinstance(resp, QualifyResponse)
-        assert resp.message == "Sorry, I can't help with that right now."
-        assert "Parse error" in resp.internal_notes
+        # Should use fallback, never send raw non-JSON to leads
+        assert resp.message  # Not empty
+        assert "fallback" in resp.internal_notes.lower() or "parse" in resp.internal_notes.lower()
         assert resp.ai_cost_usd == 0.002
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_with_extractable_message(self):
+        """When JSON is broken but has a "message" field, extract and use it."""
+        # Simulates truncated JSON that still contains the message
+        broken_json = '{"message": "Is this for your home?", "qualification": {"service_type":'
+        ai_result = {"content": broken_json, "cost_usd": 0.001, "latency_ms": 200, "error": None}
+
+        with patch("src.agents.qualify.generate_response", new_callable=AsyncMock, return_value=ai_result):
+            resp = await process_qualify(**_DEFAULT_KWARGS)
+
+        assert resp.message == "Is this for your home?"
+        assert "Extracted message" in resp.internal_notes
 
     @pytest.mark.asyncio
     async def test_json_with_markdown_fences(self):
@@ -507,7 +521,7 @@ class TestProcessQualify:
 
     @pytest.mark.asyncio
     async def test_key_error_in_parsed_json(self):
-        """JSON that parses but lacks 'message' key triggers parse-error path."""
+        """JSON that parses but lacks 'message' key triggers fallback path."""
         payload = {"qualification": {"service_type": "AC"}, "internal_notes": "missing message key"}
         ai_result = {"content": json.dumps(payload), "cost_usd": 0.001, "latency_ms": 200, "error": None}
 
@@ -515,7 +529,8 @@ class TestProcessQualify:
             resp = await process_qualify(**_DEFAULT_KWARGS)
 
         assert isinstance(resp, QualifyResponse)
-        assert "Parse error" in resp.internal_notes
+        # Should use fallback since no "message" key extractable
+        assert resp.message  # Not empty
 
     @pytest.mark.asyncio
     async def test_temperature_is_03(self):
@@ -554,15 +569,17 @@ class TestProcessQualify:
         assert resp.qualification.urgency == "emergency"
 
     @pytest.mark.asyncio
-    async def test_long_raw_content_truncated_to_300(self):
-        """If parse fails on long non-JSON content, message is truncated to 300 chars."""
+    async def test_long_raw_content_uses_fallback(self):
+        """If parse fails on long non-JSON content, safe fallback is used instead of raw."""
         long_text = "x" * 500
         ai_result = {"content": long_text, "cost_usd": 0.001, "latency_ms": 100, "error": None}
 
         with patch("src.agents.qualify.generate_response", new_callable=AsyncMock, return_value=ai_result):
             resp = await process_qualify(**_DEFAULT_KWARGS)
 
-        assert len(resp.message) == 300
+        # Fallback message should be short and safe, not the raw 500-char gibberish
+        assert len(resp.message) < 300
+        assert resp.message  # Not empty
 
     @pytest.mark.asyncio
     async def test_empty_services_dict(self):

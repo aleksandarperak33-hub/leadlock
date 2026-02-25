@@ -281,6 +281,106 @@ async def get_compliance_summary(
     )
 
 
+@router.get("/api/v1/dashboard/compliance/details")
+async def get_compliance_details(
+    db: AsyncSession = Depends(get_db),
+    client: Client = Depends(get_current_client),
+):
+    """Get detailed compliance breakdown — consent records, opt-outs, quiet hours, cold outreach."""
+    cid = client.id
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = now - timedelta(days=30)
+
+    # Consent records by type
+    consent_type_result = await db.execute(
+        select(ConsentRecord.consent_type, func.count(ConsentRecord.id))
+        .where(ConsentRecord.client_id == cid)
+        .group_by(ConsentRecord.consent_type)
+    )
+    consent_by_type = {row[0]: row[1] for row in consent_type_result.all()}
+
+    # Recent opt-outs (last 30d)
+    recent_optouts = (await db.execute(
+        select(func.count(ConsentRecord.id)).where(
+            and_(
+                ConsentRecord.client_id == cid,
+                ConsentRecord.opted_out == True,
+                ConsentRecord.updated_at >= thirty_days_ago,
+            )
+        )
+    )).scalar() or 0
+
+    # All-time opt-outs
+    total_optouts = (await db.execute(
+        select(func.count(ConsentRecord.id)).where(
+            and_(ConsentRecord.client_id == cid, ConsentRecord.opted_out == True)
+        )
+    )).scalar() or 0
+
+    # Total consent records
+    total_consent = (await db.execute(
+        select(func.count(ConsentRecord.id)).where(ConsentRecord.client_id == cid)
+    )).scalar() or 0
+
+    # Messages sent in last 30d
+    from src.models.conversation import Conversation
+    messages_sent_30d = (await db.execute(
+        select(func.count(Conversation.id)).where(
+            and_(
+                Conversation.client_id == cid,
+                Conversation.direction == "outbound",
+                Conversation.created_at >= thirty_days_ago,
+            )
+        )
+    )).scalar() or 0
+
+    # Pending followup tasks
+    pending_followups = (await db.execute(
+        select(func.count(FollowupTask.id)).where(
+            and_(FollowupTask.client_id == cid, FollowupTask.status == "pending")
+        )
+    )).scalar() or 0
+
+    # Compliance events (blocked sends, violations)
+    compliance_events_result = await db.execute(
+        select(EventLog)
+        .where(
+            and_(
+                EventLog.client_id == cid,
+                EventLog.action.in_([
+                    "compliance_blocked", "quiet_hours_blocked",
+                    "opt_out_processed", "cold_outreach_limit",
+                ]),
+                EventLog.created_at >= thirty_days_ago,
+            )
+        )
+        .order_by(desc(EventLog.created_at))
+        .limit(50)
+    )
+    compliance_events = [
+        {
+            "id": str(e.id),
+            "action": e.action,
+            "message": e.message,
+            "lead_id": str(e.lead_id) if e.lead_id else None,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in compliance_events_result.scalars().all()
+    ]
+
+    return {
+        "consent_by_type": consent_by_type,
+        "total_consent_records": total_consent,
+        "total_opted_out": total_optouts,
+        "recent_opted_out_30d": recent_optouts,
+        "opt_out_rate": round(total_optouts / total_consent, 4) if total_consent > 0 else 0.0,
+        "messages_sent_30d": messages_sent_30d,
+        "pending_followups": pending_followups,
+        "compliance_events": compliance_events,
+        "last_audit": now.isoformat(),
+    }
+
+
 # === BOOKINGS ===
 
 @router.get("/api/v1/dashboard/bookings")

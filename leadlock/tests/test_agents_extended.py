@@ -885,8 +885,10 @@ class TestRouteToQualify:
 class TestRouteToBook:
     """Cover lines 544-604 in _route_to_book."""
 
+    @patch("src.services.learning.record_lead_signal", new_callable=AsyncMock)
+    @patch("src.services.config_cache.get_sales_config", new_callable=AsyncMock, return_value=None)
     @patch("src.agents.conductor.process_booking", new_callable=AsyncMock)
-    async def test_booking_confirmed_creates_record(self, mock_booking):
+    async def test_booking_confirmed_creates_record(self, mock_booking, _mock_config, _mock_signal):
         """booking_confirmed=True should create Booking and EventLog."""
         book_result = BookResponse(
             message="You're all set for tomorrow at 9am!",
@@ -915,8 +917,10 @@ class TestRouteToBook:
         # Booking + EventLog added
         assert db.add.call_count >= 2
 
+    @patch("src.services.learning.record_lead_signal", new_callable=AsyncMock)
+    @patch("src.services.config_cache.get_sales_config", new_callable=AsyncMock, return_value=None)
     @patch("src.agents.conductor.process_booking", new_callable=AsyncMock)
-    async def test_booking_confirmed_unparseable_date(self, mock_booking):
+    async def test_booking_confirmed_unparseable_date(self, mock_booking, _mock_config, _mock_signal):
         """Unparseable appointment_date should use today's date."""
         book_result = BookResponse(
             message="You're all set!",
@@ -939,8 +943,10 @@ class TestRouteToBook:
         # Booking should still be created (with today's date)
         assert db.add.call_count >= 2
 
+    @patch("src.services.learning.record_lead_signal", new_callable=AsyncMock)
+    @patch("src.services.config_cache.get_sales_config", new_callable=AsyncMock, return_value=None)
     @patch("src.agents.conductor.process_booking", new_callable=AsyncMock)
-    async def test_booking_confirmed_no_date(self, mock_booking):
+    async def test_booking_confirmed_no_date(self, mock_booking, _mock_config, _mock_signal):
         """booking_confirmed=True with no appointment_date uses today's date."""
         book_result = BookResponse(
             message="You're all set!",
@@ -962,8 +968,10 @@ class TestRouteToBook:
         assert lead.state == "booked"
         assert db.add.call_count >= 2
 
+    @patch("src.services.learning.record_lead_signal", new_callable=AsyncMock)
+    @patch("src.services.config_cache.get_sales_config", new_callable=AsyncMock, return_value=None)
     @patch("src.agents.conductor.process_booking", new_callable=AsyncMock)
-    async def test_needs_human_handoff(self, mock_booking):
+    async def test_needs_human_handoff(self, mock_booking, _mock_config, _mock_signal):
         """needs_human_handoff=True should keep state=booking and log event."""
         book_result = BookResponse(
             message="Let me get a manager to help with that request.",
@@ -987,8 +995,10 @@ class TestRouteToBook:
         # EventLog for human_handoff_needed
         db.add.assert_called()
 
+    @patch("src.services.learning.record_lead_signal", new_callable=AsyncMock)
+    @patch("src.services.config_cache.get_sales_config", new_callable=AsyncMock, return_value=None)
     @patch("src.agents.conductor.process_booking", new_callable=AsyncMock)
-    async def test_booking_not_confirmed_stays_booking(self, mock_booking):
+    async def test_booking_not_confirmed_stays_booking(self, mock_booking, _mock_config, _mock_signal):
         """Neither confirmed nor handoff keeps state=booking."""
         book_result = BookResponse(
             message="Would Tuesday work instead?",
@@ -1398,7 +1408,7 @@ class TestQualifyAgent:
 
     @patch("src.agents.qualify.generate_response", new_callable=AsyncMock)
     async def test_json_parse_error_fallback(self, mock_ai):
-        """Invalid JSON from AI should use fallback with raw content."""
+        """Invalid JSON from AI should use safe fallback, never raw content."""
         mock_ai.return_value = {
             "content": "Not a JSON response at all here",
             "cost_usd": 0.002,
@@ -1417,8 +1427,9 @@ class TestQualifyAgent:
             conversation_turn=2,
         )
 
-        assert "Not a JSON response" in result.message
-        assert "Parse error" in result.internal_notes
+        # Should use fallback message, not raw non-JSON
+        assert result.message  # Not empty
+        assert "Not a JSON response" not in result.message
         assert result.ai_cost_usd == 0.002
 
     @patch("src.agents.qualify.generate_response", new_callable=AsyncMock)

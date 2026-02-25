@@ -668,10 +668,31 @@ async def _route_to_book(
                     "AI returned unparseable appointment_date '%s' for lead %s",
                     result.appointment_date, str(lead.id)[:8],
                 )
+        # Parse time window from "HH:MM" strings
+        from datetime import time as time_type
+        parsed_start = None
+        parsed_end = None
+        for raw_val, label in [(result.time_window_start, "start"), (result.time_window_end, "end")]:
+            if raw_val:
+                try:
+                    parts = raw_val.split(":")
+                    parsed_time = time_type(int(parts[0]), int(parts[1]))
+                    if label == "start":
+                        parsed_start = parsed_time
+                    else:
+                        parsed_end = parsed_time
+                except (ValueError, IndexError):
+                    logger.warning(
+                        "AI returned unparseable time_window_%s '%s' for lead %s",
+                        label, raw_val, str(lead.id)[:8],
+                    )
+
         booking = Booking(
             lead_id=lead.id,
             client_id=client.id,
             appointment_date=parsed_date or datetime.now(timezone.utc).date(),
+            time_window_start=parsed_start,
+            time_window_end=parsed_end,
             service_type=lead.service_type or "service",
             tech_name=result.tech_name,
             crm_sync_status="pending",

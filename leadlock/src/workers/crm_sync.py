@@ -21,6 +21,9 @@ from src.models.event_log import EventLog
 from src.integrations.crm_base import CRMBase
 from src.integrations.servicetitan import ServiceTitanCRM
 from src.integrations.google_sheets import GoogleSheetsCRM
+from src.integrations.jobber import JobberCRM
+from src.integrations.gohighlevel import GoHighLevelCRM
+from src.integrations.housecallpro import HousecallProCRM
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +193,12 @@ def get_crm_for_client(client: Client) -> CRMBase | None:
     """Get the appropriate CRM integration for a client."""
     crm_config = client.crm_config or {}
 
+    # Decrypt API key if stored
+    api_key = ""
+    if client.crm_api_key_encrypted:
+        from src.utils.encryption import decrypt_value
+        api_key = decrypt_value(client.crm_api_key_encrypted) or ""
+
     if client.crm_type == "servicetitan":
         return ServiceTitanCRM(
             client_id=crm_config.get("client_id", ""),
@@ -201,6 +210,15 @@ def get_crm_for_client(client: Client) -> CRMBase | None:
         return GoogleSheetsCRM(
             spreadsheet_id=crm_config.get("spreadsheet_id", ""),
         )
+    elif client.crm_type == "jobber":
+        return JobberCRM(api_key=api_key)
+    elif client.crm_type == "gohighlevel":
+        return GoHighLevelCRM(
+            api_key=api_key,
+            location_id=crm_config.get("location_id", ""),
+        )
+    elif client.crm_type == "housecallpro":
+        return HousecallProCRM(api_key=api_key)
 
     logger.warning("No CRM integration for type: %s", client.crm_type)
     return None
