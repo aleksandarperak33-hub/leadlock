@@ -114,7 +114,7 @@ async def validate_webhook_source(
             return True
         logger.warning(
             "%s not set - accepting %s webhook without signature verification. "
-            "Configure secret or set ALLOW_UNSIGNED_WEBHOOKS=false in production.",
+            "Configure the secret for production (ALLOW_UNSIGNED_WEBHOOKS defaults to false).",
             secret_name,
             source_name,
         )

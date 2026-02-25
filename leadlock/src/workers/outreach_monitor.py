@@ -126,11 +126,16 @@ async def _count_ready_candidates(db, now: datetime, config, tenant_id) -> int:
     """Count prospects currently eligible for sequencer sends."""
     followup_cutoff = now - timedelta(hours=max(1, getattr(config, "sequence_delay_hours", 48)))
     max_steps = max(1, int(getattr(config, "max_sequence_steps", 3) or 3))
+    tenant_filter = (
+        Outreach.tenant_id == tenant_id
+        if tenant_id is not None
+        else Outreach.tenant_id.is_(None)
+    )
 
     result = await db.execute(
         select(func.count()).select_from(Outreach).where(
             and_(
-                Outreach.tenant_id == tenant_id,
+                tenant_filter,
                 Outreach.prospect_email.isnot(None),
                 Outreach.prospect_email != "",
                 Outreach.email_unsubscribed == False,

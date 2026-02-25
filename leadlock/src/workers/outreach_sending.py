@@ -187,9 +187,6 @@ async def _pre_send_checks(
                 verified_email[:12],
             )
         prospect.prospect_email = normalize_email(verified_email)
-        if not bool(prospect.email_verified):
-            prospect.status = "no_verified_email"
-            return "email still unverified after discovery"
 
     # Check blacklist (email and domain)
     email_lower = prospect.prospect_email.lower().strip()
