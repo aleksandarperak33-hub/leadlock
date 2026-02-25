@@ -80,7 +80,7 @@ export default function Privacy() {
             </ul>
           </section>
 
-          <section>
+          <section id="sms-compliance">
             <h2 className="text-lg font-bold text-[#F8F8FC] mb-3">4. SMS & Communication Compliance</h2>
             <p className="mb-3">
               Our platform sends SMS messages on behalf of our clients to their leads. All SMS
@@ -96,6 +96,60 @@ export default function Privacy() {
               Every first message includes the business name and opt-out instructions ("Reply STOP to opt out").
               Consent records are retained for a minimum of 5 years per FTC TSR 2024 requirements.
             </p>
+
+            <h3 className="text-base font-semibold text-[#F8F8FC] mt-6 mb-2">How We Obtain Consent</h3>
+            <p className="mb-2">
+              LeadLock obtains SMS consent through the following methods, depending on how the lead
+              initiates contact:
+            </p>
+            <ul className="list-disc list-inside space-y-2 ml-2">
+              <li>
+                <strong className="text-[#F8F8FC]">Inbound leads (text or call)</strong> - When a customer
+                initiates contact by texting or calling a business number, this constitutes implied consent
+                for service-related replies. The first response always includes opt-out instructions.
+              </li>
+              <li>
+                <strong className="text-[#F8F8FC]">Web form leads</strong> - When a lead submits a web form,
+                they are presented with a separate, unchecked-by-default checkbox to consent to receiving
+                SMS messages. The checkbox is clearly labeled with the type and frequency of messages.
+                SMS consent is never bundled with other terms or required to submit the form.
+              </li>
+              <li>
+                <strong className="text-[#F8F8FC]">Ad-click leads</strong> - Consent is obtained through the
+                advertising platform's lead form with clear SMS disclosure, plus our first-message includes
+                business identification and opt-out instructions.
+              </li>
+            </ul>
+
+            <h3 className="text-base font-semibold text-[#F8F8FC] mt-6 mb-2">Service Messages vs. Promotional Messages</h3>
+            <ul className="list-disc list-inside space-y-2 ml-2">
+              <li>
+                <strong className="text-[#F8F8FC]">Service messages</strong> (appointment confirmations,
+                scheduling updates, service-related follow-ups) are sent to leads who initiated contact
+                with the business.
+              </li>
+              <li>
+                <strong className="text-[#F8F8FC]">Promotional messages</strong> (marketing offers,
+                seasonal campaigns) are only sent with separate express written consent. Promotional
+                consent is never assumed from a service inquiry.
+              </li>
+            </ul>
+
+            <h3 className="text-base font-semibold text-[#F8F8FC] mt-6 mb-2">Consent Records</h3>
+            <p>
+              We store consent records including the timestamp, source (web form, inbound text, ad
+              platform), exact consent language shown to the lead, method of consent (checkbox,
+              initiated contact), and the IP address or phone number used. These records are retained
+              for a minimum of 5 years per FTC Telemarketing Sales Rule (2024) requirements,
+              regardless of whether the lead opts out or the client cancels their subscription.
+            </p>
+
+            <h3 className="text-base font-semibold text-[#F8F8FC] mt-6 mb-2">Your Right to Opt Out</h3>
+            <p>
+              Reply STOP to any message at any time to immediately opt out of all SMS communications.
+              We honor all opt-out requests immediately and confirm the opt-out. You may also text
+              HELP for assistance or contact us at support@leadlock.org.
+            </p>
           </section>
 
           <section>
@@ -109,7 +163,7 @@ export default function Privacy() {
             </ul>
           </section>
 
-          <section>
+          <section id="data-security">
             <h2 className="text-lg font-bold text-[#F8F8FC] mb-3">6. Data Security</h2>
             <p>
               We implement industry-standard security measures to protect your data, including

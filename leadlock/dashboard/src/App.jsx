@@ -42,6 +42,8 @@ const Signup = lazy(() => import('./pages/Signup'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -76,6 +78,8 @@ function App() {
           <Route path="/onboarding" element={<Page component={Onboarding} />} />
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/terms" element={<Page component={Terms} />} />
+          <Route path="/about" element={<Page component={About} />} />
+          <Route path="/contact" element={<Page component={Contact} />} />
           <Route path="/forgot-password" element={<Page component={ForgotPassword} />} />
           <Route path="/reset-password" element={<Page component={ResetPassword} />} />
           <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
@@ -108,6 +112,8 @@ function App() {
           </Route>
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/terms" element={<Page component={Terms} />} />
+          <Route path="/about" element={<Page component={About} />} />
+          <Route path="/contact" element={<Page component={Contact} />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -125,6 +131,8 @@ function App() {
           <Route path="/onboarding" element={<Page component={Onboarding} />} />
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/terms" element={<Page component={Terms} />} />
+          <Route path="/about" element={<Page component={About} />} />
+          <Route path="/contact" element={<Page component={Contact} />} />
           <Route path="/verify-email" element={<Page component={VerifyEmail} />} />
           <Route path="/billing" element={<Page component={Billing} />} />
           <Route path="*" element={<Navigate to="/onboarding" replace />} />

@@ -36,8 +36,23 @@ export default function Terms() {
           <h2 className="text-lg font-semibold text-[#F8F8FC]">4. Billing and Payments</h2>
           <p>Subscription fees are billed monthly. Failure to pay may result in service suspension. You may cancel at any time; cancellation takes effect at the end of the current billing period. No refunds for partial months.</p>
 
-          <h2 className="text-lg font-semibold text-[#F8F8FC]">5. SMS Compliance</h2>
+          <h2 className="text-lg font-semibold text-[#F8F8FC]">5. SMS Compliance & Consent</h2>
           <p>You agree to comply with all applicable SMS regulations including TCPA, FTSA, and state-specific laws. LeadLock provides compliance tools, but you are ultimately responsible for the content and recipients of messages sent on your behalf.</p>
+
+          <h3 className="text-base font-medium text-[#F8F8FC] mt-4">SMS Consent</h3>
+          <p>By submitting your phone number through a web form, you consent to receive SMS messages related to your service inquiry. Promotional or marketing messages will only be sent with your separate express written consent. SMS consent is voluntary and is not a condition of purchasing any goods or services.</p>
+
+          <h3 className="text-base font-medium text-[#F8F8FC] mt-4">Message Details</h3>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li>Message frequency varies based on your service inquiry and appointment status.</li>
+            <li>Message and data rates may apply.</li>
+            <li>Reply STOP to cancel SMS messages at any time.</li>
+            <li>Reply HELP for assistance.</li>
+            <li>Carriers are not liable for delayed or undelivered messages.</li>
+          </ul>
+
+          <h3 className="text-base font-medium text-[#F8F8FC] mt-4">Data Protection</h3>
+          <p>LeadLock does not sell, rent, or share your phone number with third parties for their marketing purposes. Your phone number is used solely to provide the services you requested and to communicate about your service inquiry.</p>
 
           <h2 className="text-lg font-semibold text-[#F8F8FC]">6. AI Disclosure</h2>
           <p>Messages sent by LeadLock on your behalf may include AI-generated content. Per California SB 1001 and similar regulations, we disclose AI involvement when required.</p>

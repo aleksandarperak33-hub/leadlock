@@ -671,6 +671,7 @@ export default function Landing() {
               { icon: Shield, title: 'TCPA Compliant', desc: 'Every message is checked against TCPA rules before sending. Consent tracking, opt-out processing, 5-year records.' },
               { icon: Globe, title: 'State-Specific Rules', desc: 'Automatic enforcement of Texas SB 140, Florida FTSA, California SB 1001, and all other state-specific regulations.' },
               { icon: Lock, title: 'Data Security', desc: 'SOC 2 aligned infrastructure. PII masking in logs. Encrypted data at rest and in transit.' },
+              { icon: CheckCircle2, title: 'Explicit SMS Consent', desc: 'SMS consent is always separate, voluntary, and never bundled with other agreements. Leads opt in through clear, unchecked-by-default checkboxes.' },
             ].map((item, i) => (
               <FadeUp key={i} delay={i * 0.1}>
                 <div className="ld-card p-6 h-full">
@@ -870,9 +871,9 @@ export default function Landing() {
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#52526B] mb-4">Product</h4>
               <ul className="space-y-2">
-                {['Features', 'Pricing', 'Integrations', 'API'].map(item => (
+                {['Features', 'Pricing', 'How It Works', 'FAQ'].map(item => (
                   <li key={item}>
-                    <button onClick={() => scrollTo(item.toLowerCase())} className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    <button onClick={() => scrollTo(item.toLowerCase().replace(/\s/g, '-'))} className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
                       {item}
                     </button>
                   </li>
@@ -884,13 +885,16 @@ export default function Landing() {
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#52526B] mb-4">Company</h4>
               <ul className="space-y-2">
-                {['About', 'Blog', 'Careers', 'Contact'].map(item => (
-                  <li key={item}>
-                    <span className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
-                      {item}
-                    </span>
-                  </li>
-                ))}
+                <li>
+                  <Link to="/about" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contact" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    Contact
+                  </Link>
+                </li>
               </ul>
             </div>
 
@@ -908,13 +912,16 @@ export default function Landing() {
                     Terms of Service
                   </Link>
                 </li>
-                {['TCPA Compliance', 'Security'].map(item => (
-                  <li key={item}>
-                    <span className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors cursor-pointer">
-                      {item}
-                    </span>
-                  </li>
-                ))}
+                <li>
+                  <Link to="/privacy" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    TCPA Compliance
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/privacy" className="text-sm text-[#A1A1BC] hover:text-[#F8F8FC] transition-colors">
+                    Security
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
