@@ -208,6 +208,7 @@ async def _generate_email_with_template(
     template: Optional[EmailTemplate] = None,
     sender_name: str = "Alek",
     enrichment_data: Optional[dict] = None,
+    booking_url: Optional[str] = None,
 ) -> dict:
     """
     Generate an outreach email, optionally using a template.
@@ -304,6 +305,7 @@ async def _generate_email_with_template(
         sender_name=sender_name,
         enrichment_data=enrichment_data,
         prospect_email=prospect.prospect_email,
+        booking_url=booking_url,
     )
 
     # Attach A/B variant info for tracking
@@ -391,6 +393,7 @@ async def send_sequence_email(
         template=template,
         sender_name=sender_profile["sender_name"],
         enrichment_data=prospect.enrichment_data,
+        booking_url=config.booking_url,
     )
 
     if email_result.get("error"):
@@ -550,6 +553,7 @@ async def _run_quality_gate(
                 template=template,
                 sender_name=config.sender_name or "Alek",
                 enrichment_data=prospect.enrichment_data,
+                booking_url=config.booking_url,
             )
             if not retry_result.get("error"):
                 retry_result = {

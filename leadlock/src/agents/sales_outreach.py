@@ -200,7 +200,7 @@ GREETING: Start with "Hey {first_name}," if a first name is available. If no fir
 HOOK: Your very first sentence after the greeting MUST reference a specific dollar amount contractors lose from slow lead response. Use a number like "$8,000/month" or "$6,500/month" — frame it as "leads that go to the first contractor who picks up the phone" or "leads that went cold waiting for a callback". Make it feel like a fact you know, not a sales pitch.
 CREDIBILITY: Include one line like "I work with {trade} teams in {city}" or "I help a few {trade} shops in {state} with this" — establish you know their world.
 REFERENCE: Mention something specific about THEIR business — their Google rating, their city, their trade, their website.
-CTA: End with a genuine, specific question about their business (e.g. "How fast is your crew getting back to new leads right now?" or "Is your team responding same-day?"). NOT "would you be interested?" or "can I show you?"
+CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it: "I put together a quick breakdown for contractors in your area — grab 15 min and I'll walk you through it: {booking_url}". If no booking_url, end with a genuine question about their workflow. NEVER say "would you be interested?" or "can I show you?"
 SUBJECT: Must create curiosity or reference a specific observation about them. Must include their company name, city, or first name.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 100 words. Subject under 50 chars.""",
@@ -209,7 +209,7 @@ Under 100 words. Subject under 50 chars.""",
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
 HOOK: Lead with a specific stat: "78% of homeowners book with the first contractor who responds" or similar. This is the FIRST sentence after the greeting — no preamble between greeting and hook.
 ANGLE: Do NOT rehash the pain point from step 1. Talk about what similar contractors in their area or trade are already doing differently. Frame it as "a few {trade} shops in {city} already respond in under 60 seconds" or similar.
-CTA: Ask a different question than step 1 — focus on their team's workflow, not revenue (e.g. "Is your team getting to new inquiries same-day right now?").
+CTA: If a booking_url is provided, use a short nudge: "Worth a quick look? {booking_url}". If no booking_url, ask a different question than step 1 focused on their workflow.
 SUBJECT: Completely different angle than step 1. Reference what similar teams are doing.
 BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
@@ -218,7 +218,7 @@ Under 80 words. Subject under 50 chars.""",
     3: """STEP 3 — FAREWELL (final email).
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
 TONE: "Last note from me" energy. 2-3 sentences max.
-CONTENT: State this is the last email. No selling, no stats, no new value props. Just leave the door open: "if faster lead response ever becomes a priority, just reply and I'll circle back."
+CONTENT: State this is the last email. No selling, no stats, no new value props. Leave the door open. If a booking_url is provided, end with: "If it ever matters, here's my calendar: {booking_url}". If no booking_url: "just reply and I'll circle back."
 SUBJECT: Should feel short and final.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 50 words. Subject under 40 chars.""",
@@ -341,6 +341,7 @@ def _build_fallback_outreach_email(
     sender_name: str,
     rating: Optional[float] = None,
     review_count: Optional[int] = None,
+    booking_url: Optional[str] = None,
 ) -> dict:
     """Deterministic fallback when AI providers are unavailable."""
     first_name = _extract_first_name(prospect_name)
@@ -388,7 +389,13 @@ def _build_fallback_outreach_email(
         step_line = f"{hook_line}\n\n{credibility_line}"
         if value_line:
             step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
-        ask_line = "How fast is your crew getting back to new leads right now?"
+        if booking_url:
+            ask_line = (
+                f"I put together a quick breakdown for contractors in your area "
+                f"- grab 15 min and I'll walk you through it: {booking_url}"
+            )
+        else:
+            ask_line = "How fast is your crew getting back to new leads right now?"
     elif step == 2:
         subject = f"what {city or 'local'} {trade} shops are doing differently"[:60]
         step_line = (
@@ -398,13 +405,22 @@ def _build_fallback_outreach_email(
             f"A few {trade} shops in {location or 'your area'} already "
             f"respond to every lead in under 60 seconds."
         )
-        ask_line = "Is your team getting to new inquiries same-day right now?"
+        if booking_url:
+            ask_line = f"Worth a quick look? {booking_url}"
+        else:
+            ask_line = "Is your team getting to new inquiries same-day right now?"
     else:
         subject = f"closing the loop, {first_name or company}"[:60]
-        step_line = (
-            f"Last note from me. If faster lead response ever becomes "
-            f"a priority for {company}, just reply and I'll circle back."
-        )
+        if booking_url:
+            step_line = (
+                f"Last note from me. If faster lead response ever becomes "
+                f"a priority for {company}, here's my calendar: {booking_url}"
+            )
+        else:
+            step_line = (
+                f"Last note from me. If faster lead response ever becomes "
+                f"a priority for {company}, just reply and I'll circle back."
+            )
         value_line = ""
         ask_line = ""
 
@@ -444,6 +460,7 @@ async def generate_outreach_email(
     sender_name: str = "Alek",
     enrichment_data: Optional[dict] = None,
     prospect_email: Optional[str] = None,
+    booking_url: Optional[str] = None,
 ) -> dict:
     """
     Generate a personalized outreach email for a prospect.
@@ -461,6 +478,7 @@ async def generate_outreach_email(
         sender_name: Human first name for sign-off (default "Alek")
         enrichment_data: Prospect research data from enrichment pipeline (optional)
         prospect_email: Prospect email address, used as last-resort name source (optional)
+        booking_url: Cal.com/Calendly link for direct booking CTA (optional)
 
     Returns:
         {"subject": str, "body_html": str, "body_text": str, "ai_cost_usd": float}
@@ -505,6 +523,9 @@ async def generate_outreach_email(
 
     if website:
         prospect_details += f"\n- Website: {website}"
+
+    if booking_url:
+        prospect_details += f"\n- booking_url: {booking_url}"
 
     # Structured personalization instructions from enrichment data
     personalization: list[str] = []
@@ -588,6 +609,7 @@ async def generate_outreach_email(
         sender_name=sender_name,
         rating=rating,
         review_count=review_count,
+        booking_url=booking_url,
     )
 
     if result.get("error"):
