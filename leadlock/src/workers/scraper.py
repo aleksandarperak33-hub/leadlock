@@ -339,12 +339,22 @@ async def scrape_location_trade(
         all_results = search_results.get("results", [])
 
         # Process results
+        skipped_quality = 0
         for biz in all_results:
             place_id = biz.get("place_id", "")
             raw_phone = biz.get("phone", "")
             phone = normalize_phone(raw_phone) if raw_phone else ""
 
             if not place_id and not phone:
+                continue
+
+            # Quality gate: require both website AND phone for actionable outreach.
+            # Without a website, email discovery is impossible (no domain to guess from).
+            # Without a phone, SMS follow-up is impossible. Either alone creates a
+            # prospect that will never progress through the outreach pipeline.
+            website = biz.get("website", "")
+            if not website or not phone:
+                skipped_quality += 1
                 continue
 
             # Check for duplicates by place_id
@@ -382,7 +392,7 @@ async def scrape_location_trade(
             email = None
             email_source = None
             email_verified = False
-            website = biz.get("website", "")
+            # website already extracted above for quality gate
 
             if website:
                 enrichment = await enrich_prospect_email(website, biz.get("name", ""))
@@ -390,14 +400,6 @@ async def scrape_location_trade(
                     email = enrichment["email"]
                     email_source = enrichment["source"]
                     email_verified = enrichment.get("verified", False)
-            elif extract_domain(website):
-                # No website but have domain somehow - pattern guess only
-                from src.services.enrichment import guess_email_patterns
-                domain = extract_domain(website)
-                patterns = guess_email_patterns(domain)
-                if patterns:
-                    email = patterns[0]
-                    email_source = "pattern_guess"
 
             # Validate email before storing
             if email:
@@ -451,9 +453,9 @@ async def scrape_location_trade(
 
         logger.info(
             "Scrape completed: %s in %s (variant=%d query='%s') - "
-            "found=%d new=%d dupes=%d cost=$%.3f",
+            "found=%d new=%d dupes=%d skipped_quality=%d cost=$%.3f",
             trade, location_str, query_variant, query,
-            len(all_results), new_count, dupe_count, total_cost,
+            len(all_results), new_count, dupe_count, skipped_quality, total_cost,
         )
 
         # Enqueue prospect research tasks AFTER data is committed by caller.

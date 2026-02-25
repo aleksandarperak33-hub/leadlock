@@ -655,7 +655,10 @@ async def _sequence_cycle_for_tenant(
             Outreach.last_email_replied_at.is_(None),
         )
     ).order_by(
+        # Quality-based priority: enriched first, then by rating and reviews
         Outreach.enrichment_data.is_(None).asc(),
+        Outreach.google_rating.desc().nulls_last(),
+        Outreach.review_count.desc().nulls_last(),
         Outreach.created_at,
     ).limit(remaining).with_for_update(skip_locked=True)
 
