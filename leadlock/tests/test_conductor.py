@@ -196,6 +196,123 @@ class TestHandleNewLead:
         assert result["status"] == "intake_sent"
         assert result["lead_id"] is not None
         mock_sms.assert_called_once()
+        # Verify no_retry=True was passed to send_sms
+        mock_sms.assert_called_once()
+        call_kwargs = mock_sms.call_args[1]
+        assert call_kwargs.get("no_retry") is True
+
+    @patch("src.agents.conductor.needs_ai_disclosure", return_value=False)
+    @patch("src.services.compliance.check_content_compliance")
+    @patch("src.agents.conductor.full_compliance_check")
+    @patch("src.agents.conductor.send_sms", new_callable=AsyncMock)
+    @patch("src.agents.conductor.process_intake", new_callable=AsyncMock)
+    @patch("src.agents.conductor.get_monthly_lead_limit")
+    @patch("src.agents.conductor.is_duplicate", new_callable=AsyncMock)
+    @patch("src.agents.conductor.normalize_phone")
+    async def test_split_commit_persists_lead_before_sms(
+        self, mock_normalize, mock_dedup, mock_limit, mock_intake, mock_sms,
+        mock_compliance, mock_content, mock_ai_disc,
+    ):
+        """Lead should be committed to DB before SMS send (split commit)."""
+        mock_normalize.return_value = "+15125559876"
+        mock_dedup.return_value = False
+        mock_limit.return_value = None
+
+        mock_compliance.return_value = MagicMock(__bool__=lambda s: True)
+        mock_content.return_value = MagicMock(__bool__=lambda s: True)
+
+        intake_result = MagicMock()
+        intake_result.message = "Hi John! Sarah from Austin HVAC here. Reply STOP to opt out."
+        intake_result.template_id = "standard_A"
+        intake_result.is_emergency = False
+        mock_intake.return_value = intake_result
+
+        mock_sms.return_value = _sms_result()
+
+        client = _make_client()
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.get = AsyncMock(return_value=client)
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_execute_result)
+
+        envelope = _make_envelope(client_id=str(client.id))
+        await handle_new_lead(db, envelope)
+
+        # db.commit should be called twice: once pre-SMS (lead persist), once post-SMS
+        assert db.commit.call_count == 2
+
+    @patch("src.agents.conductor.needs_ai_disclosure", return_value=False)
+    @patch("src.services.compliance.check_content_compliance")
+    @patch("src.agents.conductor.full_compliance_check")
+    @patch("src.agents.conductor.send_sms", new_callable=AsyncMock)
+    @patch("src.agents.conductor.process_intake", new_callable=AsyncMock)
+    @patch("src.agents.conductor.get_monthly_lead_limit")
+    @patch("src.agents.conductor.is_duplicate", new_callable=AsyncMock)
+    @patch("src.agents.conductor.normalize_phone")
+    async def test_transient_sms_failure_enqueues_retry(
+        self, mock_normalize, mock_dedup, mock_limit, mock_intake, mock_sms,
+        mock_compliance, mock_content, mock_ai_disc,
+    ):
+        """Transient SMS failure should enqueue a background retry task."""
+        mock_normalize.return_value = "+15125559876"
+        mock_dedup.return_value = False
+        mock_limit.return_value = None
+
+        mock_compliance.return_value = MagicMock(__bool__=lambda s: True)
+        mock_content.return_value = MagicMock(__bool__=lambda s: True)
+
+        intake_result = MagicMock()
+        intake_result.message = "Hi John! Sarah from Austin HVAC here. Reply STOP to opt out."
+        intake_result.template_id = "standard_A"
+        intake_result.is_emergency = False
+        mock_intake.return_value = intake_result
+
+        # SMS returns transient failure
+        mock_sms.return_value = {
+            "sid": None,
+            "status": "transient_failure",
+            "provider": "twilio",
+            "segments": 1,
+            "cost_usd": 0.0,
+            "error": "30008 Unknown error",
+            "error_code": "30008",
+            "encoding": "gsm7",
+            "is_landline": False,
+        }
+
+        client = _make_client()
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.get = AsyncMock(return_value=client)
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_execute_result)
+
+        with patch("src.services.task_dispatch.enqueue_task", new_callable=AsyncMock) as mock_enqueue:
+            mock_enqueue.return_value = "task-id-123"
+            envelope = _make_envelope(client_id=str(client.id))
+            result = await handle_new_lead(db, envelope)
+
+            # Should still return intake_sent (retry is background)
+            assert result["status"] == "intake_sent"
+            assert result["lead_id"] is not None
+
+            # Verify retry was enqueued
+            mock_enqueue.assert_called_once()
+            enqueue_args = mock_enqueue.call_args
+            assert enqueue_args[0][0] == "sms_retry"
+            assert enqueue_args[1]["priority"] == 10
+            assert enqueue_args[1]["delay_seconds"] == 5
+            payload = enqueue_args[1]["payload"]
+            assert payload["to"] == "+15125559876"
 
     @patch("src.agents.conductor.get_monthly_lead_limit")
     @patch("src.agents.conductor.is_duplicate", new_callable=AsyncMock)

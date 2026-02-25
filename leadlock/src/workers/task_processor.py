@@ -138,6 +138,7 @@ async def _dispatch_task(task_type: str, payload: dict) -> dict:
         "enrich_prospect": _handle_enrich_prospect,
         "record_signal": _handle_record_signal,
         "classify_reply": _handle_classify_reply,
+        "sms_retry": _handle_sms_retry,
         "send_sms_followup": _handle_send_sms_followup,
         "send_sequence_email": _handle_send_sequence_email,
         "generate_ab_variants": _handle_generate_ab_variants,
@@ -243,6 +244,119 @@ async def _handle_classify_reply(payload: dict) -> dict:
 
     result = await classify_reply(payload.get("text", ""))
     return result
+
+
+async def _handle_sms_retry(payload: dict) -> dict:
+    """Retry a failed intake SMS send with full retry logic (background).
+
+    Safety guards:
+    - Checks opt-out status before sending (TCPA compliance)
+    - Skips if conversation already has an sms_sid (prevents double-send)
+    - Treats throttled status as failure (triggers task retry)
+    """
+    import uuid
+    from sqlalchemy import select, and_
+    from src.services.sms import send_sms
+    from src.models.conversation import Conversation
+    from src.models.consent import ConsentRecord
+    from src.models.event_log import EventLog
+
+    lead_id = payload.get("lead_id")
+    to = payload.get("to")
+    body = payload.get("body")
+    from_phone = payload.get("from_phone")
+    messaging_service_sid = payload.get("messaging_service_sid")
+
+    if not to or not body:
+        return {"status": "skipped", "reason": "missing to or body"}
+
+    # TCPA guard: check if phone has opted out since initial attempt
+    async with async_session_factory() as db:
+        optout_result = await db.execute(
+            select(ConsentRecord).where(
+                and_(
+                    ConsentRecord.phone == to,
+                    ConsentRecord.opted_out == True,
+                )
+            ).limit(1)
+        )
+        if optout_result.scalar_one_or_none():
+            logger.info("SMS retry skipped for %s: opted out before retry", to[:6] + "***")
+            return {"status": "skipped", "reason": "opted_out_before_retry"}
+
+        # Double-send guard: check if intake SMS was already delivered
+        if lead_id:
+            lead_uuid = uuid.UUID(lead_id)
+            conv_result = await db.execute(
+                select(Conversation).where(
+                    and_(
+                        Conversation.lead_id == lead_uuid,
+                        Conversation.direction == "outbound",
+                        Conversation.agent_id == "intake",
+                    )
+                ).order_by(Conversation.created_at.desc()).limit(1)
+            )
+            conv = conv_result.scalar_one_or_none()
+            if conv and conv.sms_sid:
+                logger.info(
+                    "SMS retry skipped for lead %s: already delivered (sid=%s)",
+                    lead_id[:8], conv.sms_sid,
+                )
+                return {"status": "skipped", "reason": "already_delivered"}
+
+    result = await send_sms(
+        to=to,
+        body=body,
+        from_phone=from_phone,
+        messaging_service_sid=messaging_service_sid,
+        no_retry=False,
+    )
+
+    # Treat both "failed" and "throttled" as retriable failures
+    if result.get("status") in ("failed", "throttled"):
+        raise Exception(
+            f"SMS retry failed with status={result.get('status')}: {result.get('error')}"
+        )
+
+    # Update conversation record with actual SMS result
+    if lead_id:
+        async with async_session_factory() as db:
+            lead_uuid = uuid.UUID(lead_id)
+
+            conv_result = await db.execute(
+                select(Conversation).where(
+                    and_(
+                        Conversation.lead_id == lead_uuid,
+                        Conversation.direction == "outbound",
+                        Conversation.agent_id == "intake",
+                    )
+                ).order_by(Conversation.created_at.desc()).limit(1)
+            )
+            conv = conv_result.scalar_one_or_none()
+            if conv:
+                conv.sms_sid = result.get("sid")
+                conv.sms_provider = result.get("provider")
+                conv.delivery_status = result.get("status", "sent")
+                conv.sms_cost_usd = result.get("cost_usd", 0.0)
+
+            db.add(EventLog(
+                lead_id=lead_uuid,
+                client_id=conv.client_id if conv else None,
+                action="sms_retry_success",
+                message=f"Intake SMS retry succeeded via {result.get('provider')}",
+                data={
+                    "provider": result.get("provider"),
+                    "sid": result.get("sid"),
+                    "segments": result.get("segments"),
+                },
+            ))
+            await db.commit()
+
+    return {
+        "status": "sent",
+        "provider": result.get("provider"),
+        "sid": result.get("sid"),
+    }
 
 
 async def _handle_send_sms_followup(payload: dict) -> dict:

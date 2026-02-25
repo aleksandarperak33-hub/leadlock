@@ -297,6 +297,7 @@ async def send_sms(
     body: str,
     from_phone: Optional[str] = None,
     messaging_service_sid: Optional[str] = None,
+    no_retry: bool = False,
 ) -> dict:
     """
     Send SMS via Twilio with retry logic. Falls back to Telnyx after all retries exhausted.
@@ -375,6 +376,24 @@ async def send_sms(
                     "error_code": error_code,
                     "encoding": encoding,
                     "is_landline": error_class == "landline",
+                }
+
+            # Transient error - return immediately if no_retry requested
+            if no_retry:
+                logger.warning(
+                    "Twilio transient error for %s (no_retry=True): %s. Returning for background retry.",
+                    masked, error_code or str(e),
+                )
+                return {
+                    "sid": None,
+                    "status": "transient_failure",
+                    "provider": "twilio",
+                    "segments": segments,
+                    "cost_usd": 0.0,
+                    "error": last_error,
+                    "error_code": error_code,
+                    "encoding": encoding,
+                    "is_landline": False,
                 }
 
             # Transient error - retry with backoff

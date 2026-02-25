@@ -2,6 +2,8 @@
 SMS service tests - error classification, encoding, message length enforcement.
 """
 import pytest
+from unittest.mock import AsyncMock, patch
+
 from src.services.sms import (
     classify_error,
     is_gsm7,
@@ -130,3 +132,87 @@ class TestMaskPhone:
 
     def test_short_phone_unchanged(self):
         assert mask_phone("+1512") == "+1512"
+
+
+class TestSendSmsNoRetry:
+    """Test the no_retry parameter on send_sms."""
+
+    @pytest.mark.asyncio
+    @patch("src.services.deliverability.record_sms_outcome", new_callable=AsyncMock)
+    @patch("src.services.deliverability.check_send_allowed", new_callable=AsyncMock)
+    @patch("src.services.sms._send_twilio", new_callable=AsyncMock)
+    async def test_no_retry_returns_transient_failure_immediately(
+        self, mock_twilio, mock_throttle, mock_record,
+    ):
+        """With no_retry=True, transient errors should return immediately without sleeping."""
+        from src.services.sms import send_sms
+
+        mock_throttle.return_value = (True, None)
+
+        # Simulate a transient Twilio error
+        error = Exception("30008 Unknown error")
+        error.code = 30008
+        mock_twilio.side_effect = error
+
+        result = await send_sms(
+            to="+15125559876",
+            body="Test message",
+            from_phone="+15125551234",
+            no_retry=True,
+        )
+
+        assert result["status"] == "transient_failure"
+        assert result["error_code"] == "30008"
+        assert result["cost_usd"] == 0.0
+        # Should have only tried once (no retries)
+        assert mock_twilio.call_count == 1
+
+    @pytest.mark.asyncio
+    @patch("src.services.deliverability.record_sms_outcome", new_callable=AsyncMock)
+    @patch("src.services.deliverability.check_send_allowed", new_callable=AsyncMock)
+    @patch("src.services.sms._send_twilio", new_callable=AsyncMock)
+    async def test_no_retry_still_returns_on_success(
+        self, mock_twilio, mock_throttle, mock_record,
+    ):
+        """With no_retry=True, successful sends should work normally."""
+        from src.services.sms import send_sms
+
+        mock_throttle.return_value = (True, None)
+        mock_twilio.return_value = {"sid": "SM_test_123", "status": "sent"}
+
+        result = await send_sms(
+            to="+15125559876",
+            body="Test message",
+            from_phone="+15125551234",
+            no_retry=True,
+        )
+
+        assert result["status"] == "sent"
+        assert result["sid"] == "SM_test_123"
+
+    @pytest.mark.asyncio
+    @patch("src.services.deliverability.record_sms_outcome", new_callable=AsyncMock)
+    @patch("src.services.deliverability.check_send_allowed", new_callable=AsyncMock)
+    @patch("src.services.sms._send_twilio", new_callable=AsyncMock)
+    async def test_no_retry_permanent_error_still_fails_immediately(
+        self, mock_twilio, mock_throttle, mock_record,
+    ):
+        """Permanent errors should fail immediately regardless of no_retry."""
+        from src.services.sms import send_sms
+
+        mock_throttle.return_value = (True, None)
+
+        error = Exception("21211 Invalid number")
+        error.code = 21211
+        mock_twilio.side_effect = error
+
+        result = await send_sms(
+            to="+15125559876",
+            body="Test message",
+            from_phone="+15125551234",
+            no_retry=True,
+        )
+
+        assert result["status"] == "failed"
+        assert result["error_code"] == "21211"
+        assert mock_twilio.call_count == 1

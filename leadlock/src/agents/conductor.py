@@ -11,6 +11,7 @@ State machine:
   qualifying/qualified → cold (on timeout/unresponsive)
   cold → dead (after max followups exhausted)
 """
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -77,11 +78,14 @@ async def handle_new_lead(
         logger.warning("Invalid phone number: %s", envelope.lead.phone[:6] + "***")
         return {"lead_id": None, "status": "invalid_phone", "response_ms": timer.elapsed_ms}
 
-    # Dedup check
-    is_dupe = await is_duplicate(envelope.client_id, phone, envelope.source)
+    # Dedup check + client load in parallel (independent operations)
+    is_dupe, client = await asyncio.gather(
+        is_duplicate(envelope.client_id, phone, envelope.source),
+        db.get(Client, uuid.UUID(envelope.client_id)),
+    )
+
     if is_dupe:
         # Send brief acknowledgment so customer doesn't think we're ignoring them
-        client = await db.get(Client, uuid.UUID(envelope.client_id))
         if client and client.twilio_phone:
             try:
                 await send_sms(
@@ -93,8 +97,6 @@ async def handle_new_lead(
                 logger.warning("Duplicate ack SMS failed: %s", str(sms_err))
         return {"lead_id": None, "status": "duplicate_acknowledged", "response_ms": timer.elapsed_ms}
 
-    # Load client
-    client = await db.get(Client, uuid.UUID(envelope.client_id))
     if not client:
         logger.error("Client not found: %s", envelope.client_id)
         return {"lead_id": None, "status": "client_not_found", "response_ms": timer.elapsed_ms}
@@ -193,6 +195,10 @@ async def handle_new_lead(
         lead.total_messages_received = 1
         lead.last_inbound_at = datetime.now(timezone.utc)
 
+    # SPLIT COMMIT: Persist lead + consent + inbound conversation immediately
+    # so the record survives even if SMS send fails or process crashes
+    await db.commit()
+
     # Check for prior opt-out on this phone+client before responding
     prior_optout_result = await db.execute(
         select(ConsentRecord).where(
@@ -263,13 +269,30 @@ async def handle_new_lead(
         lead.ai_disclosure_sent_at = datetime.now(timezone.utc)
         logger.info("CA SB 1001: AI disclosure prepended for lead %s", str(lead.id)[:8])
 
-    # SEND THE SMS - this is the critical path
+    # SEND THE SMS - critical path, no retries to avoid blocking webhook
+    logger.info("Pre-SMS overhead: %dms (lead=%s)", timer.elapsed_ms, str(lead.id)[:8])
     sms_result = await send_sms(
         to=phone,
         body=sms_body,
         from_phone=client.twilio_phone,
         messaging_service_sid=client.twilio_messaging_service_sid,
+        no_retry=True,
     )
+
+    # On transient failure, enqueue background retry instead of blocking
+    if sms_result.get("status") == "transient_failure":
+        from src.services.task_dispatch import enqueue_task
+        await enqueue_task("sms_retry", payload={
+            "lead_id": str(lead.id),
+            "to": phone,
+            "body": sms_body,
+            "from_phone": client.twilio_phone,
+            "messaging_service_sid": client.twilio_messaging_service_sid,
+        }, priority=10, delay_seconds=5)
+        logger.warning(
+            "Lead %s: Twilio transient failure, SMS retry enqueued (code=%s)",
+            str(lead.id)[:8], sms_result.get("error_code"),
+        )
 
     response_ms = timer.stop()
 
@@ -290,7 +313,8 @@ async def handle_new_lead(
     )
     db.add(outbound_conv)
 
-    # Update lead state
+    # Update lead state — even on transient failure, advance state
+    # since the background retry will handle delivery
     lead.state = "intake_sent"
     lead.current_agent = "qualify"
     lead.first_response_ms = response_ms
@@ -311,14 +335,16 @@ async def handle_new_lead(
             "provider": sms_result.get("provider"),
             "segments": sms_result.get("segments"),
             "is_emergency": intake_response.is_emergency,
+            "retry_enqueued": sms_result.get("status") == "transient_failure",
         },
     ))
 
     await db.commit()
 
     logger.info(
-        "Lead %s: intake sent in %dms via %s (emergency=%s)",
-        str(lead.id)[:8], response_ms, sms_result.get("provider"), lead.is_emergency,
+        "Lead %s: intake sent in %dms via %s (emergency=%s, retry=%s)",
+        str(lead.id)[:8], response_ms, sms_result.get("provider"),
+        lead.is_emergency, sms_result.get("status") == "transient_failure",
     )
 
     return {
