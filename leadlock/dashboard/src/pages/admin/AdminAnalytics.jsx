@@ -18,8 +18,9 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
-function BarRow({ label, value, maxValue, suffix = '' }) {
-  const pct = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
+function BarRow({ label, value, numericValue, maxValue, suffix = '' }) {
+  const num = typeof numericValue === 'number' ? numericValue : Number(numericValue || 0);
+  const pct = maxValue > 0 ? Math.round((num / maxValue) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm text-gray-700 w-40 shrink-0 truncate">{label}</span>
@@ -80,21 +81,33 @@ function AbTestTable({ tests }) {
 
 function CostPerLeadSection({ data }) {
   if (!data) return <p className="text-sm text-gray-400">No data available.</p>;
-  const items = Array.isArray(data) ? data : Object.entries(data).map(([trade, cost]) => ({ trade, cost }));
-  const maxCost = Math.max(...items.map((i) => Number(i.cost || 0)), 1);
+  const items = Array.isArray(data) ? data : Object.entries(data).map(([trade, cost]) => ({ trade, cost: Number(cost) || 0 }));
+  if (items.length === 0) return <p className="text-sm text-gray-400">No data available.</p>;
+  const maxCost = Math.max(...items.map((i) => Number(i.cost || 0)), 0.01);
   return (
     <div className="space-y-3">
-      {items.map((item, i) => (
-        <BarRow
-          key={item.trade || i}
-          label={item.trade || 'Overall'}
-          value={`$${Number(item.cost || 0).toFixed(2)}`}
-          maxValue={maxCost}
-          suffix=""
-        />
-      ))}
+      {items.map((item, i) => {
+        const cost = Number(item.cost || 0);
+        return (
+          <BarRow
+            key={item.trade || i}
+            label={item.trade || 'Overall'}
+            value={`$${cost.toFixed(2)}`}
+            numericValue={cost}
+            maxValue={maxCost}
+          />
+        );
+      })}
     </div>
   );
+}
+
+/** Extract .data from API response envelope {"success": true, "data": ...} */
+function unwrap(response) {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return response.data;
+  }
+  return response;
 }
 
 export default function AdminAnalytics() {
@@ -121,11 +134,11 @@ export default function AdminAnalytics() {
         api.getAnalyticsAgentCosts(),
         api.getAnalyticsCostPerLead(),
       ]);
-      if (p.status === 'fulfilled') setPipeline(p.value);
-      if (ep.status === 'fulfilled') setEmailPerf(ep.value);
-      if (ab.status === 'fulfilled') setAbTests(ab.value);
-      if (ac.status === 'fulfilled') setAgentCosts(ac.value);
-      if (cpl.status === 'fulfilled') setCostPerLead(cpl.value);
+      if (p.status === 'fulfilled') setPipeline(unwrap(p.value));
+      if (ep.status === 'fulfilled') setEmailPerf(unwrap(ep.value));
+      if (ab.status === 'fulfilled') setAbTests(unwrap(ab.value));
+      if (ac.status === 'fulfilled') setAgentCosts(unwrap(ac.value));
+      if (cpl.status === 'fulfilled') setCostPerLead(unwrap(cpl.value));
       const allFailed = [p, ep, ab, ac, cpl].every((r) => r.status === 'rejected');
       if (allFailed) throw new Error('All analytics endpoints failed.');
     } catch (err) {
@@ -143,21 +156,23 @@ export default function AdminAnalytics() {
     );
   }
 
-  const emailPerfItems = Array.isArray(emailPerf)
-    ? emailPerf
-    : emailPerf
-    ? Object.entries(emailPerf).map(([step, data]) => ({ step, ...data }))
+  // Email performance: backend returns {steps: [{step, total_sent, open_rate, ...}]}
+  const emailPerfItems = emailPerf?.steps || [];
+  const maxEmailOpen = Math.max(...emailPerfItems.map((e) => Number(e.open_rate || 0)), 0.01);
+
+  // Agent costs: backend returns {total_by_agent: {agent_name: cost}, total_usd, ...}
+  const agentCostItems = agentCosts?.total_by_agent
+    ? Object.entries(agentCosts.total_by_agent).map(([agent, cost]) => ({ agent, cost: Number(cost) || 0 }))
     : [];
+  const maxAgentCost = Math.max(...agentCostItems.map((a) => a.cost), 0.01);
 
-  const maxEmailOpen = Math.max(...emailPerfItems.map((e) => Number(e.open_rate || e.opens || 0)), 1);
+  // A/B tests: backend returns array or {experiments: [...]}
+  const abTestItems = Array.isArray(abTests)
+    ? abTests
+    : abTests?.experiments || (abTests ? [abTests] : []);
 
-  const agentCostItems = Array.isArray(agentCosts)
-    ? agentCosts
-    : agentCosts
-    ? Object.entries(agentCosts).map(([agent, cost]) => ({ agent, cost }))
-    : [];
-
-  const maxAgentCost = Math.max(...agentCostItems.map((a) => Number(a.cost || a.total_cost || 0)), 1);
+  // Pipeline: backend returns {stages: {status: count}}
+  const pipelineStages = pipeline?.stages || pipeline;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -173,29 +188,33 @@ export default function AdminAnalytics() {
         </div>
       )}
 
-      {pipeline && (
+      {pipelineStages && (
         <SectionCard title="Pipeline Waterfall" icon={TrendingUp}>
-          <FunnelChart stages={pipeline} />
+          <FunnelChart stages={pipelineStages} />
         </SectionCard>
       )}
 
       {emailPerfItems.length > 0 && (
         <SectionCard title="Email Performance by Step" icon={BarChart3}>
           <div className="space-y-3">
-            {emailPerfItems.map((item, i) => (
-              <BarRow
-                key={item.step ?? i}
-                label={item.step != null ? `Step ${item.step}` : item.name || `Step ${i + 1}`}
-                value={`${(Number(item.open_rate || item.opens || 0) * 100).toFixed(1)}%`}
-                maxValue={maxEmailOpen}
-              />
-            ))}
+            {emailPerfItems.map((item, i) => {
+              const openRate = Number(item.open_rate || 0);
+              return (
+                <BarRow
+                  key={item.step ?? i}
+                  label={`Step ${item.step ?? i + 1}`}
+                  value={`${(openRate * 100).toFixed(1)}%`}
+                  numericValue={openRate}
+                  maxValue={maxEmailOpen}
+                />
+              );
+            })}
           </div>
         </SectionCard>
       )}
 
       <SectionCard title="A/B Test Results" icon={FlaskConical}>
-        <AbTestTable tests={Array.isArray(abTests) ? abTests : (abTests ? [abTests] : [])} />
+        <AbTestTable tests={abTestItems} />
       </SectionCard>
 
       {agentCostItems.length > 0 && (
@@ -205,12 +224,19 @@ export default function AdminAnalytics() {
               <BarRow
                 key={item.agent || i}
                 label={item.agent || `Agent ${i + 1}`}
-                value={`$${Number(item.cost || item.total_cost || 0).toFixed(4)}`}
+                value={`$${item.cost.toFixed(4)}`}
+                numericValue={item.cost}
                 maxValue={maxAgentCost}
               />
             ))}
           </div>
         </SectionCard>
+      )}
+
+      {agentCosts && (
+        <div className="mb-6 text-right text-sm text-gray-500 font-mono">
+          Total AI spend (7d): ${Number(agentCosts.total_usd || 0).toFixed(4)}
+        </div>
       )}
 
       <SectionCard title="Cost Per Lead by Trade" icon={DollarSign}>
