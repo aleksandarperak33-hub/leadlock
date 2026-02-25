@@ -326,6 +326,24 @@ async def send_sequence_email(
     """Generate and send a single outreach email for a prospect."""
     next_step = prospect.outreach_sequence_step + 1
 
+    # Idempotency guard: skip if an outbound email for this step already exists.
+    # Prevents duplicate sends when task retries after post-send recording failure.
+    existing_email = await db.execute(
+        select(OutreachEmail).where(
+            and_(
+                OutreachEmail.outreach_id == prospect.id,
+                OutreachEmail.direction == "outbound",
+                OutreachEmail.sequence_step == next_step,
+            )
+        ).limit(1)
+    )
+    if existing_email.scalar_one_or_none():
+        logger.info(
+            "Prospect %s already has outbound email for step %d — skipping (idempotency)",
+            str(prospect.id)[:8], next_step,
+        )
+        return
+
     # Hard cap: never exceed max_sequence_steps regardless of campaign definition.
     if next_step > config.max_sequence_steps:
         logger.info(
@@ -466,11 +484,22 @@ async def send_sequence_email(
         )
         return
 
-    # Record send and update prospect
-    await _record_send(
-        db, prospect, config, campaign, next_step,
-        send_subject, email_result, send_result, sender_profile,
-    )
+    # Record send and update prospect.
+    # CRITICAL: This MUST succeed after send_cold_email() — if it crashes,
+    # the email is already sent but untracked, causing duplicate sends on retry.
+    # Wrap in try/except to log but still raise (idempotency guard above protects retries).
+    try:
+        await _record_send(
+            db, prospect, config, campaign, next_step,
+            send_subject, email_result, send_result, sender_profile,
+        )
+    except Exception as record_err:
+        logger.error(
+            "CRITICAL: Email sent but recording failed for prospect %s step %d: %s. "
+            "Manual DB fix needed.",
+            str(prospect.id)[:8], next_step, str(record_err),
+        )
+        raise
 
 
 async def _choose_sender_profile(
