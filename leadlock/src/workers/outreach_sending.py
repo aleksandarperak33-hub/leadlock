@@ -386,6 +386,11 @@ async def send_sequence_email(
         )
         return
 
+    # CTA A/B split: deterministic 50/50 based on prospect ID
+    # "calendar" = includes booking link, "question" = question-based CTA
+    cta_variant = "calendar" if hash(str(prospect.id)) % 2 == 0 else "question"
+    effective_booking_url = config.booking_url if cta_variant == "calendar" else None
+
     # Generate personalized email
     email_result = await _generate_email_with_template(
         prospect=prospect,
@@ -393,7 +398,7 @@ async def send_sequence_email(
         template=template,
         sender_name=sender_profile["sender_name"],
         enrichment_data=prospect.enrichment_data,
-        booking_url=config.booking_url,
+        booking_url=effective_booking_url,
     )
 
     if email_result.get("error"):
@@ -695,6 +700,7 @@ async def _record_send(
         ai_cost_usd=email_result.get("ai_cost_usd", 0.0),
         fallback_used=email_result.get("fallback_used", False),
         ab_variant_id=ab_variant_uuid,
+        cta_variant=cta_variant,
     )
     db.add(email_record)
 

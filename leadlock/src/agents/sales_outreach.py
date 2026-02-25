@@ -200,7 +200,7 @@ GREETING: Start with "Hey {first_name}," if a first name is available. If no fir
 HOOK: Your very first sentence after the greeting MUST reference a specific dollar amount contractors lose from slow lead response. Use a number like "$8,000/month" or "$6,500/month" — frame it as "leads that go to the first contractor who picks up the phone" or "leads that went cold waiting for a callback". Make it feel like a fact you know, not a sales pitch.
 CREDIBILITY: Include one line like "I work with {trade} teams in {city}" or "I help a few {trade} shops in {state} with this" — establish you know their world.
 REFERENCE: Mention something specific about THEIR business — their Google rating, their city, their trade, their website.
-CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it: "I put together a quick breakdown for contractors in your area — grab 15 min and I'll walk you through it: {booking_url}". If no booking_url, end with a genuine question about their workflow. NEVER say "would you be interested?" or "can I show you?"
+CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it with an audit angle: "I can pull your actual response times and show you exactly where leads are slipping — grab 10 min here: {booking_url}". If no booking_url, end with a genuine question about their workflow (e.g. "How fast is your crew getting back to new leads right now?"). NEVER say "would you be interested?" or "can I show you?"
 SUBJECT: Must create curiosity or reference a specific observation about them. Must include their company name, city, or first name.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 100 words. Subject under 50 chars.""",
@@ -391,8 +391,8 @@ def _build_fallback_outreach_email(
             step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
         if booking_url:
             ask_line = (
-                f"I put together a quick breakdown for contractors in your area "
-                f"- grab 15 min and I'll walk you through it: {booking_url}"
+                f"I can pull your actual response times and show you exactly "
+                f"where leads are slipping - grab 10 min here: {booking_url}"
             )
         else:
             ask_line = "How fast is your crew getting back to new leads right now?"
