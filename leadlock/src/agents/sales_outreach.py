@@ -50,8 +50,8 @@ ANTI-REPETITION (critical):
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
-body_html: simple <p> tags only. No complex HTML.
-body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. End with {sender_name} on its own line.
+body_html: simple <p> tags only. If a booking_url is provided, wrap it in an anchor tag: <a href="URL">URL</a>. No other complex HTML.
+body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. Include raw URL (no anchor tag). End with {sender_name} on its own line.
 
 """ + EMAIL_HUMANIZER
 

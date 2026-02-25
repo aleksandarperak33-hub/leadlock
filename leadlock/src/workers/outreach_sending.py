@@ -3,6 +3,7 @@ Outreach email sending — generate and send a single outreach email for a prosp
 Extracted from outreach_sequencer.py for file size compliance.
 """
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import unquote
@@ -37,6 +38,18 @@ def sanitize_dashes(text: str) -> str:
         .replace("\u2015", "-")   # horizontal bar
         .replace("\u2010", "-")   # hyphen
         .replace("\u2011", "-")   # non-breaking hyphen
+    )
+
+
+def auto_link_urls(html: str) -> str:
+    """Wrap bare URLs in body_html with <a href> tags (skip already-linked ones)."""
+    if not html:
+        return html
+    # Match URLs NOT already inside an href="..." or >...</a>
+    return re.sub(
+        r'(?<!href=")(?<!">)(https?://[^\s<>"]+)',
+        r'<a href="\1">\1</a>',
+        html,
     )
 
 
@@ -433,11 +446,11 @@ async def send_sequence_email(
             )
         return
 
-    # Sanitize dashes from AI-generated content and attach CTA variant for tracking
+    # Sanitize dashes, auto-link bare URLs, and attach CTA variant for tracking
     email_result = {
         **email_result,
         "subject": sanitize_dashes(email_result.get("subject", "")),
-        "body_html": sanitize_dashes(email_result.get("body_html", "")),
+        "body_html": auto_link_urls(sanitize_dashes(email_result.get("body_html", ""))),
         "body_text": sanitize_dashes(email_result.get("body_text", "")),
         "cta_variant": cta_variant,
     }
