@@ -4,11 +4,10 @@ Uses completely different value props from the original outreach sequence.
 
 Angles: competitor comparison, industry stats, social proof, ROI calculator, case study.
 """
-import json
 import logging
 from typing import Optional
 
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 from src.utils.agent_cost import track_agent_cost
 
 logger = logging.getLogger(__name__)
@@ -164,20 +163,17 @@ async def generate_winback_email(
     ai_cost = result.get("cost_usd", 0.0)
     await track_agent_cost("winback", ai_cost)
 
-    try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        email_data = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.error("Failed to parse win-back email: %s", str(e))
+    email_data, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error or not isinstance(email_data, dict):
+        err = parse_error or f"Expected JSON object, got {type(email_data).__name__}"
+        logger.error("Failed to parse win-back email: %s", err)
         return {
             "subject": "",
             "body_html": "",
             "body_text": "",
             "ai_cost_usd": ai_cost,
             "angle": angle["name"],
-            "error": f"JSON parse error: {str(e)}",
+            "error": f"JSON parse error: {err}",
         }
 
     return {
@@ -187,5 +183,4 @@ async def generate_winback_email(
         "ai_cost_usd": ai_cost,
         "angle": angle["name"],
     }
-
 

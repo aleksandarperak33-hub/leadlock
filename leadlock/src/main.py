@@ -257,13 +257,19 @@ def create_app() -> FastAPI:
     if settings.allowed_origins:
         cors_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
     if not cors_origins:
-        # Defaults: localhost dev servers + app base URL + dashboard
-        cors_origins = [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            settings.app_base_url,
-            settings.dashboard_base_url,
-        ]
+        # Safe defaults: production only allows known public origins.
+        if settings.app_env == "production":
+            cors_origins = [
+                settings.app_base_url,
+                settings.dashboard_base_url,
+            ]
+        else:
+            cors_origins = [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                settings.app_base_url,
+                settings.dashboard_base_url,
+            ]
     application.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,

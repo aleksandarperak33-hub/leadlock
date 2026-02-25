@@ -69,7 +69,19 @@ async def get_active_sales_configs(db) -> list[SalesEngineConfig]:
             SalesEngineConfig.tenant_id.isnot(None),
         )
     )
-    return list(result.scalars().all())
+    tenant_configs = list(result.scalars().all())
+    if tenant_configs:
+        return tenant_configs
+
+    # Legacy/single-tenant fallback: if no tenant-scoped configs exist,
+    # allow one or more global configs (tenant_id NULL).
+    fallback_result = await db.execute(
+        select(SalesEngineConfig).where(
+            SalesEngineConfig.is_active == True,  # noqa: E712
+            SalesEngineConfig.tenant_id.is_(None),
+        )
+    )
+    return list(fallback_result.scalars().all())
 
 
 async def resolve_tenant_ids_for_mailboxes(

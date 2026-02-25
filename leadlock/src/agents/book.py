@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import date, time, timedelta
 from typing import Optional
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 from src.services.scheduling import generate_available_slots
 from src.schemas.agent_responses import BookResponse
 from src.prompts.humanizer import SMS_HUMANIZER
@@ -153,7 +153,9 @@ async def process_booking(
         raw = "\n".join(lines).strip()
 
     try:
-        parsed = json.loads(raw)
+        parsed, parse_error = parse_json_content(raw)
+        if parse_error or not isinstance(parsed, dict):
+            raise ValueError(parse_error or f"Expected JSON object, got {type(parsed).__name__}")
         response = BookResponse(
             message=parsed["message"],
             appointment_date=parsed.get("appointment_date"),
@@ -167,7 +169,7 @@ async def process_booking(
         response.ai_cost_usd = ai_cost
         response.ai_latency_ms = ai_latency
         return response
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning("Failed to parse book response: %s", str(e))
         response = BookResponse(
             message=result["content"][:300] if result["content"] else _fallback_booking(slots).message,

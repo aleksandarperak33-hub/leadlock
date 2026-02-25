@@ -1,9 +1,9 @@
 """
 Email finder worker — discovers real email addresses for unverified prospects.
 
-Runs every 30 minutes, picks up prospects whose emails were pattern-guessed
-and never verified, then runs multi-source email discovery (deep website scrape,
-Brave Search, enrichment candidates) to replace guessed emails with real ones.
+Runs every 30 minutes, picks up prospects with unverified emails (including
+those parked in no_verified_email), then runs multi-source email discovery
+to try to find high-confidence, non-pattern addresses.
 
 Tracks discovery attempts via email_discovery_attempted_at to avoid re-processing
 the same prospects every cycle. Prospects are retried after RETRY_DAYS.
@@ -31,7 +31,7 @@ RETRY_DAYS = 7  # Skip prospects attempted within this window
 
 
 async def run_email_finder():
-    """Main loop — find real emails for unverified pattern-guessed prospects."""
+    """Main loop — find real emails for unverified prospects."""
     logger.info("Email finder started (poll every %ds, retry after %dd)", POLL_INTERVAL, RETRY_DAYS)
 
     # Wait 3 minutes on startup to let other workers initialize
@@ -61,16 +61,16 @@ async def run_email_finder():
 
 
 def _eligible_filter():
-    """Base WHERE clause for unverified pattern-guess prospects."""
+    """Base WHERE clause for unverified prospects eligible for rediscovery."""
     return and_(
-        Outreach.email_source == "pattern_guess",
         Outreach.email_verified == False,  # noqa: E712
         Outreach.prospect_email.isnot(None),
+        Outreach.prospect_email != "",
         Outreach.website.isnot(None),
-        Outreach.status.notin_([
-            "lost", "won", "no_verified_email",
-            "duplicate_email", "unreachable",
-        ]),
+        Outreach.website != "",
+        Outreach.email_unsubscribed == False,  # noqa: E712
+        Outreach.last_email_replied_at.is_(None),
+        Outreach.status.in_(["cold", "contacted", "no_verified_email"]),
     )
 
 
@@ -133,6 +133,7 @@ async def _process_batch():
         prospects = list(result.scalars().all())
 
         found = 0
+        reactivated = 0
         kept = 0
         failed = 0
 
@@ -166,19 +167,25 @@ async def _process_batch():
 
             # Always stamp the attempt timestamp regardless of outcome
             prospect.email_discovery_attempted_at = now
+            cost = discovery.get("cost_usd", 0.0)
+            if cost > 0:
+                prospect.total_cost_usd = (prospect.total_cost_usd or 0) + cost
 
             if not new_email:
                 logger.debug("Email finder: no email found for %s", prospect.prospect_name)
                 failed += 1
                 continue
 
-            # Did we find something better than the current pattern guess?
+            # Did we find something better than current unverified data?
             current_email = prospect.prospect_email
-            if source == "pattern_guess":
-                # Same strategy — nothing better available, skip for now
+            if source == "pattern_guess" or confidence != "high":
+                # Keep prospect parked; only high-confidence non-pattern addresses
+                # are send-eligible for first-touch outreach.
                 kept += 1
                 logger.debug(
-                    "Email finder: only pattern guess available for %s, will retry in %dd",
+                    "Email finder: non-send-eligible result (%s/%s) for %s, retry in %dd",
+                    source or "unknown",
+                    confidence or "unknown",
                     prospect.prospect_name, RETRY_DAYS,
                 )
                 continue
@@ -187,7 +194,7 @@ async def _process_batch():
             if new_email.lower() == (current_email or "").lower():
                 # Same email but from a better source — upgrade the source
                 prospect.email_source = source
-                prospect.email_verified = confidence == "high"
+                prospect.email_verified = True
                 kept += 1
                 logger.info(
                     "Email finder: confirmed %s***@%s via %s",
@@ -195,9 +202,9 @@ async def _process_batch():
                 )
             else:
                 # Different (better) email found
-                prospect.prospect_email = new_email
+                prospect.prospect_email = new_email.lower().strip()
                 prospect.email_source = source
-                prospect.email_verified = confidence == "high"
+                prospect.email_verified = True
                 found += 1
                 logger.info(
                     "Email finder: replaced with %s***@%s via %s (was %s***)",
@@ -205,16 +212,15 @@ async def _process_batch():
                     (current_email or "").split("@")[0][:3],
                 )
 
-            # Track discovery cost
-            cost = discovery.get("cost_usd", 0.0)
-            if cost > 0:
-                prospect.total_cost_usd = (prospect.total_cost_usd or 0) + cost
+            if prospect.status == "no_verified_email":
+                prospect.status = "cold"
+                reactivated += 1
 
         await db.commit()
 
         logger.info(
-            "Email finder cycle: %d found, %d kept, %d failed (of %d processed, %d remaining)",
-            found, kept, failed, len(prospects), due - len(prospects),
+            "Email finder cycle: %d found, %d reactivated, %d kept, %d failed (of %d processed, %d remaining)",
+            found, reactivated, kept, failed, len(prospects), due - len(prospects),
         )
 
 

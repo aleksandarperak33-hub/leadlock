@@ -8,7 +8,6 @@ Experiment lifecycle:
 3. record_event() increments open/reply counters
 4. check_winner() declares a winner when one variant beats others by >20% with n>=30
 """
-import json
 import logging
 import random
 import uuid
@@ -20,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
 from src.models.ab_test import ABTestExperiment, ABTestVariant
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 from src.utils.agent_cost import track_agent_cost
 
 logger = logging.getLogger(__name__)
@@ -98,13 +97,9 @@ async def create_experiment(
         logger.error("Failed to generate A/B variants: %s", result["error"])
         return None
 
-    try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        variant_data = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.error("Failed to parse A/B variant response: %s", str(e))
+    variant_data, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error:
+        logger.error("Failed to parse A/B variant response: %s", parse_error)
         return None
 
     if not isinstance(variant_data, list) or len(variant_data) < 2:
@@ -334,5 +329,3 @@ async def check_and_declare_winner(experiment_id: str) -> Optional[dict]:
             "winner_open_rate": best.open_rate,
             "improvement_pct": improvement,
         }
-
-

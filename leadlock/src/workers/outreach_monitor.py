@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, func, and_, update
+from sqlalchemy import select, func, and_, not_, update
 
 from src.database import async_session_factory
 from src.models.outreach import Outreach
@@ -87,22 +87,84 @@ async def _check_outreach_health():
         now = datetime.now(timezone.utc)
         for config in configs:
             tenant_id = getattr(config, "tenant_id", None)
-            if not tenant_id:
-                continue
             in_send_window = is_within_send_window(config)
             if in_send_window:
-                await _check_zero_sends(db, now, tenant_id)
+                await _check_zero_sends(db, now, config, tenant_id)
             await _check_bounce_rate(db, now, tenant_id)
             await _check_open_rate(db, now, tenant_id)
         await _check_sequencer_heartbeat()
         await _check_reputation_paused()
 
 
-async def _check_zero_sends(db, now: datetime, tenant_id) -> None:
-    """Alert if zero outbound emails sent in the last 4 hours during send window."""
-    cutoff = now - timedelta(hours=ZERO_SENDS_HOURS)
+async def _estimate_effective_daily_limit(config, tenant_id) -> int:
+    """
+    Estimate today's effective send cap after warmup and reputation throttling.
+    Falls back to configured daily limit if dependencies are unavailable.
+    """
+    configured_limit = max(1, int(getattr(config, "daily_email_limit", 1) or 1))
+    try:
+        from src.services.sender_mailboxes import get_primary_sender_profile
+        from src.services.deliverability import EMAIL_THROTTLE_FACTORS
+        from src.workers.outreach_sequencer import _get_warmup_limit, _check_email_health
+
+        primary_profile = get_primary_sender_profile(config) or {}
+        from_email = primary_profile.get("from_email", "")
+        warmup_limit = await _get_warmup_limit(
+            configured_limit,
+            from_email,
+            tenant_id=tenant_id,
+        )
+        _, throttle_level = await _check_email_health()
+        throttle_factor = EMAIL_THROTTLE_FACTORS.get(throttle_level, 1.0)
+        return max(1, int(warmup_limit * throttle_factor))
+    except Exception as e:
+        logger.debug("Failed to estimate effective daily limit: %s", str(e))
+        return configured_limit
+
+
+async def _count_ready_candidates(db, now: datetime, config, tenant_id) -> int:
+    """Count prospects currently eligible for sequencer sends."""
+    followup_cutoff = now - timedelta(hours=max(1, getattr(config, "sequence_delay_hours", 48)))
+    max_steps = max(1, int(getattr(config, "max_sequence_steps", 3) or 3))
 
     result = await db.execute(
+        select(func.count()).select_from(Outreach).where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                Outreach.prospect_email.isnot(None),
+                Outreach.prospect_email != "",
+                Outreach.email_unsubscribed == False,
+                Outreach.status.in_(["cold", "contacted"]),
+                Outreach.last_email_replied_at.is_(None),
+                (
+                    and_(
+                        Outreach.outreach_sequence_step == 0,
+                        Outreach.status == "cold",
+                        Outreach.email_verified == True,  # noqa: E712
+                    )
+                    | and_(
+                        Outreach.outreach_sequence_step >= 1,
+                        Outreach.outreach_sequence_step < max_steps,
+                        Outreach.last_email_sent_at.isnot(None),
+                        Outreach.last_email_sent_at <= followup_cutoff,
+                        not_(and_(
+                            Outreach.email_source == "pattern_guess",
+                            Outreach.email_verified == False,  # noqa: E712
+                        )),
+                    )
+                ),
+            )
+        )
+    )
+    return result.scalar() or 0
+
+
+async def _check_zero_sends(db, now: datetime, config, tenant_id) -> None:
+    """Alert if zero outbound emails sent in the last 4 hours during send window."""
+    cutoff = now - timedelta(hours=ZERO_SENDS_HOURS)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    recent_result = await db.execute(
         select(func.count())
         .select_from(OutreachEmail)
         .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
@@ -114,22 +176,59 @@ async def _check_zero_sends(db, now: datetime, tenant_id) -> None:
             )
         )
     )
-    count = result.scalar() or 0
+    count = recent_result.scalar() or 0
+    if count > 0:
+        return
 
-    if count == 0:
-        await send_alert(
-            alert_type=AlertType.OUTREACH_ZERO_SENDS,
-            message=(
-                f"Zero outbound emails sent in the last {ZERO_SENDS_HOURS} hours "
-                f"during the send window. The sequencer may be stuck or paused."
-            ),
-            severity="critical",
-            extra={
-                "window_hours": str(ZERO_SENDS_HOURS),
-                "check_time": now.isoformat(),
-                "tenant_id": str(tenant_id),
-            },
+    sent_today_result = await db.execute(
+        select(func.count())
+        .select_from(OutreachEmail)
+        .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+        .where(
+            and_(
+                Outreach.tenant_id == tenant_id,
+                OutreachEmail.direction == "outbound",
+                OutreachEmail.sent_at >= today_start,
+            )
         )
+    )
+    sent_today = sent_today_result.scalar() or 0
+
+    effective_limit = await _estimate_effective_daily_limit(config, tenant_id)
+    if sent_today >= effective_limit:
+        logger.debug(
+            "Skipping zero-sends alert for tenant=%s: daily effective cap reached (%d/%d)",
+            str(tenant_id)[:8],
+            sent_today,
+            effective_limit,
+        )
+        return
+
+    ready_candidates = await _count_ready_candidates(db, now, config, tenant_id)
+    if ready_candidates == 0:
+        logger.debug(
+            "Skipping zero-sends alert for tenant=%s: no ready prospects",
+            str(tenant_id)[:8],
+        )
+        return
+
+    await send_alert(
+        alert_type=AlertType.OUTREACH_ZERO_SENDS,
+        message=(
+            f"Zero outbound emails sent in the last {ZERO_SENDS_HOURS} hours "
+            f"during the send window despite {ready_candidates} ready prospects. "
+            f"The sequencer may be stuck or paused."
+        ),
+        severity="critical",
+        extra={
+            "window_hours": str(ZERO_SENDS_HOURS),
+            "check_time": now.isoformat(),
+            "tenant_id": str(tenant_id),
+            "ready_candidates": str(ready_candidates),
+            "sent_today": str(sent_today),
+            "effective_limit": str(effective_limit),
+        },
+    )
 
 
 async def _check_bounce_rate(db, now: datetime, tenant_id) -> None:
@@ -341,18 +440,27 @@ async def _cleanup_exhausted_sequences():
 
         for config in configs:
             tenant_id = getattr(config, "tenant_id", None)
-            if not tenant_id:
-                continue
+            tenant_label = str(tenant_id)[:8] if tenant_id else "global"
             if getattr(config, "cleanup_paused", False):
-                logger.debug("Outreach cleanup is paused for tenant=%s", str(tenant_id)[:8])
+                logger.debug("Outreach cleanup is paused for tenant=%s", tenant_label)
                 continue
 
             delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=config.sequence_delay_hours)
+            tenant_outreach_filter = (
+                Outreach.tenant_id == tenant_id
+                if tenant_id is not None
+                else Outreach.tenant_id.is_(None)
+            )
+            tenant_campaign_filter = (
+                Campaign.tenant_id == tenant_id
+                if tenant_id is not None
+                else Campaign.tenant_id.is_(None)
+            )
 
             campaigns_result = await db.execute(
                 select(Campaign).where(
                     and_(
-                        Campaign.tenant_id == tenant_id,
+                        tenant_campaign_filter,
                         Campaign.status.in_(["active", "paused", "completed"]),
                     )
                 )
@@ -369,7 +477,7 @@ async def _cleanup_exhausted_sequences():
                     update(Outreach)
                     .where(
                         and_(
-                            Outreach.tenant_id == tenant_id,
+                            tenant_outreach_filter,
                             Outreach.campaign_id == campaign.id,
                             Outreach.outreach_sequence_step >= campaign_max_steps,
                             Outreach.status.in_(["cold", "contacted"]),
@@ -393,7 +501,7 @@ async def _cleanup_exhausted_sequences():
                 update(Outreach)
                 .where(
                     and_(
-                        Outreach.tenant_id == tenant_id,
+                        tenant_outreach_filter,
                         Outreach.campaign_id.is_(None),
                         Outreach.outreach_sequence_step >= config.max_sequence_steps,
                         Outreach.status.in_(["cold", "contacted"]),
@@ -411,8 +519,8 @@ async def _cleanup_exhausted_sequences():
 
             if unbound_marked > 0:
                 logger.info(
-                    "Tenant %s unbound: marked %d exhausted sequences as lost (max_steps=%d)",
-                    str(tenant_id)[:8],
+                    "Unbound tenant %s: marked %d exhausted sequences as lost (max_steps=%d)",
+                    tenant_label,
                     unbound_marked,
                     config.max_sequence_steps,
                 )

@@ -3237,7 +3237,11 @@ class TestSendSequenceEmailPatternGuard:
         mock_validate.return_value = {"valid": True, "reason": None}
         mock_verify.return_value = None  # No email found
 
+        idempotency_result = MagicMock()
+        idempotency_result.scalar_one_or_none.return_value = None
+
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=idempotency_result)
         config = _make_config()
         settings = _make_settings()
         prospect = _make_prospect()
@@ -3262,7 +3266,11 @@ class TestSendSequenceEmailPatternGuard:
         mock_validate.return_value = {"valid": True, "reason": None}
         mock_verify.return_value = None
 
+        idempotency_result = MagicMock()
+        idempotency_result.scalar_one_or_none.return_value = None
+
         db = AsyncMock()
+        db.execute = AsyncMock(return_value=idempotency_result)
         config = _make_config()
         settings = _make_settings()
         prospect = _make_prospect(outreach_sequence_step=0, status="cold")
@@ -3288,10 +3296,16 @@ class TestSendSequenceEmailPatternGuard:
     ):
         """Pattern guess proceeds to send when discovery finds a real email."""
         mock_validate.return_value = {"valid": True, "reason": None}
-        mock_verify.return_value = "real@acmehvac.com"
 
-        blacklist_result = MagicMock()
-        blacklist_result.scalar_one_or_none.return_value = None
+        async def _verify_side_effect(prospect):
+            prospect.email_verified = True
+            prospect.email_source = "website_deep_scrape"
+            return "real@acmehvac.com"
+
+        mock_verify.side_effect = _verify_side_effect
+
+        query_result = MagicMock()
+        query_result.scalar_one_or_none.return_value = None
 
         mock_gen.return_value = {
             "subject": "Test",
@@ -3309,7 +3323,7 @@ class TestSendSequenceEmailPatternGuard:
         mock_get_redis.return_value = mock_redis
 
         db = AsyncMock()
-        db.execute = AsyncMock(return_value=blacklist_result)
+        db.execute = AsyncMock(return_value=query_result)
         db.get = AsyncMock(return_value=None)
         db.add = MagicMock()
 

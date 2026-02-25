@@ -4,10 +4,11 @@ Hard 10-second timeout on ALL AI calls. Never block the SMS response path.
 Tracks cost, latency, and token usage for every call.
 Daily spending cap via Redis to prevent runaway costs.
 """
+import json
 import logging
 import re
 import time
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,95 @@ def _sanitize_output_text(text: str) -> str:
         return ""
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
     return cleaned.strip()
+
+
+def strip_markdown_fences(text: str) -> str:
+    """Remove surrounding markdown code fences from model output."""
+    if not text:
+        return ""
+
+    stripped = text.strip()
+    match = re.search(r"```(?:json)?\s*(.*?)```", stripped, flags=re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    if stripped.startswith("```"):
+        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+        return "\n".join(lines).strip()
+
+    return stripped
+
+
+def _extract_balanced_json_fragment(text: str) -> str:
+    """
+    Extract the first balanced JSON object/array from text.
+    Helps when providers prepend/append commentary around otherwise valid JSON.
+    """
+    if not text:
+        return ""
+
+    obj_idx = text.find("{")
+    arr_idx = text.find("[")
+    starts = [idx for idx in (obj_idx, arr_idx) if idx != -1]
+    if not starts:
+        return text.strip()
+
+    start = min(starts)
+    opener = text[start]
+    closer = "}" if opener == "{" else "]"
+
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == opener:
+            depth += 1
+            continue
+        if ch == closer:
+            depth -= 1
+            if depth == 0:
+                return text[start:idx + 1].strip()
+
+    # Fallback: trim trailing junk if we can still find a closing bracket.
+    last_close = text.rfind(closer)
+    if last_close > start:
+        return text[start:last_close + 1].strip()
+    return text[start:].strip()
+
+
+def parse_json_content(content: str) -> tuple[Optional[Any], Optional[str]]:
+    """Parse AI JSON output robustly; returns (parsed, error_message)."""
+    cleaned = strip_markdown_fences(content or "")
+    if not cleaned:
+        return None, "Empty AI response"
+
+    candidates = [cleaned]
+    fragment = _extract_balanced_json_fragment(cleaned)
+    if fragment and fragment not in candidates:
+        candidates.append(fragment)
+
+    last_error = "Invalid JSON"
+    for candidate in candidates:
+        try:
+            return json.loads(candidate), None
+        except json.JSONDecodeError as e:
+            last_error = str(e)
+
+    return None, last_error
 
 
 async def _check_daily_budget(cost_usd: float = 0.0) -> tuple[bool, float]:

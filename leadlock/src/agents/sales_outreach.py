@@ -7,7 +7,7 @@ Also classifies inbound replies (interested, rejection, auto_reply, etc).
 import json
 import logging
 from typing import Optional
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 from src.prompts.humanizer import EMAIL_HUMANIZER
 
 logger = logging.getLogger(__name__)
@@ -619,15 +619,10 @@ async def generate_outreach_email(
         )
         return _build_fallback_outreach_email(**fallback_kwargs)
 
-    # Parse JSON response
-    try:
-        content = result["content"].strip()
-        # Handle markdown code blocks
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        email_data = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.warning("Failed to parse AI email response, using fallback: %s", str(e))
+    email_data, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error or not isinstance(email_data, dict):
+        err = parse_error or f"Expected JSON object, got {type(email_data).__name__}"
+        logger.warning("Failed to parse AI email response, using fallback: %s", err)
         return _build_fallback_outreach_email(**fallback_kwargs)
 
     subject = email_data.get("subject", "").strip()
@@ -799,11 +794,10 @@ async def generate_booking_reply(
         }
 
     try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        email_data = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
+        email_data, parse_error = parse_json_content(result.get("content", ""))
+        if parse_error or not isinstance(email_data, dict):
+            raise ValueError(parse_error or f"Expected JSON object, got {type(email_data).__name__}")
+    except (json.JSONDecodeError, IndexError, ValueError) as e:
         logger.error("Failed to parse AI booking reply: %s", str(e))
         # Fallback: send a simple non-AI reply
         if booking_url and booking_url.startswith("http"):

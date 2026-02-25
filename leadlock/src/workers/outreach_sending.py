@@ -67,14 +67,17 @@ def normalize_email(raw_email: str) -> str:
     return email.lower()
 
 
-async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
+async def _verify_or_find_working_email(
+    prospect: Outreach,
+    require_high_confidence: bool = True,
+) -> Optional[str]:
     """
     Discover a real email for a pattern-guessed prospect using deep web
     scraping and Brave Search (replaces broken SMTP verification —
     port 25 blocked on VPS).
 
     Returns:
-        Discovered email address, or None if no real email found.
+        Discovered email address, or None if no high-confidence email was found.
     """
     from src.services.email_discovery import discover_email
 
@@ -94,6 +97,7 @@ async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
     email = discovery.get("email")
     source = discovery.get("source")
     confidence = discovery.get("confidence")
+    is_high = confidence == "high"
 
     if not email:
         logger.info(
@@ -110,14 +114,23 @@ async def _verify_or_find_working_email(prospect: Outreach) -> Optional[str]:
         )
         return None
 
+    if require_high_confidence and not is_high:
+        logger.info(
+            "Low-confidence discovery for prospect %s (%s via %s), skipping",
+            str(prospect.id)[:8],
+            confidence or "unknown",
+            source or "unknown",
+        )
+        return None
+
     # Update source metadata on the prospect
     prospect.email_source = source
-    prospect.email_verified = confidence == "high"
+    prospect.email_verified = is_high
     cost = discovery.get("cost_usd", 0.0)
     if cost > 0:
         prospect.total_cost_usd = (prospect.total_cost_usd or 0) + cost
 
-    return email
+    return normalize_email(email)
 
 
 async def _pre_send_checks(
@@ -155,14 +168,16 @@ async def _pre_send_checks(
     if not email_check["valid"]:
         return f"invalid email ({email_check['reason']})"
 
-    # Gate: on first touch, always attempt to replace pattern-guessed emails
-    # with a discovered real address (higher deliverability).
-    # Follow-ups can proceed without rediscovery because initial send already passed.
-    if prospect.email_source == "pattern_guess" and prospect.outreach_sequence_step <= 0:
+    # Gate: first-touch outreach requires a high-confidence email.
+    # Pattern-guess sources are always revalidated, even if a stale row was marked verified.
+    # Follow-ups can proceed because initial send already passed this gate.
+    is_pattern_guess = (prospect.email_source or "").strip().lower() == "pattern_guess"
+    if prospect.outreach_sequence_step <= 0 and (is_pattern_guess or not bool(prospect.email_verified)):
         verified_email = await _verify_or_find_working_email(prospect)
         if verified_email is None:
             prospect.status = "no_verified_email"
-            return "no verified email found"
+            prospect.email_discovery_attempted_at = datetime.now(timezone.utc)
+            return "no high-confidence email found"
         # Update prospect with the (possibly different) verified email
         if verified_email != prospect.prospect_email:
             logger.info(
@@ -172,7 +187,9 @@ async def _pre_send_checks(
                 verified_email[:12],
             )
         prospect.prospect_email = normalize_email(verified_email)
-        prospect.email_verified = True
+        if not bool(prospect.email_verified):
+            prospect.status = "no_verified_email"
+            return "email still unverified after discovery"
 
     # Check blacklist (email and domain)
     email_lower = prospect.prospect_email.lower().strip()

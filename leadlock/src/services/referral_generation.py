@@ -2,12 +2,11 @@
 Referral email generation service - generates personalized referral ask emails.
 Skeleton: activates when first customer onboards.
 """
-import json
 import logging
 import secrets
 from typing import Optional
 
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +66,11 @@ async def generate_referral_email(
         logger.error("Referral email generation failed: %s", result["error"])
         return {"error": result["error"], "ai_cost_usd": ai_cost}
 
-    try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        parsed = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.error("Failed to parse referral email: %s", str(e))
-        return {"error": f"JSON parse error: {str(e)}", "ai_cost_usd": ai_cost}
+    parsed, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error or not isinstance(parsed, dict):
+        err = parse_error or f"Expected JSON object, got {type(parsed).__name__}"
+        logger.error("Failed to parse referral email: %s", err)
+        return {"error": f"JSON parse error: {err}", "ai_cost_usd": ai_cost}
 
     return {
         "subject": parsed.get("subject", "").strip(),

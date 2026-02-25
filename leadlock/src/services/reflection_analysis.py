@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Optional
 
-from src.services.ai import generate_response
+from src.services.ai import generate_response, parse_json_content
 from src.utils.agent_cost import track_agent_cost
 from src.database import async_session_factory
 from src.models.agent_regression import AgentRegression
@@ -74,14 +74,11 @@ async def run_reflection_analysis(performance_data: dict) -> dict:
         logger.error("Reflection analysis failed: %s", result["error"])
         return {"error": result["error"], "ai_cost_usd": ai_cost}
 
-    try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        parsed = json.loads(content)
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.error("Failed to parse reflection analysis: %s", str(e))
-        return {"error": f"JSON parse error: {str(e)}", "ai_cost_usd": ai_cost}
+    parsed, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error or not isinstance(parsed, dict):
+        err = parse_error or f"Expected JSON object, got {type(parsed).__name__}"
+        logger.error("Failed to parse reflection analysis: %s", err)
+        return {"error": f"JSON parse error: {err}", "ai_cost_usd": ai_cost}
 
     # Store regressions in DB
     regressions = parsed.get("regressions", [])
@@ -162,5 +159,4 @@ async def run_reflection_analysis(performance_data: dict) -> dict:
         "recommendations": parsed.get("recommendations", []),
         "ai_cost_usd": ai_cost,
     }
-
 

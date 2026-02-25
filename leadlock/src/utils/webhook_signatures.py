@@ -102,11 +102,29 @@ async def validate_webhook_source(
     """
     from src.config import get_settings
     settings = get_settings()
+    strict_prod = settings.app_env == "production" and not settings.allow_unsigned_webhooks
+
+    def _missing_secret(source_name: str, secret_name: str) -> bool:
+        if strict_prod:
+            logger.error(
+                "Missing %s in production for source '%s' - rejecting webhook",
+                secret_name,
+                source_name,
+            )
+            return True
+        logger.warning(
+            "%s not set - accepting %s webhook without signature verification. "
+            "Configure secret or set ALLOW_UNSIGNED_WEBHOOKS=false in production.",
+            secret_name,
+            source_name,
+        )
+        return False
 
     if source == "twilio":
         signature = request.headers.get("X-Twilio-Signature", "")
         if not settings.twilio_auth_token:
-            logger.warning("Twilio auth_token not configured - skipping signature check")
+            if _missing_secret(source, "TWILIO_AUTH_TOKEN"):
+                return False
             return True
         url = await get_webhook_url(request)
         return validate_twilio_signature(
@@ -119,10 +137,8 @@ async def validate_webhook_source(
     if source == "google_lsa":
         secret = settings.webhook_secret_google
         if not secret:
-            logger.warning(
-                "WEBHOOK_SECRET_GOOGLE not set - accepting %s webhook without "
-                "signature verification. Configure for production.", source,
-            )
+            if _missing_secret(source, "WEBHOOK_SECRET_GOOGLE"):
+                return False
             return True
         sig = request.headers.get("X-Webhook-Signature", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -130,10 +146,8 @@ async def validate_webhook_source(
     if source == "angi":
         secret = settings.webhook_secret_angi
         if not secret:
-            logger.warning(
-                "WEBHOOK_SECRET_ANGI not set - accepting %s webhook without "
-                "signature verification. Configure for production.", source,
-            )
+            if _missing_secret(source, "WEBHOOK_SECRET_ANGI"):
+                return False
             return True
         sig = request.headers.get("X-Webhook-Signature", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -141,10 +155,8 @@ async def validate_webhook_source(
     if source == "facebook":
         secret = settings.webhook_secret_facebook
         if not secret:
-            logger.warning(
-                "WEBHOOK_SECRET_FACEBOOK not set - accepting %s webhook without "
-                "signature verification. Configure for production.", source,
-            )
+            if _missing_secret(source, "WEBHOOK_SECRET_FACEBOOK"):
+                return False
             return True
         sig = request.headers.get("X-Hub-Signature-256", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -152,10 +164,8 @@ async def validate_webhook_source(
     if source == "thumbtack":
         secret = settings.webhook_secret_thumbtack
         if not secret:
-            logger.warning(
-                "WEBHOOK_SECRET_THUMBTACK not set - accepting %s webhook without "
-                "signature verification. Configure for production.", source,
-            )
+            if _missing_secret(source, "WEBHOOK_SECRET_THUMBTACK"):
+                return False
             return True
         sig = request.headers.get("X-Webhook-Signature", "")
         return validate_hmac_sha256(secret, sig, body)
@@ -166,8 +176,16 @@ async def validate_webhook_source(
         if sig:
             return validate_hmac_sha256(settings.webhook_signing_key, sig, body)
 
+    if strict_prod:
+        logger.error(
+            "No webhook secret configured for source '%s' in production - rejecting webhook",
+            source,
+        )
+        return False
+
     logger.warning(
         "No webhook secret configured for source '%s' - accepting without "
-        "signature verification. Configure webhook_signing_key for production.", source,
+        "signature verification. Configure webhook_signing_key for production.",
+        source,
     )
     return True

@@ -115,8 +115,7 @@ async def _extract_decision_maker(page_text: str) -> dict:
     Returns:
         {"name": str|None, "title": str|None, "ai_cost_usd": float}
     """
-    import json
-    from src.services.ai import generate_response
+    from src.services.ai import generate_response, parse_json_content
 
     result = await generate_response(
         system_prompt=_EXTRACTION_PROMPT,
@@ -132,19 +131,17 @@ async def _extract_decision_maker(page_text: str) -> dict:
         logger.warning("AI extraction failed: %s", result["error"])
         return {"name": None, "title": None, "ai_cost_usd": cost}
 
-    try:
-        content = result["content"].strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        data = json.loads(content)
-        return {
-            "name": data.get("name"),
-            "title": data.get("title"),
-            "ai_cost_usd": cost,
-        }
-    except (json.JSONDecodeError, IndexError) as e:
-        logger.warning("Failed to parse AI extraction: %s", str(e))
+    data, parse_error = parse_json_content(result.get("content", ""))
+    if parse_error or not isinstance(data, dict):
+        err = parse_error or f"Expected JSON object, got {type(data).__name__}"
+        logger.warning("Failed to parse AI extraction: %s", err)
         return {"name": None, "title": None, "ai_cost_usd": cost}
+
+    return {
+        "name": data.get("name"),
+        "title": data.get("title"),
+        "ai_cost_usd": cost,
+    }
 
 
 def generate_email_candidates(domain: str, name: Optional[str] = None) -> list[str]:

@@ -347,6 +347,7 @@ async def reset_password(
     client.dashboard_password_hash = bcrypt.hashpw(
         new_password.encode(), bcrypt.gensalt()
     ).decode()
+    await db.commit()
 
     # Delete the used token
     try:
@@ -378,15 +379,20 @@ async def verify_email(
         raise HTTPException(status_code=400, detail="Invalid or expired verification token")
 
     client_id = client_id_raw if isinstance(client_id_raw, str) else client_id_raw.decode()
+    try:
+        client_uuid = uuid.UUID(client_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
 
     result = await db.execute(
-        select(Client).where(Client.id == uuid.UUID(client_id))
+        select(Client).where(Client.id == client_uuid)
     )
     client = result.scalar_one_or_none()
     if not client:
         raise HTTPException(status_code=400, detail="Invalid verification token")
 
     client.email_verified = True
+    await db.commit()
 
     # Delete the used token
     try:
