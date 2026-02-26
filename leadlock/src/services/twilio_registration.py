@@ -363,8 +363,12 @@ async def submit_tollfree_verification(
             use_case_categories=["CUSTOMER_CARE"],
             use_case_summary=(
                 "Automated lead response and appointment booking for home services. "
-                "Homeowners request service via web forms and receive SMS confirmations. "
-                "Consent is collected via a dedicated checkbox on the service request form."
+                "Homeowners submit a service request through our web form at "
+                "leadlock.org. The form includes a separate SMS consent checkbox "
+                "with clear disclosure language. After opting in, they receive an "
+                "initial SMS confirming their request, followed by up to 3 messages "
+                "to qualify their needs and book an appointment. All messages include "
+                "the business name and STOP opt-out instructions."
             ),
             production_message_sample=(
                 f"Hi! This is Sarah from {business_name}. "
@@ -372,14 +376,21 @@ async def submit_tollfree_verification(
                 "Are you available Thursday between 9-11 AM? "
                 "Reply STOP to opt out."
             ),
-            opt_in_type="VERBAL",
+            opt_in_type="WEB_FORM",
             opt_in_image_urls=opt_in_image_urls or default_opt_in_urls,
             message_volume="1,000",
             additional_information=(
-                "AI-powered speed-to-lead platform for home services contractors. "
-                "All messages include STOP opt-out instructions and business name. "
-                "SMS consent is collected separately via checkbox, not bundled with "
-                "other terms. Maximum 3 follow-up messages per lead."
+                "Consent flow: Homeowner fills out a service request form on our "
+                "website (leadlock.org). The form has a SEPARATE checkbox (not "
+                "pre-checked) that reads: 'I agree to receive SMS/text messages "
+                "about my service request. Message frequency varies. Message and "
+                "data rates may apply. Reply STOP to cancel at any time. Reply "
+                "HELP for help.' The checkbox is visually highlighted and not "
+                "bundled with other terms. Opt-in screenshot attached shows the "
+                "exact form. After consent, the consumer receives: (1) an initial "
+                "confirmation SMS with business name and STOP instructions, (2) up "
+                "to 3 follow-up messages to qualify and book an appointment. No "
+                "marketing messages are sent. AI disclosure included per CA SB 1001."
             ),
         )
         logger.info("Toll-free verification submitted: %s", verification.sid)
