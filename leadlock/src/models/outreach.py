@@ -107,7 +107,7 @@ class Outreach(Base):
         Index("ix_outreach_tenant_id", "tenant_id"),
         Index("ix_outreach_status", "status"),
         Index("ix_outreach_created_at", "created_at"),
-        Index("ix_outreach_source_place_id", "source_place_id", unique=True,
+        Index("ix_outreach_source_place_id", "tenant_id", "source_place_id", unique=True,
               postgresql_where="source_place_id IS NOT NULL"),
         Index("ix_outreach_sequence_step", "outreach_sequence_step"),
         Index("ix_outreach_winback", "winback_eligible", "winback_sent_at"),
