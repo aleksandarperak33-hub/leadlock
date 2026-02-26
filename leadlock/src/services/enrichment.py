@@ -165,10 +165,17 @@ def guess_email_patterns(domain: str, name: Optional[str] = None) -> list[str]:
 
 def _is_valid_business_email(email: str, target_domain: Optional[str] = None) -> bool:
     """Check if an email looks like a real business contact email."""
-    email_lower = email.lower().strip()
+    from urllib.parse import unquote
 
-    # Reject emails with whitespace, URL-encoded artifacts, or control chars
-    if " " in email_lower or "\t" in email_lower or "%" in email_lower:
+    # URL-decode first (catches %20, %40 artifacts from scraping)
+    email_lower = unquote(email).lower().strip()
+
+    # Reject if whitespace or control chars remain after decoding
+    if " " in email_lower or "\t" in email_lower or "\n" in email_lower:
+        return False
+
+    # Reject if URL-encoded artifacts remain (double-encoded or broken encoding)
+    if "%" in email_lower:
         return False
 
     # Basic sanity: must have exactly one @, reasonable length
@@ -196,8 +203,26 @@ def _is_valid_business_email(email: str, target_domain: Optional[str] = None) ->
         "noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon",
         "notifications", "alerts", "automated", "bot", "robot",
         "postmaster", "webmaster", "hostmaster", "abuse",
+        "privacy", "legal", "compliance", "gdpr",
     )
     if any(skip in local_part for skip in unmonitored_patterns):
+        return False
+
+    # Reject placeholder/bogus local parts from scraping artifacts
+    _placeholder_locals = frozenset({
+        "last", "first", "name", "email", "test", "user", "example",
+        "your", "youremail", "your.email", "your-email", "username",
+        "null", "undefined", "none", "admin1", "test1", "temp",
+    })
+    if local_part in _placeholder_locals:
+        return False
+
+    # Reject common placeholder name patterns (j.doe, jane.doe, john.doe)
+    _placeholder_name_parts = frozenset({
+        "doe", "sample", "placeholder", "dummy", "fake",
+    })
+    local_parts = local_part.replace("-", ".").replace("_", ".").split(".")
+    if any(part in _placeholder_name_parts for part in local_parts):
         return False
 
     # Reject file extensions mistakenly parsed as email addresses

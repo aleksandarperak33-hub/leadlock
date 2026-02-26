@@ -202,6 +202,18 @@ async def _pre_send_checks(
     if blacklist_check.scalar_one_or_none():
         return "blacklisted"
 
+    # First-touch: block non-contact generic prefixes that rarely exist
+    # on small business domains and cause bounces (privacy@, accounts@, etc.)
+    if prospect.outreach_sequence_step <= 0 and domain:
+        local_part = email_lower.split("@")[0]
+        _non_contact_prefixes = frozenset({
+            "privacy", "legal", "compliance", "gdpr",
+            "webmaster", "hostmaster", "postmaster", "abuse",
+            "accounts", "accounting", "billing",
+        })
+        if local_part in _non_contact_prefixes:
+            return f"non-contact prefix ({local_part}@) blocked for first-touch"
+
     # Check domain bounce risk score (blocks high-bounce domains)
     if domain:
         try:

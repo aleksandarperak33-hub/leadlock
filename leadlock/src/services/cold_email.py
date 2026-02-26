@@ -65,7 +65,9 @@ async def send_cold_email(
     settings = get_settings()
 
     # Normalize recipient to avoid sending to malformed scraped addresses.
-    normalized_to_email = "".join((to_email or "").strip().split()).lower()
+    from urllib.parse import unquote
+    normalized_to_email = unquote((to_email or "").strip())
+    normalized_to_email = "".join(normalized_to_email.split()).lower()
     if normalized_to_email != (to_email or ""):
         logger.info(
             "Normalized outbound recipient email: %s -> %s",
