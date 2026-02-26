@@ -15,9 +15,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Regex to find email addresses in page content
+# Regex to find email addresses in page content.
+# Excludes % to avoid matching URL-encoded artifacts like %20info@domain.com.
+# Keeps _ which is valid in email local parts (john_smith@, billing_info@).
 _EMAIL_REGEX = re.compile(
-    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+    r"[a-zA-Z0-9._+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
 )
 
 # Pages most likely to contain contact emails
@@ -163,25 +165,45 @@ def guess_email_patterns(domain: str, name: Optional[str] = None) -> list[str]:
 
 def _is_valid_business_email(email: str, target_domain: Optional[str] = None) -> bool:
     """Check if an email looks like a real business contact email."""
-    email_lower = email.lower()
+    email_lower = email.lower().strip()
 
-    # Reject emails with whitespace or URL-encoded artifacts
+    # Reject emails with whitespace, URL-encoded artifacts, or control chars
     if " " in email_lower or "\t" in email_lower or "%" in email_lower:
         return False
 
-    email_domain = email_lower.split("@")[1] if "@" in email_lower else ""
+    # Basic sanity: must have exactly one @, reasonable length
+    if email_lower.count("@") != 1:
+        return False
+    local_part, email_domain = email_lower.split("@")
+    if not local_part or not email_domain:
+        return False
+    if len(email_lower) > 254 or len(local_part) > 64:
+        return False
+
+    # Reject local parts that start or end with dots (invalid per RFC)
+    if local_part.startswith(".") or local_part.endswith(".") or ".." in local_part:
+        return False
+
+    # Reject domains without a dot (e.g., "user@localhost")
+    if "." not in email_domain:
+        return False
 
     if email_domain in _IGNORE_EMAIL_DOMAINS:
         return False
 
     # Filter out noreply, automated, and unmonitored addresses
-    local_part = email_lower.split("@")[0]
     unmonitored_patterns = (
         "noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon",
         "notifications", "alerts", "automated", "bot", "robot",
         "postmaster", "webmaster", "hostmaster", "abuse",
     )
     if any(skip in local_part for skip in unmonitored_patterns):
+        return False
+
+    # Reject file extensions mistakenly parsed as email addresses
+    # e.g., "image.png@2x" from srcset attributes or CSS
+    _fake_ext_patterns = (".png", ".jpg", ".gif", ".svg", ".css", ".js", ".woff")
+    if any(local_part.endswith(ext) for ext in _fake_ext_patterns):
         return False
 
     # If we have a target domain, prefer emails matching that domain

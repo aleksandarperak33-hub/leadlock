@@ -7,9 +7,35 @@ import logging
 import re
 import smtplib
 import socket
+import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# MX record cache — avoids repeated DNS lookups for the same domain.
+# In-memory dict with TTL. Safe for single-process (Railway/Docker).
+# ---------------------------------------------------------------------------
+_mx_cache: dict[str, tuple[bool, float]] = {}
+_mx_hosts_cache: dict[str, tuple[list[str], float]] = {}
+_MX_CACHE_TTL = 3600  # 1 hour
+
+# ---------------------------------------------------------------------------
+# Known catch-all MX providers — these accept mail for ANY address,
+# so pattern-guessed emails at these domains look "valid" but often aren't.
+# We downgrade confidence for domains whose MX points to these.
+# ---------------------------------------------------------------------------
+_CATCH_ALL_MX_PATTERNS = frozenset({
+    "secureserver.net",       # GoDaddy shared hosting — catch-all by default
+    "emailsrvr.com",         # Rackspace catch-all
+    "registrar-servers.com", # Namecheap default mail
+    "hostinger.com",         # Hostinger catch-all
+    "bluehost.com",          # Bluehost catch-all
+    "dreamhost.com",         # DreamHost default
+    "pair.com",              # pair Networks
+    "fatcow.com",            # FatCow catch-all
+    "ipage.com",             # iPage catch-all
+})
 
 # RFC 5322 simplified - covers 99%+ of valid emails
 EMAIL_REGEX = re.compile(
@@ -71,7 +97,7 @@ def _get_mx_hosts(domain: str) -> list[str]:
 
 async def has_mx_record(domain: str) -> bool:
     """
-    Check if domain has MX (mail exchange) DNS records.
+    Check if domain has MX (mail exchange) DNS records.  Cached for 1 hour.
     Falls back to A record check if no MX found.
     Runs DNS resolution in a thread pool to avoid blocking the event loop.
 
@@ -81,6 +107,14 @@ async def has_mx_record(domain: str) -> bool:
     Returns:
         True if domain can receive email
     """
+    # Check cache first
+    now = time.time()
+    cached = _mx_cache.get(domain)
+    if cached is not None:
+        result, cached_at = cached
+        if now - cached_at < _MX_CACHE_TTL:
+            return result
+
     try:
         import dns.resolver
 
@@ -94,12 +128,14 @@ async def has_mx_record(domain: str) -> bool:
                 try:
                     dns.resolver.resolve(domain, "A")
                     return True
-                except Exception as e:
+                except Exception:
                     return False
             except dns.resolver.NXDOMAIN:
                 return False
 
-        return await loop.run_in_executor(None, _resolve_mx)
+        result = await loop.run_in_executor(None, _resolve_mx)
+        _mx_cache[domain] = (result, now)
+        return result
 
     except ImportError:
         logger.warning("dnspython not installed - skipping MX record check")
@@ -107,6 +143,62 @@ async def has_mx_record(domain: str) -> bool:
     except Exception as e:
         logger.warning("MX record check failed for %s: %s", domain, str(e))
         return True
+
+
+async def get_mx_hosts_async(domain: str) -> list[str]:
+    """
+    Async wrapper for _get_mx_hosts — resolves MX records in thread pool.
+    Cached for 1 hour to avoid redundant DNS lookups (called by both
+    has_mx_record flow and is_likely_catch_all in the same pipeline).
+
+    Args:
+        domain: Domain to resolve
+
+    Returns:
+        List of MX hostnames, or empty list if domain has no mail setup.
+    """
+    now = time.time()
+    cached = _mx_hosts_cache.get(domain)
+    if cached is not None:
+        hosts, cached_at = cached
+        if now - cached_at < _MX_CACHE_TTL:
+            return hosts
+
+    loop = asyncio.get_running_loop()
+    hosts = await loop.run_in_executor(None, _get_mx_hosts, domain)
+    _mx_hosts_cache[domain] = (hosts, now)
+    return hosts
+
+
+async def is_likely_catch_all(domain: str) -> bool:
+    """
+    Heuristic catch-all detection via MX provider matching.
+    Returns True if the domain's MX records point to a known
+    catch-all shared hosting provider.
+
+    Without SMTP port 25, we can't probe with a random address,
+    so we rely on MX provider patterns.
+
+    Args:
+        domain: Domain to check
+
+    Returns:
+        True if domain is likely a catch-all (emails may not actually exist)
+    """
+    try:
+        mx_hosts = await get_mx_hosts_async(domain)
+        for mx_host in mx_hosts:
+            mx_lower = mx_host.lower()
+            for catch_all_pattern in _CATCH_ALL_MX_PATTERNS:
+                if mx_lower.endswith(catch_all_pattern):
+                    logger.debug(
+                        "Domain %s likely catch-all (MX: %s)", domain, mx_host,
+                    )
+                    return True
+        return False
+    except Exception as e:
+        logger.debug("Catch-all check failed for %s: %s", domain, str(e))
+        return False
 
 
 def _smtp_verify_sync(email: str, mx_hosts: list[str]) -> dict:

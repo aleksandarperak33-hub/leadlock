@@ -9,6 +9,7 @@ Processes 1 location+trade combo per cycle (round-robin via Redis).
 import asyncio
 import logging
 import random
+import re
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
 DEFAULT_VARIANT_COOLDOWN_DAYS = 7
+
+# Patterns in business names indicating closed/inactive businesses.
+# These appear in Google/Brave listings for businesses that no longer operate.
+# Avoids bare "closed" to prevent false positives like "Closed Loop HVAC".
+_CLOSED_NAME_PATTERNS = re.compile(
+    r"\b(permanently\s+closed|temporarily\s+closed|out\s+of\s+business"
+    r"|no\s+longer\s+in\s+business|defunct|shutdown|shut\s+down)\b"
+    r"|\(closed\)",
+    re.IGNORECASE,
+)
 
 # Multiple query variations per trade - each produces different Brave results.
 # Rotated across scrape cycles so we always discover new businesses.
@@ -354,6 +365,13 @@ async def scrape_location_trade(
             # prospect that will never progress through the outreach pipeline.
             website = biz.get("website", "")
             if not website or not phone:
+                skipped_quality += 1
+                continue
+
+            # Skip closed/inactive businesses detected by name patterns.
+            # Brave/Google listings sometimes include businesses that no longer operate.
+            biz_name = biz.get("name", "")
+            if _CLOSED_NAME_PATTERNS.search(biz_name):
                 skipped_quality += 1
                 continue
 

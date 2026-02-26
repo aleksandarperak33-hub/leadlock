@@ -74,6 +74,13 @@ async def discover_email(
     """
     Multi-strategy email discovery for a prospect.
 
+    MX validation gate: every candidate email's domain is checked for MX
+    records BEFORE returning. Domains without MX records cannot receive
+    email and would cause hard bounces that damage sender reputation.
+
+    Catch-all detection: domains hosted on known catch-all providers have
+    their confidence downgraded since any address appears valid.
+
     Returns:
         {
             "email": str|None,
@@ -82,17 +89,40 @@ async def discover_email(
             "cost_usd": float,
         }
     """
+    from src.utils.email_validation import has_mx_record, is_likely_catch_all
+
     domain = extract_domain(website) if website else None
+    total_cost = 0.0
+
+    # Pre-flight: check domain MX once (cached) — skip all strategies if no MX
+    if domain:
+        domain_has_mx = await has_mx_record(domain)
+        if not domain_has_mx:
+            logger.info("Domain %s has no MX records — skipping email discovery", domain)
+            return {
+                "email": None,
+                "source": None,
+                "confidence": None,
+                "cost_usd": 0.0,
+                "skip_reason": "no_mx_record",
+            }
+
+    # Check catch-all status (cached via MX resolution)
+    domain_is_catch_all = False
+    if domain:
+        domain_is_catch_all = await is_likely_catch_all(domain)
 
     # Strategy 1: Deep website scrape (high confidence)
     if website:
         try:
             scraped = await deep_scrape_website(website)
             if scraped:
+                # Catch-all domains downgrade from high → medium
+                confidence = "medium" if domain_is_catch_all else "high"
                 return {
                     "email": scraped[0],
                     "source": "website_deep_scrape",
-                    "confidence": "high",
+                    "confidence": confidence,
                     "cost_usd": 0.0,
                 }
         except Exception as e:
@@ -102,12 +132,15 @@ async def discover_email(
     if domain:
         try:
             brave_emails = await search_brave_for_email(domain)
+            total_cost += 0.005
             if brave_emails:
+                # Catch-all domains downgrade from medium → low
+                confidence = "low" if domain_is_catch_all else "medium"
                 return {
                     "email": brave_emails[0],
                     "source": "brave_search",
-                    "confidence": "medium",
-                    "cost_usd": 0.005,
+                    "confidence": confidence,
+                    "cost_usd": total_cost,
                 }
         except Exception as e:
             logger.debug("Brave search failed for %s: %s", domain, str(e))
@@ -117,11 +150,12 @@ async def discover_email(
         candidates = enrichment_data.get("email_candidates", [])
         for candidate in candidates:
             if _is_valid_business_email(candidate, target_domain=domain):
+                confidence = "low" if domain_is_catch_all else "medium"
                 return {
                     "email": candidate,
                     "source": "enrichment_candidate",
-                    "confidence": "medium",
-                    "cost_usd": 0.0,
+                    "confidence": confidence,
+                    "cost_usd": total_cost,
                 }
 
     # Strategy 4: Pattern guessing (low confidence — last resort)
@@ -132,14 +166,14 @@ async def discover_email(
                 "email": patterns[0],
                 "source": "pattern_guess",
                 "confidence": "low",
-                "cost_usd": 0.0,
+                "cost_usd": total_cost,
             }
 
     return {
         "email": None,
         "source": None,
         "confidence": None,
-        "cost_usd": 0.0,
+        "cost_usd": total_cost,
     }
 
 
