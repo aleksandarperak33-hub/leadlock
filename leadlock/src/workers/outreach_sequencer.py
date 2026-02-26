@@ -282,6 +282,97 @@ async def _recover_warmup_start_from_db(tenant_id=None) -> Optional[datetime]:
         return None
 
 
+async def _get_multi_mailbox_warmup_limit(
+    config: SalesEngineConfig,
+    tenant_id,
+    primary_from_email: str,
+) -> int:
+    """
+    Calculate combined warmup limit across ALL active sender mailboxes.
+
+    Each domain warms up independently, so adding a second sending domain
+    doubles throughput during the warmup period. Mailboxes on the same
+    domain share that domain's warmup limit.
+
+    Returns:
+        Combined warmup limit (capped at config.daily_email_limit).
+    """
+    from src.services.sender_mailboxes import get_active_sender_mailboxes
+
+    mailboxes = get_active_sender_mailboxes(config)
+    if not mailboxes:
+        return await _get_warmup_limit(
+            config.daily_email_limit, primary_from_email, tenant_id=tenant_id,
+        )
+
+    # Group mailboxes by domain — mailboxes on the same domain share warmup
+    domain_mailboxes: dict[str, list[dict]] = {}
+    for mb in mailboxes:
+        email = mb.get("from_email", "")
+        domain = email.split("@")[1].lower() if "@" in email else "default"
+        domain_mailboxes.setdefault(domain, []).append(mb)
+
+    total_warmup = 0
+
+    for domain, mbs in domain_mailboxes.items():
+        # Get warmup limit for this domain
+        representative_email = mbs[0]["from_email"]
+        domain_warmup = await _get_warmup_limit(
+            config.daily_email_limit, representative_email, tenant_id=tenant_id,
+        )
+
+        # Apply warmup optimizer if available
+        try:
+            from src.services.warmup_optimizer import get_optimized_warmup_limit
+            from src.utils.dedup import get_redis as _get_redis_for_warmup
+
+            _redis = await _get_redis_for_warmup()
+            _warmup_key = f"leadlock:email_warmup:{tenant_id}:{domain}"
+            _started_raw = await _redis.get(_warmup_key)
+            if _started_raw:
+                _started_str = (
+                    _started_raw.decode()
+                    if isinstance(_started_raw, bytes)
+                    else str(_started_raw)
+                )
+                _started = datetime.fromisoformat(_started_str)
+                _days = (datetime.now(timezone.utc) - _started).days
+                domain_warmup = await get_optimized_warmup_limit(domain_warmup, _days)
+        except Exception:
+            pass
+
+        # Sum per-mailbox daily limits for this domain (if set)
+        mailbox_sum = 0
+        for mb in mbs:
+            mb_limit = mb.get("daily_limit")
+            if mb_limit and int(mb_limit) > 0:
+                mailbox_sum += int(mb_limit)
+            else:
+                # No per-mailbox limit: this mailbox uses the full domain warmup
+                mailbox_sum = domain_warmup
+                break
+
+        # The domain's contribution is capped by its warmup stage
+        domain_contribution = min(domain_warmup, mailbox_sum)
+        total_warmup += domain_contribution
+
+        logger.debug(
+            "Domain %s: warmup=%d mailbox_sum=%d contribution=%d",
+            domain, domain_warmup, mailbox_sum, domain_contribution,
+        )
+
+    # Cap at configured tenant limit
+    combined = min(total_warmup, config.daily_email_limit)
+
+    if len(domain_mailboxes) > 1:
+        logger.info(
+            "Multi-domain warmup: %d domains, combined_limit=%d (tenant cap=%d)",
+            len(domain_mailboxes), combined, config.daily_email_limit,
+        )
+
+    return combined
+
+
 async def _check_email_health() -> tuple[bool, str]:
     """
     Check email reputation before sending. Returns (allowed, throttle_level).
@@ -582,31 +673,11 @@ async def _sequence_cycle_for_tenant(
     )
     sent_today = sent_today_result.scalar() or 0
 
-    warmup_limit = await _get_warmup_limit(
-        config.daily_email_limit,
-        primary_from_email,
-        tenant_id=tenant_id,
+    # Calculate combined warmup limit across all active mailboxes/domains.
+    # Each domain warms up independently, so multiple domains multiply throughput.
+    warmup_limit = await _get_multi_mailbox_warmup_limit(
+        config, tenant_id, primary_from_email,
     )
-
-    try:
-        from src.services.warmup_optimizer import get_optimized_warmup_limit
-        from src.utils.dedup import get_redis as _get_redis_for_warmup
-
-        _redis = await _get_redis_for_warmup()
-        domain = (
-            primary_from_email.split("@")[1].lower()
-            if "@" in primary_from_email
-            else "default"
-        )
-        _warmup_key = f"leadlock:email_warmup:{tenant_id}:{domain}"
-        _started_raw = await _redis.get(_warmup_key)
-        if _started_raw:
-            _started_str = _started_raw.decode() if isinstance(_started_raw, bytes) else str(_started_raw)
-            _started = datetime.fromisoformat(_started_str)
-            _days = (datetime.now(timezone.utc) - _started).days
-            warmup_limit = await get_optimized_warmup_limit(warmup_limit, _days)
-    except Exception as opt_err:
-        logger.debug("Warmup optimizer unavailable: %s", str(opt_err))
 
     from src.services.deliverability import EMAIL_THROTTLE_FACTORS
 
