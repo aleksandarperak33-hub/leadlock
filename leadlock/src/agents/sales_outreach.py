@@ -184,6 +184,18 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
     except Exception as e:
         logger.debug("Winning patterns query failed: %s", str(e))
 
+    # Add content intelligence (feature-engagement correlations)
+    try:
+        from src.services.email_intelligence import format_content_intelligence_for_prompt
+
+        content_insights = await format_content_intelligence_for_prompt(
+            trade=trade_type, step=step,
+        )
+        if content_insights:
+            parts.append(content_insights)
+    except Exception as e:
+        logger.debug("Content intelligence query failed: %s", str(e))
+
     # Cap at 5 insight lines to avoid prompt bloat
     if parts:
         capped = parts[:5]

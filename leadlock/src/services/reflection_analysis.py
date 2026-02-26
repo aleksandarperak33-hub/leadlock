@@ -22,10 +22,12 @@ PERFORMANCE DATA:
 Analyze:
 1. A/B TEST RESULTS: Which angles/approaches worked? What should we test next?
 2. EMAIL PERFORMANCE: Which trades/steps have best open and reply rates?
-3. WIN-BACK EFFECTIVENESS: Which angles got the best response?
-4. COST EFFICIENCY: Any agents spending more than expected?
-5. REGRESSIONS: Any metrics that got worse compared to previous periods?
-6. WINNING PATTERNS: Extract specific subject line instructions that demonstrably work.
+3. CTA VARIANT PERFORMANCE: Compare "calendar" (booking link) vs "question" (question CTA). If one variant has 20%+ higher reply rate with 30+ sends, declare it the winner.
+4. WIN-BACK EFFECTIVENESS: Which angles got the best response?
+5. COST EFFICIENCY: Any agents spending more than expected?
+6. REGRESSIONS: Any metrics that got worse compared to previous periods?
+7. WINNING PATTERNS: Extract specific subject line instructions that demonstrably work.
+8. CONTENT FEATURES: If content_feature_summary is provided, note which email features (length, personalization depth, greeting type) correlate with higher engagement.
 
 For each regression found, output a structured entry.
 For each winning pattern found, output a structured entry with the instruction that works.
@@ -35,6 +37,9 @@ Output valid JSON:
   "summary": "1-2 sentence executive summary",
   "ab_test_insights": "...",
   "email_insights": "...",
+  "cta_winner": "calendar|question|null",
+  "cta_insights": "...",
+  "content_feature_insights": "...",
   "winback_insights": "...",
   "cost_insights": "...",
   "regressions": [
@@ -151,6 +156,9 @@ async def run_reflection_analysis(performance_data: dict) -> dict:
         "insights": {
             "ab_test": parsed.get("ab_test_insights"),
             "email": parsed.get("email_insights"),
+            "cta_winner": parsed.get("cta_winner"),
+            "cta": parsed.get("cta_insights"),
+            "content_features": parsed.get("content_feature_insights"),
             "winback": parsed.get("winback_insights"),
             "cost": parsed.get("cost_insights"),
         },

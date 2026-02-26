@@ -2,6 +2,7 @@
 Outreach email sending — generate and send a single outreach email for a prospect.
 Extracted from outreach_sequencer.py for file size compliance.
 """
+import hashlib
 import logging
 import re
 import uuid
@@ -342,6 +343,40 @@ async def _generate_email_with_template(
     return result
 
 
+def _stable_hash_bucket(prospect_id: uuid.UUID, modulo: int) -> int:
+    """Deterministic hash bucket stable across Python processes and restarts."""
+    digest = hashlib.md5(str(prospect_id).encode()).digest()
+    return int.from_bytes(digest[:4], "big") % modulo
+
+
+async def _choose_cta_variant(prospect_id: uuid.UUID) -> str:
+    """
+    Choose CTA variant using cached winner (80/20 exploit/explore) or 50/50 fallback.
+
+    Checks Redis key ``leadlock:cta_winner`` for a winner declared by the
+    reflection agent.  When a winner exists, 80 % of traffic uses it while
+    20 % explores the alternative (prevents local-maximum lock-in).
+    Falls back to deterministic 50/50 split when no winner is cached.
+    """
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+        cached_winner = await redis.get("leadlock:cta_winner")
+        if cached_winner:
+            winner = cached_winner.decode() if isinstance(cached_winner, bytes) else str(cached_winner)
+            if winner in ("calendar", "question"):
+                # 80% exploit winner, 20% explore alternative
+                bucket = _stable_hash_bucket(prospect_id, 10)
+                if bucket < 8:
+                    return winner
+                return "question" if winner == "calendar" else "calendar"
+    except Exception as e:
+        logger.debug("CTA winner cache lookup failed: %s", str(e))
+
+    # Fallback: deterministic 50/50 split
+    return "calendar" if _stable_hash_bucket(prospect_id, 2) == 0 else "question"
+
+
 async def send_sequence_email(
     db: AsyncSession,
     config: SalesEngineConfig,
@@ -431,9 +466,8 @@ async def send_sequence_email(
         )
         return
 
-    # CTA A/B split: deterministic 50/50 based on prospect ID
-    # "calendar" = includes booking link, "question" = question-based CTA
-    cta_variant = "calendar" if hash(str(prospect.id)) % 2 == 0 else "question"
+    # CTA variant selection: uses cached winner if available, else 50/50 split
+    cta_variant = await _choose_cta_variant(prospect.id)
     effective_booking_url = config.booking_url if cta_variant == "calendar" else None
 
     # Generate personalized email
@@ -745,6 +779,22 @@ async def _record_send(
         except (ValueError, TypeError):
             pass
 
+    # Extract content features for intelligence tracking
+    content_features = None
+    try:
+        from src.services.email_intelligence import extract_content_features
+        content_features = extract_content_features(
+            subject=send_subject,
+            body_text=email_result.get("body_text", ""),
+            prospect_name=prospect.prospect_name,
+            company=prospect.prospect_company,
+            city=prospect.city,
+            trade=prospect.prospect_trade_type,
+            has_booking_url=bool(email_result.get("cta_variant") == "calendar"),
+        )
+    except Exception as feat_err:
+        logger.debug("Content feature extraction failed: %s", str(feat_err))
+
     email_record = OutreachEmail(
         outreach_id=prospect.id,
         direction="outbound",
@@ -760,6 +810,7 @@ async def _record_send(
         fallback_used=email_result.get("fallback_used", False),
         ab_variant_id=ab_variant_uuid,
         cta_variant=email_result.get("cta_variant"),
+        content_features=content_features,
     )
     db.add(email_record)
 

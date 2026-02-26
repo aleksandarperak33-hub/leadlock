@@ -142,6 +142,7 @@ async def _record_email_signal(
             "step": str(email_record.sequence_step),
             "time_bucket": _time_bucket(sent_hour),
             "day_of_week": sent_day,
+            "cta_variant": getattr(email_record, "cta_variant", None) or "",
         }
 
         await record_signal(
@@ -461,7 +462,12 @@ async def inbound_email_webhook(
 
         now = datetime.now(timezone.utc)
 
-        # Record inbound email
+        # Classify reply with AI before creating the record (immutable construction)
+        from src.agents.sales_outreach import classify_reply
+        classification_result = await classify_reply(text_body or html_body)
+        classification = classification_result["classification"]
+
+        # Record inbound email with classification set at creation
         email_record = OutreachEmail(
             outreach_id=prospect.id,
             direction="inbound",
@@ -472,13 +478,9 @@ async def inbound_email_webhook(
             to_email=to_email,
             sequence_step=prospect.outreach_sequence_step,
             sent_at=now,
+            reply_classification=classification,
         )
         db.add(email_record)
-
-        # Classify reply with AI
-        from src.agents.sales_outreach import classify_reply
-        classification_result = await classify_reply(text_body or html_body)
-        classification = classification_result["classification"]
 
         # Update prospect based on classification
         prospect.last_email_replied_at = now
@@ -500,6 +502,24 @@ async def inbound_email_webhook(
             await _record_email_signal(
                 "email_replied", prospect, email_record, signal_value,
             )
+
+        # Track A/B variant reply event on the latest outbound email
+        try:
+            latest_outbound_result = await db.execute(
+                select(OutreachEmail).where(
+                    and_(
+                        OutreachEmail.outreach_id == prospect.id,
+                        OutreachEmail.direction == "outbound",
+                        OutreachEmail.ab_variant_id.isnot(None),
+                    )
+                ).order_by(OutreachEmail.sent_at.desc()).limit(1)
+            )
+            latest_outbound = latest_outbound_result.scalar_one_or_none()
+            if latest_outbound and latest_outbound.ab_variant_id:
+                from src.services.ab_testing import record_event
+                await record_event(str(latest_outbound.ab_variant_id), "replied")
+        except Exception as ab_err:
+            logger.debug("A/B reply tracking failed: %s", str(ab_err))
 
         # Persist reply classification and prospect updates before attempting SMS
         await db.commit()
@@ -661,6 +681,13 @@ async def email_events_webhook(
                             await record_email_event(redis, "opened")
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
+                    # Track A/B variant open event
+                    if email_record.ab_variant_id:
+                        try:
+                            from src.services.ab_testing import record_event
+                            await record_event(str(email_record.ab_variant_id), "opened")
+                        except Exception as ab_err:
+                            logger.debug("A/B open tracking failed: %s", str(ab_err))
                     # Also update prospect
                     if prospect_id:
                         prospect = await db.get(Outreach, prospect_id)
@@ -678,6 +705,13 @@ async def email_events_webhook(
                             await record_email_event(redis, "clicked")
                         except Exception as e:
                             logger.debug("Redis event recording failed: %s", str(e))
+                    # Track A/B variant click event
+                    if email_record.ab_variant_id:
+                        try:
+                            from src.services.ab_testing import record_event
+                            await record_event(str(email_record.ab_variant_id), "clicked")
+                        except Exception as ab_err:
+                            logger.debug("A/B click tracking failed: %s", str(ab_err))
                     if prospect_id:
                         prospect = await db.get(Outreach, prospect_id)
                         if prospect:

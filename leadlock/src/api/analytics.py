@@ -16,6 +16,7 @@ from src.services.analytics import (
     get_ab_test_results,
     get_pipeline_waterfall,
     get_agent_costs,
+    get_cta_variant_performance,
 )
 from src.services.sales_tenancy import normalize_tenant_id
 
@@ -78,3 +79,27 @@ async def agent_costs(days: int = Query(7, ge=1, le=90)):
     """Per-agent AI cost breakdown."""
     data = await get_agent_costs(days)
     return {"success": True, "data": data}
+
+
+@router.get("/email-intelligence")
+async def email_intelligence(admin=Depends(get_current_admin)):
+    """
+    Email intelligence dashboard: CTA performance, content feature correlations,
+    and active A/B test results in one response.
+    """
+    from src.services.email_intelligence import get_content_intelligence_summary
+
+    tenant_id = normalize_tenant_id(getattr(admin, "id", None))
+
+    cta_data = await get_cta_variant_performance(tenant_id=tenant_id)
+    content_data = await get_content_intelligence_summary()
+    ab_data = await get_ab_test_results()
+
+    return {
+        "success": True,
+        "data": {
+            "cta_performance": cta_data,
+            "content_features": content_data,
+            "ab_tests": ab_data,
+        },
+    }

@@ -238,6 +238,99 @@ async def get_ab_test_results() -> dict:
     return await _cached_query(cache_key, _query)
 
 
+async def get_cta_variant_performance(
+    tenant_id: Optional[uuid.UUID] = None,
+) -> dict:
+    """
+    CTA variant (calendar vs question) performance by sequence step.
+    Computes open rate, click rate, and interested-reply rate per variant.
+    """
+    cache_key = f"cta_variant_perf:{tenant_id or 'global'}"
+
+    async def _query():
+        async with async_session_factory() as db:
+            # Base query: outbound emails with a cta_variant set
+            tenant_filter = (
+                [Outreach.tenant_id == tenant_id] if tenant_id else []
+            )
+
+            result = await db.execute(
+                select(
+                    OutreachEmail.cta_variant,
+                    OutreachEmail.sequence_step,
+                    func.count(OutreachEmail.id).label("total_sent"),
+                    func.count(OutreachEmail.opened_at).label("total_opened"),
+                    func.count(OutreachEmail.clicked_at).label("total_clicked"),
+                )
+                .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+                .where(
+                    and_(
+                        OutreachEmail.direction == "outbound",
+                        OutreachEmail.cta_variant.isnot(None),
+                        *tenant_filter,
+                    )
+                )
+                .group_by(OutreachEmail.cta_variant, OutreachEmail.sequence_step)
+                .order_by(OutreachEmail.sequence_step, OutreachEmail.cta_variant)
+            )
+            rows = result.fetchall()
+
+            # Count interested replies per variant+step via reply_classification.
+            # Join outbound emails with inbound replies at the same step to
+            # correctly attribute replies to the outbound email that triggered them.
+            from sqlalchemy.orm import aliased
+            inbound = aliased(OutreachEmail, name="inbound")
+
+            reply_result = await db.execute(
+                select(
+                    OutreachEmail.cta_variant,
+                    OutreachEmail.sequence_step,
+                    func.count(func.distinct(OutreachEmail.outreach_id)).label("interested_replies"),
+                )
+                .join(Outreach, OutreachEmail.outreach_id == Outreach.id)
+                .join(
+                    inbound,
+                    and_(
+                        inbound.outreach_id == OutreachEmail.outreach_id,
+                        inbound.sequence_step == OutreachEmail.sequence_step,
+                        inbound.reply_classification == "interested",
+                    ),
+                )
+                .where(
+                    and_(
+                        OutreachEmail.direction == "outbound",
+                        OutreachEmail.cta_variant.isnot(None),
+                        *tenant_filter,
+                    )
+                )
+                .group_by(OutreachEmail.cta_variant, OutreachEmail.sequence_step)
+            )
+            reply_rows = reply_result.fetchall()
+            reply_map = {
+                (r[0], r[1]): r[2] for r in reply_rows
+            }
+
+            variants = []
+            for row in rows:
+                variant, step, sent, opened, clicked = row
+                interested = reply_map.get((variant, step), 0)
+                variants.append({
+                    "cta_variant": variant,
+                    "step": step,
+                    "total_sent": sent,
+                    "total_opened": opened,
+                    "open_rate": round(opened / sent, 4) if sent > 0 else 0.0,
+                    "total_clicked": clicked,
+                    "click_rate": round(clicked / sent, 4) if sent > 0 else 0.0,
+                    "interested_replies": interested,
+                    "reply_rate": round(interested / sent, 4) if sent > 0 else 0.0,
+                })
+
+            return {"variants": variants}
+
+    return await _cached_query(cache_key, _query)
+
+
 PIPELINE_STAGE_ORDER = [
     "cold", "contacted", "demo_scheduled", "demo_completed",
     "proposal_sent", "won", "lost",

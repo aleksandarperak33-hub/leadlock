@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Integer, Float, Boolean, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database import Base
 
@@ -59,6 +59,12 @@ class OutreachEmail(Base):
 
     # CTA variant for lightweight A/B tests (e.g. "calendar" vs "question")
     cta_variant: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+
+    # Reply classification from AI (interested, rejection, auto_reply, out_of_office, unsubscribe)
+    reply_classification: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+
+    # Structured content features for intelligence tracking
+    content_features: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

@@ -14,6 +14,7 @@ from src.services.analytics import (
     get_email_performance_by_step,
     get_agent_costs,
     get_pipeline_waterfall,
+    get_cta_variant_performance,
 )
 from src.services.reflection_analysis import run_reflection_analysis
 
@@ -96,6 +97,17 @@ async def reflection_cycle():
     except Exception as e:
         logger.warning("Reflection: failed to get pipeline data: %s", str(e))
 
+    try:
+        performance_data["cta_variant_performance"] = await get_cta_variant_performance()
+    except Exception as e:
+        logger.warning("Reflection: failed to get CTA variant data: %s", str(e))
+
+    try:
+        from src.services.email_intelligence import get_content_intelligence_summary
+        performance_data["content_feature_summary"] = await get_content_intelligence_summary()
+    except Exception as e:
+        logger.warning("Reflection: failed to get content feature data: %s", str(e))
+
     # Run AI analysis
     result = await run_reflection_analysis(performance_data)
 
@@ -111,6 +123,17 @@ async def reflection_cycle():
         len(result.get("recommendations", [])),
         result.get("ai_cost_usd", 0.0),
     )
+
+    # Cache CTA winner in Redis if reflection analysis declares one
+    try:
+        cta_winner = (result.get("insights", {}).get("cta_winner") or "").strip().lower()
+        if cta_winner in ("calendar", "question"):
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            await redis.set("leadlock:cta_winner", cta_winner, ex=7 * 86400)
+            logger.info("Reflection: cached CTA winner '%s' (7d TTL)", cta_winner)
+    except Exception as cta_err:
+        logger.debug("CTA winner cache failed: %s", str(cta_err))
 
     # Mark day complete
     try:
