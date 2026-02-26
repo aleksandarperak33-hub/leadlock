@@ -25,7 +25,7 @@ from src.utils.dedup import get_redis
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL = 1800  # 30 minutes
-BATCH_SIZE = 20
+BATCH_SIZE = 75
 HEARTBEAT_KEY = "leadlock:worker_health:email_finder"
 RETRY_DAYS = 7  # Skip prospects attempted within this window
 
