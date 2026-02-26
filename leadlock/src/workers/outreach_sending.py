@@ -127,6 +127,8 @@ async def _verify_or_find_working_email(
     # Update source metadata on the prospect
     prospect.email_source = source
     prospect.email_verified = is_high
+    if is_high:
+        prospect.verified_at = datetime.now(timezone.utc)
     cost = discovery.get("cost_usd", 0.0)
     if cost > 0:
         prospect.total_cost_usd = (prospect.total_cost_usd or 0) + cost
@@ -199,6 +201,18 @@ async def _pre_send_checks(
     )
     if blacklist_check.scalar_one_or_none():
         return "blacklisted"
+
+    # Check domain bounce risk score (blocks high-bounce domains)
+    if domain:
+        try:
+            from src.services.deliverability import get_domain_bounce_risk
+            risk = await get_domain_bounce_risk(domain)
+            if risk == "blocked":
+                return f"domain bounce-blocked ({domain})"
+            if risk == "risky" and prospect.outreach_sequence_step == 0:
+                return f"domain risky for first-touch ({domain})"
+        except Exception as e:
+            logger.debug("Domain risk check unavailable: %s", str(e))
 
     # Temporary domain cooldown after repeated bounce events.
     if domain:
@@ -524,7 +538,7 @@ async def send_sequence_email(
         subject=send_subject,
         body_html=email_result["body_html"],
         from_email=sender_profile["from_email"],
-        from_name=sender_profile["from_name"] or "LeadLock",
+        from_name=sender_profile["from_name"] or sender_profile["sender_name"],
         reply_to=sender_profile["reply_to_email"] or sender_profile["from_email"],
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
@@ -535,7 +549,7 @@ async def send_sequence_email(
         in_reply_to=in_reply_to,
         references=references,
         body_text=email_result.get("body_text", ""),
-        company_name="LeadLock",
+        company_name=sender_profile["sender_name"],
     )
 
     if send_result.get("error"):

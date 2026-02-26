@@ -428,7 +428,7 @@ def _build_fallback_outreach_email(
         else:
             ask_line = "Is your team getting to new inquiries same-day right now?"
     else:
-        subject = f"closing the loop, {first_name or company}"[:60]
+        subject = f"one last thing, {first_name or company}"[:60]
         if booking_url:
             step_line = (
                 f"Last note from me. If faster lead response ever becomes "

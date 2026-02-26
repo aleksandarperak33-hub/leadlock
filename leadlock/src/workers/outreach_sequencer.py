@@ -713,6 +713,8 @@ async def _sequence_cycle_for_tenant(
 
     delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)
 
+    verification_freshness_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+
     step_0_query = select(Outreach).where(
         and_(
             Outreach.tenant_id == tenant_id,
@@ -724,6 +726,10 @@ async def _sequence_cycle_for_tenant(
             Outreach.email_unsubscribed == False,
             Outreach.status.in_(["cold"]),
             Outreach.last_email_replied_at.is_(None),
+            # Verification freshness: require verified within 14 days
+            Outreach.verified_at >= verification_freshness_cutoff,
+            # Source quality: block pattern_guess from first-touch
+            Outreach.email_source != "pattern_guess",
         )
     ).order_by(
         # Quality-based priority: enriched first, then by rating and reviews
@@ -887,6 +893,7 @@ async def _process_campaign_prospects(
 
         if step_num == 1:
             # Step 1: cold prospects in this campaign, never contacted
+            campaign_freshness_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
             query = select(Outreach).where(
                 and_(
                     Outreach.tenant_id == campaign.tenant_id,
@@ -898,6 +905,10 @@ async def _process_campaign_prospects(
                     Outreach.email_unsubscribed == False,
                     Outreach.status.in_(["cold"]),
                     Outreach.last_email_replied_at.is_(None),
+                    # Verification freshness: require verified within 14 days
+                    Outreach.verified_at >= campaign_freshness_cutoff,
+                    # Source quality: block pattern_guess from first-touch
+                    Outreach.email_source != "pattern_guess",
                 )
             ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
         else:

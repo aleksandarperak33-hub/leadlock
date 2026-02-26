@@ -114,8 +114,8 @@ async def discover_email(
     Catch-all detection: domains hosted on known catch-all providers have
     their confidence downgraded since any address appears valid.
 
-    Domain bounce risk: domains with 5+ historical bounces (30-day window)
-    are blocked entirely. Domains with 3-4 bounces get confidence downgraded.
+    Domain bounce risk: domains with 3+ historical bounces (90-day window)
+    are blocked entirely. Domains with 2 bounces get confidence downgraded.
 
     Blacklist check: when a db session is provided, each candidate email is
     checked against the EmailBlacklist table before returning. Blacklisted
@@ -170,7 +170,7 @@ async def discover_email(
     def _downgrade_confidence(confidence: str) -> str:
         """Downgrade confidence one level for risky domains."""
         if domain_bounce_risk == "risky":
-            return {"high": "medium", "medium": "low", "low": "low"}[confidence]
+            return {"high": "medium", "medium": "low", "low": "low", "none": "none"}[confidence]
         return confidence
 
     # Strategy 1: Deep website scrape (high confidence)
@@ -226,13 +226,16 @@ async def discover_email(
                 logger.debug("Blacklisted email %s from enrichment, falling through", candidate[:20])
 
     # Strategy 4: Pattern guessing (low confidence — last resort)
+    # Catch-all domains get "none" confidence (effectively blocked from outreach)
+    # because any address appears valid but most will bounce.
     if domain:
         patterns = guess_email_patterns(domain, name=company_name)
         if patterns:
+            pattern_confidence = "none" if domain_is_catch_all else "low"
             return {
                 "email": patterns[0],
                 "source": "pattern_guess",
-                "confidence": "low",
+                "confidence": _downgrade_confidence(pattern_confidence),
                 "cost_usd": total_cost,
             }
 

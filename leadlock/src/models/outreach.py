@@ -60,6 +60,7 @@ class Outreach(Base):
 
     # Email enrichment
     email_verified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     email_source: Mapped[Optional[str]] = mapped_column(String(50))  # hunter, website_scrape, pattern_guess
 
     # Outreach sequence tracking

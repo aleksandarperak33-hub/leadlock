@@ -214,12 +214,12 @@ async def _send_booking_reply(
         subject=reply["subject"],
         body_html=reply["body_html"],
         from_email=sender_profile["from_email"],
-        from_name=sender_profile["from_name"] or "Alek from LeadLock",
+        from_name=sender_profile["from_name"] or sender_profile["sender_name"],
         reply_to=sender_profile["reply_to_email"] or sender_profile["from_email"],
         unsubscribe_url=unsubscribe_url,
         company_address=config.company_address or "",
         body_text=reply.get("body_text", ""),
-        company_name="LeadLock",
+        company_name=sender_profile["sender_name"],
     )
 
     if send_result.get("error"):
@@ -401,10 +401,25 @@ async def inbound_email_webhook(
         prospect = None
         tenant_ids = await resolve_tenant_ids_for_mailboxes(db, inbound_to_candidates)
 
+        # Expand match addresses: when reply_to differs from from_email,
+        # prospects reply to reply_to but OutreachEmail stores from_email.
+        # Include all configured mailbox addresses for matching tenants.
+        expanded_match_addresses = set(inbound_to_candidates)
+        if tenant_ids:
+            from src.services.sender_mailboxes import mailbox_addresses_for_config
+            for tid in tenant_ids:
+                try:
+                    tenant_config = await get_sales_config_for_tenant(db, tid)
+                    if tenant_config:
+                        expanded_match_addresses |= mailbox_addresses_for_config(tenant_config)
+                except Exception:
+                    pass
+
         # First, try mailbox-aware thread matching:
-        # reply sender + mailbox they replied to must match the most recent outbound.
-        # This avoids wrong matches when the same prospect email exists multiple times.
-        if inbound_to_candidates:
+        # reply sender + mailbox they replied to (or the from_email it was sent from)
+        # must match the most recent outbound.
+        match_addresses = [a for a in expanded_match_addresses if a]
+        if match_addresses:
             thread_result = await db.execute(
                 select(Outreach)
                 .join(OutreachEmail, OutreachEmail.outreach_id == Outreach.id)
@@ -412,7 +427,7 @@ async def inbound_email_webhook(
                     and_(
                         OutreachEmail.direction == "outbound",
                         func.lower(OutreachEmail.to_email) == from_email,
-                        func.lower(OutreachEmail.from_email).in_(inbound_to_candidates),
+                        func.lower(OutreachEmail.from_email).in_(match_addresses),
                     )
                 )
                 .order_by(OutreachEmail.sent_at.desc())

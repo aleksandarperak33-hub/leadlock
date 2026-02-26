@@ -6,7 +6,7 @@ This module is the CORE fix for reputation degradation:
 2. Computes sender reputation score (0-100)
 3. Auto-throttles when reputation drops below threshold
 4. Alerts when delivery rate drops below acceptable levels
-5. Per-domain email bounce tracking (30-day rolling window)
+5. Per-domain email bounce tracking (90-day rolling window)
 
 Why reputation drops:
 - High failure rates signal to carriers that you're sending spam
@@ -430,6 +430,15 @@ async def get_email_reputation(redis_client) -> dict:
     elif bounce_rate >= BOUNCE_RATE_CRITICAL and sent >= MIN_GUARDRAIL_SAMPLE and throttle == "normal":
         score = min(score, 45.0)
         status, throttle = "poor", "critical"
+    elif sent >= 50 and open_rate < 0.03:
+        # Open rate floor: < 3% opens after 50+ sends means emails are
+        # going to spam or invalid — pause to prevent reputation spiral.
+        score = min(score, 30.0)
+        status, throttle = "critical", "paused"
+        logger.warning(
+            "Open rate floor triggered: %.1f%% opens at %d sends",
+            open_rate * 100, sent,
+        )
     elif open_rate < 0.05 and sent >= 100 and throttle in ("normal", "reduced"):
         # Protect sender reputation when opens collapse at scale.
         score = min(score, 55.0)
@@ -501,20 +510,20 @@ async def get_deliverability_summary() -> dict:
 
 
 # ─── PER-DOMAIN EMAIL BOUNCE TRACKING ─────────────────
-# Sorted-set pattern: each bounce is a timestamp member in a 30-day window.
+# Sorted-set pattern: each bounce is a timestamp member in a 90-day window.
 # Mirrors the SMS delivery tracking above but scoped per email domain.
 
-DOMAIN_BOUNCE_WINDOW = 30 * 86400  # 30 days in seconds
-DOMAIN_BOUNCE_TTL = 31 * 86400     # TTL slightly longer than window
-DOMAIN_BOUNCE_RISKY = 3            # 3+ bounces = risky
-DOMAIN_BOUNCE_BLOCKED = 5          # 5+ bounces = blocked
+DOMAIN_BOUNCE_WINDOW = 90 * 86400  # 90 days in seconds
+DOMAIN_BOUNCE_TTL = 91 * 86400     # TTL slightly longer than window
+DOMAIN_BOUNCE_RISKY = 2            # 2+ bounces = risky
+DOMAIN_BOUNCE_BLOCKED = 3          # 3+ bounces = blocked
 
 DomainBounceRisk = Literal["safe", "risky", "blocked"]
 
 
 async def record_domain_bounce(domain: str) -> None:
     """
-    Record a hard bounce for an email domain in a 30-day rolling window.
+    Record a hard bounce for an email domain in a 90-day rolling window.
 
     Uses a Redis sorted set keyed by domain. Each member is a unique
     timestamp+nonce string (score = timestamp). Old entries beyond 30 days
@@ -546,12 +555,12 @@ async def record_domain_bounce(domain: str) -> None:
 
 async def get_domain_bounce_risk(domain: str) -> DomainBounceRisk:
     """
-    Check per-domain bounce risk based on 30-day rolling bounce count.
+    Check per-domain bounce risk based on 90-day rolling bounce count.
 
     Returns:
-        "safe"    — fewer than 3 bounces
-        "risky"   — 3-4 bounces (confidence downgraded)
-        "blocked" — 5+ bounces (skip domain entirely)
+        "safe"    — fewer than 2 bounces
+        "risky"   — 2 bounces (confidence downgraded)
+        "blocked" — 3+ bounces (skip domain entirely)
     """
     try:
         from src.utils.dedup import get_redis

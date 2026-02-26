@@ -26,6 +26,7 @@ _MX_CACHE_TTL = 3600  # 1 hour
 # We downgrade confidence for domains whose MX points to these.
 # ---------------------------------------------------------------------------
 _CATCH_ALL_MX_PATTERNS = frozenset({
+    # Existing
     "secureserver.net",       # GoDaddy shared hosting — catch-all by default
     "emailsrvr.com",         # Rackspace catch-all
     "registrar-servers.com", # Namecheap default mail
@@ -35,6 +36,24 @@ _CATCH_ALL_MX_PATTERNS = frozenset({
     "pair.com",              # pair Networks
     "fatcow.com",            # FatCow catch-all
     "ipage.com",             # iPage catch-all
+    # Expanded providers (high catch-all rate)
+    "kundenserver.de",       # IONOS/1&1
+    "netsolmail.net",        # Network Solutions
+    "netsolhost.com",        # Network Solutions (alt)
+    "inmotionhosting.com",   # InMotion Hosting
+    "siteground.net",        # SiteGround
+    "a2hosting.com",         # A2 Hosting
+    "justhost.com",          # JustHost
+    "webhostbox.net",        # WebHostBox
+    "mxlogin.com",           # Domain.com
+    "plesk.com",             # Plesk
+    "cpanel.net",            # cPanel
+    "titan.email",           # Titan
+    "hover.com",             # Hover
+    "gandi.net",             # Gandi
+    "name.com",              # Name.com
+    "emailarray.com",        # Squarespace
+    "improvmx.com",          # ImprovMX (forwarding)
 })
 
 # RFC 5322 simplified - covers 99%+ of valid emails

@@ -104,6 +104,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("Background worker lock acquired in pid=%s", os.getpid())
 
+    # Check that reply-to domain has Inbound Parse MX configured
+    try:
+        from src.utils.inbound_parse_check import check_reply_to_mx
+        await check_reply_to_mx()
+    except Exception as mx_err:
+        logger.debug("Reply-to MX check skipped: %s", str(mx_err))
+
     # Start background workers (15 total after consolidation)
 
     # --- Always-on core workers ---

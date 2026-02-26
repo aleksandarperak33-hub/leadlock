@@ -23,8 +23,10 @@ def get_default_sender_profile(config) -> Optional[dict[str, Any]]:
     from_email = _normalize_email(getattr(config, "from_email", None))
     if not from_email:
         return None
-    from_name = (getattr(config, "from_name", None) or "LeadLock").strip()
     sender_name = (getattr(config, "sender_name", None) or "Alek").strip()
+    # from_name defaults to sender_name (a person), NOT the company name.
+    # Cold outreach from a company name ("LeadLock") triggers spam filters.
+    from_name = (getattr(config, "from_name", None) or sender_name).strip()
     reply_to = _normalize_email(getattr(config, "reply_to_email", None)) or from_email
     return {
         "from_email": from_email,
@@ -54,12 +56,13 @@ def get_active_sender_mailboxes(config) -> list[dict[str, Any]]:
             if not from_email:
                 continue
             reply_to = _normalize_email(item.get("reply_to_email")) or from_email
+            item_sender_name = (item.get("sender_name") or getattr(config, "sender_name", None) or "Alek").strip()
             profiles.append(
                 {
                     "from_email": from_email,
-                    "from_name": (item.get("from_name") or getattr(config, "from_name", None) or "LeadLock").strip(),
+                    "from_name": (item.get("from_name") or getattr(config, "from_name", None) or item_sender_name).strip(),
                     "reply_to_email": reply_to,
-                    "sender_name": (item.get("sender_name") or getattr(config, "sender_name", None) or "Alek").strip(),
+                    "sender_name": item_sender_name,
                     "daily_limit": _to_int_or_none(item.get("daily_limit")),
                     "is_active": True,
                 }

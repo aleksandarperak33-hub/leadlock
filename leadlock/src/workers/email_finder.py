@@ -65,10 +65,19 @@ async def run_email_finder():
         await asyncio.sleep(POLL_INTERVAL)
 
 
+STALE_VERIFICATION_DAYS = 14  # Re-verify emails older than this
+
+
 def _eligible_filter():
-    """Base WHERE clause for unverified prospects eligible for rediscovery."""
+    """Base WHERE clause for unverified OR stale-verified prospects eligible for rediscovery."""
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=STALE_VERIFICATION_DAYS)
     return and_(
-        Outreach.email_verified == False,  # noqa: E712
+        # Unverified OR stale verification (verified_at older than 14 days or NULL)
+        or_(
+            Outreach.email_verified == False,  # noqa: E712
+            Outreach.verified_at.is_(None),
+            Outreach.verified_at < stale_cutoff,
+        ),
         Outreach.prospect_email.isnot(None),
         Outreach.prospect_email != "",
         Outreach.website.isnot(None),
@@ -257,6 +266,7 @@ async def _process_batch():
                 # Same email but from a better source — upgrade the source
                 prospect.email_source = source
                 prospect.email_verified = True
+                prospect.verified_at = now
                 kept += 1
                 logger.info(
                     "Email finder: confirmed %s***@%s via %s",
@@ -267,6 +277,7 @@ async def _process_batch():
                 prospect.prospect_email = new_email.lower().strip()
                 prospect.email_source = source
                 prospect.email_verified = True
+                prospect.verified_at = now
                 found += 1
                 logger.info(
                     "Email finder: replaced with %s***@%s via %s (was %s***)",
