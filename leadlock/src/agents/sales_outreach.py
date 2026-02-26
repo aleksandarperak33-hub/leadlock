@@ -207,38 +207,44 @@ Under 100 words. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
-HOOK: Lead with a specific stat: "78% of homeowners book with the first contractor who responds" or similar. This is the FIRST sentence after the greeting — no preamble between greeting and hook.
-ANGLE: Do NOT rehash the pain point from step 1. Talk about what similar contractors in their area or trade are already doing differently. Frame it as "a few {trade} shops in {city} already respond in under 60 seconds" or similar.
-CTA: If a booking_url is provided, use a short nudge: "Happy to show you how it works — 10 min: {booking_url}". If no booking_url, ask a different question than step 1 focused on their workflow.
-SUBJECT: Completely different angle than step 1. Reference what similar teams are doing.
+HOOK: Lead with what similar contractors in their SPECIFIC CITY and TRADE are doing differently. Frame it as "a few {trade} shops in {city} already respond to leads in under 60 seconds — and they're closing 3x more jobs because of it." Make it about THEIR local competitors, not a generic stat.
+ANGLE: Do NOT rehash the pain point from step 1. Talk about the competitive advantage — contractors who respond faster win the job. Frame it as an observation about their market, not a sales pitch.
+REFERENCE: You MUST mention their city and trade in the body. Reference their Google rating or review count if available — e.g. "With {review_count} reviews and a {rating} rating, you're clearly doing the work — the leads just need faster follow-up."
+CTA: If a booking_url is provided, use a short nudge: "Happy to show you how it works — 10 min: {booking_url}". If no booking_url, ask a question about their specific workflow.
+SUBJECT: MUST include their company name, first name, OR city. Never use a generic stat as the subject line. Create curiosity about what their local competitors are doing.
 BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 80 words. Subject under 50 chars.""",
 
-    3: """STEP 3 — FAREWELL (final email).
+    3: """STEP 3 — HAIL MARY CLOSE (final email — make it count).
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
-TONE: "Last note from me" energy. 2-3 sentences max.
-CONTENT: State this is the last email. No selling, no stats, no new value props. Leave the door open. If a booking_url is provided, end with: "If it ever matters, here's my calendar: {booking_url}". If no booking_url: "just reply and I'll circle back."
-SUBJECT: Should feel short and final.
+TONE: Confident, direct, zero desperation. This is your last shot — deliver VALUE, not a goodbye.
+CONTENT: Lead with ONE specific insight they haven't heard yet. Options:
+  - A mini case study: "A {trade} shop in {city} similar to yours added $12K/month just by cutting their response time from 4 hours to 45 seconds."
+  - An objection killer: "Most {trade} contractors think they respond fast enough. Then they see their average is 4+ hours and their competitors are at 30 seconds."
+  - A bold question: "What would it mean for {company} if you never lost another lead to a slower competitor?"
+End with a firm CTA: If booking_url provided, say "I've got one slot open this week if you want to see the numbers: {booking_url}". If no booking_url: "Reply with 'show me' and I'll send you the data."
+SUBJECT: Must include their name or company. Create urgency without being cheesy — reference something specific about their business.
+BANNED: Do NOT say "last email", "closing the loop", "wrapping up", or "just checking in". Do NOT apologize for emailing. Do NOT say "no hard feelings" or "I understand if you're busy."
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-Under 50 words. Subject under 40 chars.""",
+Under 80 words. Subject under 40 chars.""",
 }
 
 STEP_SUBJECT_EXAMPLES = {
     1: [
-        "contractors in {city} losing $8k/month",
-        "{first_name}, quick question about {company}",
+        "{company}, what slow leads cost in {city}",
+        "{first_name}, $8k question for {company}",
         "{trade} leads going cold in {city}",
     ],
     2: [
-        "what {city} {trade} shops are doing differently",
-        "78% of homeowners go with whoever calls first",
-        "{trade} response times in {city}",
+        "{first_name}, what {city} {trade} shops do differently",
+        "{company} vs faster competitors in {city}",
+        "your {city} competitors respond in 30 seconds",
     ],
     3: [
-        "closing the loop, {first_name}",
-        "last note from me",
-        "wrapping up, {first_name}",
+        "{first_name}, one thing about {company}",
+        "{company} is leaving money on the table",
+        "{first_name}, quick data point for you",
     ],
 }
 

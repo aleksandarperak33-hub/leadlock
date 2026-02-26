@@ -357,6 +357,13 @@ async def scrape_location_trade(
                 skipped_quality += 1
                 continue
 
+            # Skip businesses with very low ratings (likely inactive or problematic).
+            # Only filter when rating data is available — no rating means unknown, not bad.
+            rating = biz.get("rating")
+            if rating is not None and rating < 2.5:
+                skipped_quality += 1
+                continue
+
             # Check for duplicates by place_id
             if place_id:
                 existing = await db.execute(

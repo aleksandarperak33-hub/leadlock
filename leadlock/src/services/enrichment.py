@@ -174,9 +174,14 @@ def _is_valid_business_email(email: str, target_domain: Optional[str] = None) ->
     if email_domain in _IGNORE_EMAIL_DOMAINS:
         return False
 
-    # Filter out noreply / donotreply addresses
+    # Filter out noreply, automated, and unmonitored addresses
     local_part = email_lower.split("@")[0]
-    if any(skip in local_part for skip in ("noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon")):
+    unmonitored_patterns = (
+        "noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon",
+        "notifications", "alerts", "automated", "bot", "robot",
+        "postmaster", "webmaster", "hostmaster", "abuse",
+    )
+    if any(skip in local_part for skip in unmonitored_patterns):
         return False
 
     # If we have a target domain, prefer emails matching that domain
