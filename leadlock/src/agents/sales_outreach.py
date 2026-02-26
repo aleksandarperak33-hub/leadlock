@@ -209,12 +209,17 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
 STEP_INSTRUCTIONS = {
     1: """STEP 1 — CURIOSITY / PAIN (first contact).
 GREETING: Start with "Hey {first_name}," if a first name is available. If no first name, use "Hey {company} team," — NEVER "Hey there,".
-HOOK: Your very first sentence after the greeting MUST reference a specific dollar amount contractors lose from slow lead response. Use a number like "$8,000/month" or "$6,500/month" — frame it as "leads that go to the first contractor who picks up the phone" or "leads that went cold waiting for a callback". Make it feel like a fact you know, not a sales pitch.
-CREDIBILITY: Include one line like "I work with {trade} teams in {city}" or "I help a few {trade} shops in {state} with this" — establish you know their world.
-REFERENCE: Mention something specific about THEIR business — their Google rating, their city, their trade, their website.
-CTA: End with a direct, low-friction call to action. If a booking_url is provided in the prospect details, use it: "I can show you exactly how much revenue is slipping through on slow follow-ups — takes 10 min: {booking_url}". If no booking_url, end with a genuine question about their workflow (e.g. "How fast is your crew getting back to new leads right now?"). NEVER say "would you be interested?" or "can I show you?"
-SUBJECT: Must create curiosity or reference a specific observation about them. Must include their company name, city, or first name.
+HOOK (pick ONE — do NOT combine, vary across prospects):
+  A) Dollar stat: "Most {trade} contractors lose $X,000/month to slow lead follow-up."
+  B) Speed stat: "78% of homeowners hire the first contractor who calls back. The second one doesn't get a shot."
+  C) Direct observation: Reference their Google rating, review count, or city market directly. E.g. "You've got {review_count} reviews in {city} — that means a lot of leads coming in. Question is how fast they're getting a callback."
+  D) Competitor frame: "{city} is a fast market for {trade}. The shops winning right now aren't the cheapest — they're the fastest to pick up the phone."
+Pick randomly. Do NOT always use the dollar stat.
+CREDIBILITY: ONE short line establishing local knowledge. Vary the phrasing — do NOT always say "I work with {trade} teams in {city}". Options: "I help a handful of {trade} shops with this", "I've been digging into lead response times in {city}", "I talk to {trade} contractors about this all the time".
+CTA: Ask a genuine question about their workflow. Examples: "How fast is your crew getting back to new leads right now?", "What happens to leads that come in after hours?", "Curious — are you tracking how fast your team responds to new inquiries?". If booking_url is provided, you may optionally include it as a second line: "Happy to show you the numbers — takes 10 min: {booking_url}". But the QUESTION must come first.
+SUBJECT: Must include their company name, city, or first name. Keep it conversational, not salesy.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
+BANNED PATTERNS: Do NOT use the phrase "slipping through" in any email. Do NOT use "exactly how much revenue" — too templated.
 Under 100 words. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
@@ -244,9 +249,10 @@ Under 80 words. Subject under 40 chars.""",
 
 STEP_SUBJECT_EXAMPLES = {
     1: [
-        "{company}, what slow leads cost in {city}",
-        "{first_name}, $8k question for {company}",
-        "{trade} leads going cold in {city}",
+        "{first_name}, quick question about {company}",
+        "{company} — how fast do your leads get a call back?",
+        "{trade} leads in {city} — who responds first wins",
+        "{first_name}, something about your {city} market",
     ],
     2: [
         "{first_name}, what {city} {trade} shops do differently",
@@ -260,7 +266,7 @@ STEP_SUBJECT_EXAMPLES = {
     ],
 }
 
-STEP_TEMPERATURE = {1: 0.4, 2: 0.6, 3: 0.7}
+STEP_TEMPERATURE = {1: 0.6, 2: 0.6, 3: 0.7}
 
 
 def _extract_first_name(full_name: str) -> str:

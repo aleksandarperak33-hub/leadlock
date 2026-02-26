@@ -495,7 +495,7 @@ class TestStepTemperature:
     """Verify per-step temperature configuration."""
 
     def test_step_1_low_temperature(self):
-        assert STEP_TEMPERATURE[1] == 0.4
+        assert STEP_TEMPERATURE[1] == 0.6
 
     def test_step_2_medium_temperature(self):
         assert STEP_TEMPERATURE[2] == 0.6
@@ -509,7 +509,7 @@ class TestStepTemperature:
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_step_1_uses_correct_temperature(self, mock_ai, mock_learning):
-        """Step 1 should pass temperature=0.4 to AI."""
+        """Step 1 should pass temperature=0.6 to AI."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response(_valid_email_json())
 
@@ -517,7 +517,7 @@ class TestStepTemperature:
             prospect_name="John", company_name="HVAC Co",
             trade_type="hvac", city="Austin", state="TX", sequence_step=1,
         )
-        assert mock_ai.call_args.kwargs["temperature"] == 0.4
+        assert mock_ai.call_args.kwargs["temperature"] == 0.6
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
@@ -552,9 +552,9 @@ class TestStepSubjectExamples:
     def test_all_steps_have_examples(self):
         assert set(STEP_SUBJECT_EXAMPLES.keys()) == {1, 2, 3}
 
-    def test_each_step_has_three_examples(self):
+    def test_each_step_has_examples(self):
         for step in [1, 2, 3]:
-            assert len(STEP_SUBJECT_EXAMPLES[step]) == 3
+            assert len(STEP_SUBJECT_EXAMPLES[step]) >= 3
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
