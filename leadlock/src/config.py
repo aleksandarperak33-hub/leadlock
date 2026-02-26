@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     # Transactional Email (auth flows, billing notifications)
     sendgrid_transactional_key: str = ""  # Separate key for transactional emails
     from_email_transactional: str = "noreply@leadlock.org"
+    alert_recipient_email: str = ""  # Where to send system alerts (personal email)
 
     # Stripe Billing
     stripe_secret_key: str = ""

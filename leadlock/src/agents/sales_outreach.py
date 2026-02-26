@@ -288,6 +288,27 @@ def _extract_first_name(full_name: str) -> str:
     return first.capitalize()
 
 
+_LEGAL_SUFFIXES_RE = None
+
+
+def _clean_company_name(name: str) -> str:
+    """Strip legal suffixes (Inc., LLC, Co., etc.) for cleaner greetings."""
+    global _LEGAL_SUFFIXES_RE
+    if _LEGAL_SUFFIXES_RE is None:
+        import re
+        # Match trailing legal entity suffixes, with optional commas/periods
+        _LEGAL_SUFFIXES_RE = re.compile(
+            r"[,\s]+"
+            r"(?:Inc\.?|LLC\.?|L\.?L\.?C\.?|Corp\.?|Corporation|Ltd\.?|"
+            r"Co\.?|Company|LP|L\.?P\.?|PLLC|P\.?L\.?L\.?C\.?|"
+            r"DBA|d/b/a|Group|Holdings|Enterprises)"
+            r"[\s.,]*$",
+            re.IGNORECASE,
+        )
+    cleaned = _LEGAL_SUFFIXES_RE.sub("", name).strip().rstrip(",. ")
+    return cleaned or name
+
+
 GENERIC_EMAIL_PREFIXES = frozenset({
     "info", "contact", "admin", "support", "sales", "hello", "help",
     "team", "office", "service", "billing", "marketing", "hr", "careers",
@@ -362,6 +383,7 @@ def _build_fallback_outreach_email(
     booking_url: Optional[str] = None,
 ) -> dict:
     """Deterministic fallback when AI providers are unavailable."""
+    company_name = _clean_company_name(company_name) if company_name else company_name
     first_name = _extract_first_name(prospect_name)
     company = (company_name or "your business").strip()
     greeting = f"Hey {first_name}," if first_name else f"Hey {company} team,"
@@ -526,15 +548,16 @@ async def generate_outreach_email(
             if not decision_maker_name:
                 effective_name = email_name
 
+    clean_company = _clean_company_name(company_name) if company_name else company_name
     greeting_instruction = (
         f'Open with: "Hey {first_name},"'
         if first_name
-        else f'Open with: "Hey {company_name} team,"'
+        else f'Open with: "Hey {clean_company} team,"'
     )
 
     prospect_details = f"""Prospect details:
 - First name: {first_name or '(unavailable)'}
-- Company: {company_name}
+- Company: {clean_company}
 - Trade: {trade_type}
 - Location: {city}, {state}
 - GREETING: {greeting_instruction}"""
@@ -587,8 +610,8 @@ async def generate_outreach_email(
     if subject_examples:
         filled_examples = []
         subs = {
-            "{first_name}": first_name or company_name,
-            "{company}": company_name,
+            "{first_name}": first_name or clean_company,
+            "{company}": clean_company,
             "{city}": city or "your area",
             "{trade}": trade_type or "home services",
             "{rating}": str(rating) if rating else "4.5",

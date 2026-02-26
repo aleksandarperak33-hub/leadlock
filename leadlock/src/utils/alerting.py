@@ -179,10 +179,13 @@ async def _send_email_alert(
     try:
         from src.services.transactional_email import _send_transactional
 
-        # Send to the transactional email sender (admin address)
         from src.config import get_settings
         settings = get_settings()
-        alert_email = settings.from_email_transactional or "noreply@leadlock.org"
+        alert_email = (
+            settings.alert_recipient_email
+            or settings.from_email_transactional
+            or "noreply@leadlock.org"
+        )
 
         subject = f"LeadLock Alert: {alert_type}"
         details = ""
