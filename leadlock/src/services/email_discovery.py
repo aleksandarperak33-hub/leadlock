@@ -18,6 +18,8 @@ from urllib.parse import urlparse, urljoin, unquote
 
 import httpx
 from curl_cffi.requests import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession as DBSession
 
 from src.services.enrichment import (
     _EMAIL_REGEX,
@@ -29,6 +31,36 @@ from src.services.enrichment import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Blacklist check helper
+# ---------------------------------------------------------------------------
+async def _is_blacklisted(email: str, db: Optional[DBSession]) -> bool:
+    """
+    Check if an email (or its domain) is on the EmailBlacklist table.
+
+    Returns True if the address or its domain is blacklisted.
+    Requires a db session — returns False if none provided (existing callers
+    without a session are unaffected).
+    """
+    if db is None:
+        return False
+    try:
+        from src.models.email_blacklist import EmailBlacklist
+        domain = email.split("@")[1] if "@" in email else None
+        values = [email]
+        if domain:
+            values.append(domain)
+        result = await db.execute(
+            select(EmailBlacklist.id)
+            .where(EmailBlacklist.value.in_(values))
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+    except Exception as e:
+        logger.debug("Blacklist check failed for %s: %s", email[:20], str(e))
+        return False
 
 # ---------------------------------------------------------------------------
 # Extended contact paths (beyond the original 5)
@@ -70,6 +102,7 @@ async def discover_email(
     website: str,
     company_name: str,
     enrichment_data: Optional[dict] = None,
+    db: Optional[DBSession] = None,
 ) -> dict:
     """
     Multi-strategy email discovery for a prospect.
@@ -81,6 +114,13 @@ async def discover_email(
     Catch-all detection: domains hosted on known catch-all providers have
     their confidence downgraded since any address appears valid.
 
+    Domain bounce risk: domains with 5+ historical bounces (30-day window)
+    are blocked entirely. Domains with 3-4 bounces get confidence downgraded.
+
+    Blacklist check: when a db session is provided, each candidate email is
+    checked against the EmailBlacklist table before returning. Blacklisted
+    emails fall through to the next strategy.
+
     Returns:
         {
             "email": str|None,
@@ -90,6 +130,7 @@ async def discover_email(
         }
     """
     from src.utils.email_validation import has_mx_record, is_likely_catch_all
+    from src.services.deliverability import get_domain_bounce_risk
 
     domain = extract_domain(website) if website else None
     total_cost = 0.0
@@ -107,24 +148,46 @@ async def discover_email(
                 "skip_reason": "no_mx_record",
             }
 
+    # Domain bounce risk gate — skip domains with 5+ historical bounces
+    domain_bounce_risk = "safe"
+    if domain:
+        domain_bounce_risk = await get_domain_bounce_risk(domain)
+        if domain_bounce_risk == "blocked":
+            logger.info("Domain %s blocked (5+ historical bounces) — skipping email discovery", domain)
+            return {
+                "email": None,
+                "source": None,
+                "confidence": None,
+                "cost_usd": 0.0,
+                "skip_reason": "domain_bounce_blocked",
+            }
+
     # Check catch-all status (cached via MX resolution)
     domain_is_catch_all = False
     if domain:
         domain_is_catch_all = await is_likely_catch_all(domain)
+
+    def _downgrade_confidence(confidence: str) -> str:
+        """Downgrade confidence one level for risky domains."""
+        if domain_bounce_risk == "risky":
+            return {"high": "medium", "medium": "low", "low": "low"}[confidence]
+        return confidence
 
     # Strategy 1: Deep website scrape (high confidence)
     if website:
         try:
             scraped = await deep_scrape_website(website)
             if scraped:
-                # Catch-all domains downgrade from high → medium
-                confidence = "medium" if domain_is_catch_all else "high"
-                return {
-                    "email": scraped[0],
-                    "source": "website_deep_scrape",
-                    "confidence": confidence,
-                    "cost_usd": 0.0,
-                }
+                candidate = scraped[0]
+                if not await _is_blacklisted(candidate, db):
+                    confidence = "medium" if domain_is_catch_all else "high"
+                    return {
+                        "email": candidate,
+                        "source": "website_deep_scrape",
+                        "confidence": _downgrade_confidence(confidence),
+                        "cost_usd": 0.0,
+                    }
+                logger.debug("Blacklisted email %s from deep scrape, falling through", candidate[:20])
         except Exception as e:
             logger.warning("Deep scrape failed for %s: %s", domain or website, str(e))
 
@@ -134,14 +197,16 @@ async def discover_email(
             brave_emails = await search_brave_for_email(domain)
             total_cost += 0.005
             if brave_emails:
-                # Catch-all domains downgrade from medium → low
-                confidence = "low" if domain_is_catch_all else "medium"
-                return {
-                    "email": brave_emails[0],
-                    "source": "brave_search",
-                    "confidence": confidence,
-                    "cost_usd": total_cost,
-                }
+                candidate = brave_emails[0]
+                if not await _is_blacklisted(candidate, db):
+                    confidence = "low" if domain_is_catch_all else "medium"
+                    return {
+                        "email": candidate,
+                        "source": "brave_search",
+                        "confidence": _downgrade_confidence(confidence),
+                        "cost_usd": total_cost,
+                    }
+                logger.debug("Blacklisted email %s from Brave, falling through", candidate[:20])
         except Exception as e:
             logger.debug("Brave search failed for %s: %s", domain, str(e))
 
@@ -150,13 +215,15 @@ async def discover_email(
         candidates = enrichment_data.get("email_candidates", [])
         for candidate in candidates:
             if _is_valid_business_email(candidate, target_domain=domain):
-                confidence = "low" if domain_is_catch_all else "medium"
-                return {
-                    "email": candidate,
-                    "source": "enrichment_candidate",
-                    "confidence": confidence,
-                    "cost_usd": total_cost,
-                }
+                if not await _is_blacklisted(candidate, db):
+                    confidence = "low" if domain_is_catch_all else "medium"
+                    return {
+                        "email": candidate,
+                        "source": "enrichment_candidate",
+                        "confidence": _downgrade_confidence(confidence),
+                        "cost_usd": total_cost,
+                    }
+                logger.debug("Blacklisted email %s from enrichment, falling through", candidate[:20])
 
     # Strategy 4: Pattern guessing (low confidence — last resort)
     if domain:

@@ -14,23 +14,40 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-def _make_mock_session(total_count: int, due_count: int, prospects: list):
-    """Build a mock async session that returns total, due, and fetch results."""
+def _make_mock_session(
+    total_count: int,
+    due_count: int,
+    prospects: list,
+    bounce_due_count: int = 0,
+    bounce_prospects: list | None = None,
+):
+    """Build a mock async session that returns total, due, bounce_due, and fetch results."""
     mock_total = MagicMock()
     mock_total.scalar.return_value = total_count
 
     mock_due = MagicMock()
     mock_due.scalar.return_value = due_count
 
+    mock_bounce_due = MagicMock()
+    mock_bounce_due.scalar.return_value = bounce_due_count
+
     mock_fetch = MagicMock()
     mock_scalars = MagicMock()
     mock_scalars.all.return_value = prospects
     mock_fetch.scalars.return_value = mock_scalars
 
+    side_effects = [mock_total, mock_due, mock_bounce_due]
+    if due_count > 0:
+        side_effects.append(mock_fetch)
+    if bounce_due_count > 0:
+        mock_bounce_fetch = MagicMock()
+        mock_bounce_scalars = MagicMock()
+        mock_bounce_scalars.all.return_value = bounce_prospects or []
+        mock_bounce_fetch.scalars.return_value = mock_bounce_scalars
+        side_effects.append(mock_bounce_fetch)
+
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        side_effect=[mock_total, mock_due, mock_fetch]
-    )
+    mock_session.execute = AsyncMock(side_effect=side_effects)
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
     return mock_session
@@ -85,16 +102,19 @@ class TestProcessBatch:
     @pytest.mark.asyncio
     async def test_skips_when_all_recently_attempted(self):
         """All prospects attempted within retry window -> no work."""
-        # total=10 but due=0
+        # total=10 but due=0, bounce_due=0
         mock_total = MagicMock()
         mock_total.scalar.return_value = 10
 
         mock_due = MagicMock()
         mock_due.scalar.return_value = 0
 
+        mock_bounce_due = MagicMock()
+        mock_bounce_due.scalar.return_value = 0
+
         mock_session = AsyncMock()
         mock_session.execute = AsyncMock(
-            side_effect=[mock_total, mock_due]
+            side_effect=[mock_total, mock_due, mock_bounce_due]
         )
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)

@@ -6,6 +6,7 @@ This module is the CORE fix for reputation degradation:
 2. Computes sender reputation score (0-100)
 3. Auto-throttles when reputation drops below threshold
 4. Alerts when delivery rate drops below acceptable levels
+5. Per-domain email bounce tracking (30-day rolling window)
 
 Why reputation drops:
 - High failure rates signal to carriers that you're sending spam
@@ -16,7 +17,7 @@ Why reputation drops:
 import logging
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -497,3 +498,76 @@ async def get_deliverability_summary() -> dict:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": str(e),
         }
+
+
+# ─── PER-DOMAIN EMAIL BOUNCE TRACKING ─────────────────
+# Sorted-set pattern: each bounce is a timestamp member in a 30-day window.
+# Mirrors the SMS delivery tracking above but scoped per email domain.
+
+DOMAIN_BOUNCE_WINDOW = 30 * 86400  # 30 days in seconds
+DOMAIN_BOUNCE_TTL = 31 * 86400     # TTL slightly longer than window
+DOMAIN_BOUNCE_RISKY = 3            # 3+ bounces = risky
+DOMAIN_BOUNCE_BLOCKED = 5          # 5+ bounces = blocked
+
+DomainBounceRisk = Literal["safe", "risky", "blocked"]
+
+
+async def record_domain_bounce(domain: str) -> None:
+    """
+    Record a hard bounce for an email domain in a 30-day rolling window.
+
+    Uses a Redis sorted set keyed by domain. Each member is a unique
+    timestamp+nonce string (score = timestamp). Old entries beyond 30 days
+    are pruned on every write.
+    """
+    try:
+        from src.utils.dedup import get_redis
+        import uuid
+        redis = await get_redis()
+
+        key = f"leadlock:email_domain_bounces:{domain}"
+        now = time.time()
+        cutoff = now - DOMAIN_BOUNCE_WINDOW
+
+        # Include a nonce to avoid member collisions when two bounces
+        # arrive at the same time.time() resolution
+        member = f"{now}:{uuid.uuid4().hex[:8]}"
+
+        pipe = redis.pipeline()
+        pipe.zadd(key, {member: now})
+        pipe.zremrangebyscore(key, 0, cutoff)
+        pipe.expire(key, DOMAIN_BOUNCE_TTL)
+        await pipe.execute()
+
+        logger.info("Recorded domain bounce for %s", domain)
+    except Exception as e:
+        logger.warning("Failed to record domain bounce for %s: %s", domain, str(e))
+
+
+async def get_domain_bounce_risk(domain: str) -> DomainBounceRisk:
+    """
+    Check per-domain bounce risk based on 30-day rolling bounce count.
+
+    Returns:
+        "safe"    — fewer than 3 bounces
+        "risky"   — 3-4 bounces (confidence downgraded)
+        "blocked" — 5+ bounces (skip domain entirely)
+    """
+    try:
+        from src.utils.dedup import get_redis
+        redis = await get_redis()
+
+        key = f"leadlock:email_domain_bounces:{domain}"
+        now = time.time()
+        cutoff = now - DOMAIN_BOUNCE_WINDOW
+
+        count = await redis.zcount(key, cutoff, now)
+
+        if count >= DOMAIN_BOUNCE_BLOCKED:
+            return "blocked"
+        if count >= DOMAIN_BOUNCE_RISKY:
+            return "risky"
+        return "safe"
+    except Exception as e:
+        logger.warning("Failed to check domain bounce risk for %s: %s", domain, str(e))
+        return "safe"  # Fail open — don't block on Redis outage

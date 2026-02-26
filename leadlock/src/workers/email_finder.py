@@ -29,6 +29,11 @@ BATCH_SIZE = 75
 HEARTBEAT_KEY = "leadlock:worker_health:email_finder"
 RETRY_DAYS = 7  # Skip prospects attempted within this window
 
+# Bounce retry: re-process "lost" prospects with a longer cooldown
+BOUNCE_RETRY_DAYS = 14  # Longer than normal retry — give domain time to cool
+BOUNCE_RETRY_BATCH = 15  # Reserve 15 slots (of 75 total) for bounce retries
+NORMAL_BATCH_SIZE = BATCH_SIZE - BOUNCE_RETRY_BATCH  # 60 normal slots
+
 
 async def run_email_finder():
     """Main loop — find real emails for unverified prospects."""
@@ -79,21 +84,48 @@ def _retry_cutoff() -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=RETRY_DAYS)
 
 
+def _bounce_retry_cutoff() -> datetime:
+    """Cutoff timestamp for bounce-retry prospects (longer window)."""
+    return datetime.now(timezone.utc) - timedelta(days=BOUNCE_RETRY_DAYS)
+
+
+def _bounce_retry_filter():
+    """
+    WHERE clause for bounced ("lost") prospects eligible for email re-discovery.
+
+    Selects prospects that:
+    - Have status "lost" (set by hard-bounce handler)
+    - Have email_verified=False (bounce invalidated the email)
+    - Have a website (required for discovery strategies)
+    - Haven't been attempted in BOUNCE_RETRY_DAYS
+    - Haven't unsubscribed or replied
+    """
+    cutoff = _bounce_retry_cutoff()
+    return and_(
+        Outreach.status == "lost",
+        Outreach.email_verified == False,  # noqa: E712
+        Outreach.website.isnot(None),
+        Outreach.website != "",
+        Outreach.email_unsubscribed == False,  # noqa: E712
+        Outreach.last_email_replied_at.is_(None),
+        or_(
+            Outreach.email_discovery_attempted_at.is_(None),
+            Outreach.email_discovery_attempted_at < cutoff,
+        ),
+    )
+
+
 async def _process_batch():
-    """Pick up unverified prospects and try to find real emails."""
+    """Pick up unverified prospects and bounced prospects, try to find real emails."""
     now = datetime.now(timezone.utc)
     cutoff = _retry_cutoff()
 
     async with async_session_factory() as db:
-        # Count total eligible (regardless of attempt history)
+        # Count total eligible normal prospects (regardless of attempt history)
         total_q = select(func.count()).select_from(Outreach).where(_eligible_filter())
         total = (await db.execute(total_q)).scalar() or 0
 
-        if total == 0:
-            logger.debug("Email finder: no unverified prospects to process")
-            return
-
-        # Count how many are actually due for (re)processing
+        # Count how many normal prospects are actually due for (re)processing
         due_filter = and_(
             _eligible_filter(),
             or_(
@@ -104,52 +136,81 @@ async def _process_batch():
         due_q = select(func.count()).select_from(Outreach).where(due_filter)
         due = (await db.execute(due_q)).scalar() or 0
 
-        if due == 0:
-            logger.info(
-                "Email finder: %d unverified prospects, but all attempted within %dd — waiting",
-                total, RETRY_DAYS,
-            )
+        # Count bounce-retry prospects
+        bounce_due_q = select(func.count()).select_from(Outreach).where(_bounce_retry_filter())
+        bounce_due = (await db.execute(bounce_due_q)).scalar() or 0
+
+        if due == 0 and bounce_due == 0:
+            if total > 0:
+                logger.info(
+                    "Email finder: %d unverified prospects, but all attempted within retry window — waiting",
+                    total,
+                )
+            else:
+                logger.debug("Email finder: no prospects to process")
             return
 
         logger.info(
-            "Email finder: %d unverified total, %d due for processing, batch %d",
-            total, due, min(due, BATCH_SIZE),
+            "Email finder: %d unverified due, %d bounce-retry due (normal batch %d, bounce batch %d)",
+            due, bounce_due, min(due, NORMAL_BATCH_SIZE), min(bounce_due, BOUNCE_RETRY_BATCH),
         )
 
-        # Fetch batch — prioritize never-attempted, then oldest attempts first
-        # Secondary sort: prospects WITH websites before those without (all have websites
-        # per filter, but keep the pattern for future-proofing)
-        fetch_q = (
-            select(Outreach)
-            .where(due_filter)
-            .order_by(
-                # Never-attempted first (NULL sorts first with nulls_first)
-                Outreach.email_discovery_attempted_at.asc().nulls_first(),
-                Outreach.created_at.asc(),
+        # Fetch normal batch (60 slots)
+        prospects: list[Outreach] = []
+        bounce_retry_ids: set = set()
+
+        if due > 0:
+            fetch_q = (
+                select(Outreach)
+                .where(due_filter)
+                .order_by(
+                    Outreach.email_discovery_attempted_at.asc().nulls_first(),
+                    Outreach.created_at.asc(),
+                )
+                .limit(NORMAL_BATCH_SIZE)
             )
-            .limit(BATCH_SIZE)
-        )
-        result = await db.execute(fetch_q)
-        prospects = list(result.scalars().all())
+            result = await db.execute(fetch_q)
+            prospects.extend(result.scalars().all())
+
+        # Fetch bounce-retry batch (15 slots)
+        if bounce_due > 0:
+            bounce_q = (
+                select(Outreach)
+                .where(_bounce_retry_filter())
+                .order_by(
+                    Outreach.email_discovery_attempted_at.asc().nulls_first(),
+                    Outreach.created_at.asc(),
+                )
+                .limit(BOUNCE_RETRY_BATCH)
+            )
+            bounce_result = await db.execute(bounce_q)
+            bounce_prospects = list(bounce_result.scalars().all())
+            bounce_retry_ids = {p.id for p in bounce_prospects}
+            prospects.extend(bounce_prospects)
 
         found = 0
         reactivated = 0
         kept = 0
         failed = 0
+        bounce_reactivated = 0
 
         for prospect in prospects:
             domain = _extract_prospect_domain(prospect)
+            is_bounce_retry = prospect.id in bounce_retry_ids
 
             logger.info(
-                "Email finder: checking %s (%s)",
+                "Email finder: checking %s (%s)%s",
                 prospect.prospect_name, domain or "no domain",
+                " [bounce retry]" if is_bounce_retry else "",
             )
 
             try:
+                # Pass db session for bounce-retry prospects to enable blacklist checks
                 discovery = await discover_email(
                     website=prospect.website,
                     company_name=prospect.prospect_company or prospect.prospect_name,
                     enrichment_data=prospect.enrichment_data,
+                    db=db if is_bounce_retry else None,
                 )
             except Exception as e:
                 logger.warning(
@@ -186,7 +247,8 @@ async def _process_batch():
                     "Email finder: non-send-eligible result (%s/%s) for %s, retry in %dd",
                     source or "unknown",
                     confidence or "unknown",
-                    prospect.prospect_name, RETRY_DAYS,
+                    prospect.prospect_name,
+                    BOUNCE_RETRY_DAYS if is_bounce_retry else RETRY_DAYS,
                 )
                 continue
 
@@ -212,6 +274,15 @@ async def _process_batch():
                     (current_email or "").split("@")[0][:3],
                 )
 
+                # Bounce retry: reactivate to "cold" if we found a DIFFERENT high-confidence email
+                if is_bounce_retry:
+                    prospect.status = "cold"
+                    bounce_reactivated += 1
+                    logger.info(
+                        "Email finder: bounce retry — reactivated %s to cold with new email",
+                        prospect.prospect_name,
+                    )
+
             if prospect.status == "no_verified_email":
                 prospect.status = "cold"
                 reactivated += 1
@@ -219,8 +290,8 @@ async def _process_batch():
         await db.commit()
 
         logger.info(
-            "Email finder cycle: %d found, %d reactivated, %d kept, %d failed (of %d processed, %d remaining)",
-            found, reactivated, kept, failed, len(prospects), due - len(prospects),
+            "Email finder cycle: %d found, %d reactivated, %d bounce-reactivated, %d kept, %d failed (of %d processed)",
+            found, reactivated, bounce_reactivated, kept, failed, len(prospects),
         )
 
 

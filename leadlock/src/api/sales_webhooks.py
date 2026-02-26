@@ -800,6 +800,15 @@ async def email_events_webhook(
                                                         "Domain cooldown enabled for %s after %d bounces in 24h",
                                                         domain, recent_bounces,
                                                     )
+
+                                            # Record per-domain bounce for 30-day risk tracking
+                                            # Skip protected providers — they can't be domain-blocked
+                                            if domain not in _PROTECTED_DOMAINS:
+                                                try:
+                                                    from src.services.deliverability import record_domain_bounce
+                                                    await record_domain_bounce(domain)
+                                                except Exception as db_err:
+                                                    logger.debug("Domain bounce recording failed: %s", str(db_err))
                                 except Exception as bl_err:
                                     logger.warning(
                                         "Failed to auto-blacklist email/domain: %s", str(bl_err)
