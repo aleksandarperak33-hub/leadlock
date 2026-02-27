@@ -130,7 +130,7 @@ async def check_readiness(
     config = client.config or {}
     checks = {
         "phone_provisioned": bool(client.twilio_phone),
-        "billing_active": client.billing_status in ("active", "pilot"),
+        "billing_active": client.billing_status in ("active", "pilot", "trial"),
         "services_configured": bool(config.get("services", {}).get("primary")),
         "persona_set": bool(config.get("persona", {}).get("rep_name")),
         "crm_connected": client.crm_type != "google_sheets" or bool(client.crm_api_key_encrypted),

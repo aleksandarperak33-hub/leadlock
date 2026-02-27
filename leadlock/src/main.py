@@ -145,6 +145,11 @@ async def lifespan(app: FastAPI):
     worker_tasks.append(asyncio.create_task(run_registration_poller()))
     logger.info("Registration poller started")
 
+    # Trial reminder (sends email reminders before trial expiry)
+    from src.workers.trial_reminder import run_trial_reminder
+    worker_tasks.append(asyncio.create_task(run_trial_reminder()))
+    logger.info("Trial reminder worker started")
+
     # Sales engine workers - gated behind config flag
     if settings.sales_engine_enabled:
         if not settings.brave_api_key:

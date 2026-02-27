@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Check, AlertCircle, ExternalLink, Zap } from 'lucide-react';
+import { CreditCard, Check, AlertCircle, ExternalLink, Zap, Clock } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 
 export default function Billing() {
@@ -102,9 +102,15 @@ export default function Billing() {
   }
 
   const isActive = billing?.billing_status === 'active';
+  const isTrial = billing?.billing_status === 'trial';
   const isPending = billing?.billing_status === 'pending';
   const isPastDue = billing?.billing_status === 'past_due';
   const isCanceled = billing?.billing_status === 'canceled';
+
+  // Compute trial days remaining
+  const trialDaysLeft = isTrial && billing?.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(billing.trial_ends_at).getTime() - Date.now()) / 86400000))
+    : 0;
 
   return (
     <div>
@@ -135,6 +141,23 @@ export default function Billing() {
         </div>
       )}
 
+      {isTrial && (
+        <div className="mb-6 px-5 py-4 rounded-xl bg-orange-50 border border-orange-200/60">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="w-4 h-4 text-orange-500" />
+            <span className="text-sm font-semibold text-orange-700">
+              Free trial &middot; {trialDaysLeft} {trialDaysLeft === 1 ? 'day' : 'days'} remaining
+            </span>
+          </div>
+          {billing?.trial_ends_at && (
+            <p className="text-xs text-orange-600/80 ml-6">
+              Your card will be charged on {new Date(billing.trial_ends_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+              Manage your subscription anytime from Stripe.
+            </p>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="mb-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200/60 text-red-600 text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -156,12 +179,13 @@ export default function Billing() {
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                 isActive ? 'bg-green-50 text-green-600' :
+                isTrial ? 'bg-orange-50 text-orange-600' :
                 isPending ? 'bg-orange-50 text-orange-600' :
                 isPastDue ? 'bg-red-50 text-red-600' :
                 isCanceled ? 'bg-red-50 text-red-600' :
                 'bg-gray-100 text-gray-500'
               }`}>
-                {billing?.billing_status?.replace('_', ' ')}
+                {isTrial ? 'free trial' : billing?.billing_status?.replace('_', ' ')}
               </span>
             </div>
             {billing?.current_period_end && (
@@ -170,7 +194,7 @@ export default function Billing() {
               </p>
             )}
           </div>
-          {(isActive || isPastDue) && (
+          {(isActive || isTrial || isPastDue) && (
             <button
               onClick={handlePortal}
               disabled={actionLoading === 'portal'}
@@ -184,7 +208,7 @@ export default function Billing() {
       </div>
 
       {/* Plan selection */}
-      {(!isActive || isPending) && (
+      {((!isActive && !isTrial) || isPending) && (
         <>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose a plan</h2>
           <div className="grid md:grid-cols-3 gap-5">

@@ -412,6 +412,74 @@ async def verify_email(
     return {"message": "Email verified successfully!", "verified": True}
 
 
+@router.post("/api/v1/auth/refresh")
+async def refresh_token(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """Issue a fresh JWT token if the current one is expired but still within 7 days."""
+    import jwt as pyjwt
+    from src.config import get_settings
+    settings = get_settings()
+
+    # Rate limit: 20 refreshes per token-suffix per 15 minutes
+    token_suffix = credentials.credentials[-16:] if len(credentials.credentials) > 16 else credentials.credentials
+    await _check_auth_rate_limit("refresh", token_suffix, max_attempts=20, window_seconds=900)
+
+    secret = settings.dashboard_jwt_secret or settings.app_secret_key
+
+    # Decode without verifying expiry — we handle staleness ourselves
+    try:
+        payload = pyjwt.decode(
+            credentials.credentials,
+            secret,
+            algorithms=["HS256"],
+            options={"verify_exp": False},
+        )
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # Reject tokens older than 7 days past their original expiry
+    original_exp = payload.get("exp", 0)
+    max_refresh_window = original_exp + (7 * 86400)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if now_ts > max_refresh_window:
+        raise HTTPException(status_code=401, detail="Token too old to refresh")
+
+    client_id = payload.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        client_uuid = uuid.UUID(client_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    result = await db.execute(
+        select(Client).where(and_(Client.id == client_uuid, Client.is_active == True))
+    )
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    new_token = pyjwt.encode(
+        {
+            "client_id": str(client.id),
+            "is_admin": client.is_admin,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=settings.dashboard_jwt_expiry_hours),
+        },
+        secret,
+        algorithm="HS256",
+    )
+
+    logger.info("Token refreshed for client %s", str(client.id)[:8])
+    return {
+        "token": new_token,
+        "client_id": str(client.id),
+        "billing_status": client.billing_status,
+    }
+
+
 @router.post("/api/v1/auth/resend-verification")
 async def resend_verification(
     db: AsyncSession = Depends(get_db),

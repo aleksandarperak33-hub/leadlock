@@ -670,6 +670,12 @@ export default function Onboarding() {
                 <p className="text-sm text-[#52526B]">Select a plan to activate your account and get a dedicated phone number.</p>
               </div>
 
+              {/* Trial messaging */}
+              <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+                <p className="text-sm font-medium text-emerald-400">14-day free trial on every plan</p>
+                <p className="text-xs text-[#A1A1BC] mt-1">Your card won't be charged for 14 days. Cancel anytime.</p>
+              </div>
+
               <div className="space-y-4">
                 {plans.map(plan => (
                   <div key={plan.slug} className={`p-5 rounded-xl border transition-all ${plan.popular ? 'border-orange-500/30 bg-orange-500/[0.03]' : 'border-[#222230]'}`}>
@@ -702,7 +708,7 @@ export default function Onboarding() {
                           <Loader2 className="w-4 h-4 animate-spin" /> Redirecting to Stripe...
                         </span>
                       ) : (
-                        <span className="flex items-center justify-center gap-2">Subscribe <ExternalLink className="w-3.5 h-3.5" /></span>
+                        <span className="flex items-center justify-center gap-2">Start 14-Day Free Trial <ExternalLink className="w-3.5 h-3.5" /></span>
                       )}
                     </button>
                   </div>

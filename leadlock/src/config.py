@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # Alerting
     alert_webhook_url: str = ""  # Discord/Slack webhook URL for critical alerts
 
+    # Trial
+    trial_period_days: int = 14
+
     # Operational limits
     max_cold_followups: int = 3
     max_conversation_turns: int = 10

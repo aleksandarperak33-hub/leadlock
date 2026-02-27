@@ -104,7 +104,7 @@ async def _enforce_billing_gate(client: Client | None, client_id: str) -> dict |
     """Check client billing and phone readiness. Returns error dict or None if OK."""
     if not client or not client.is_active:
         return {"status": "client_inactive"}
-    if client.billing_status not in ("active", "pilot"):
+    if client.billing_status not in ("active", "pilot", "trial"):
         logger.warning(
             "Lead rejected: client %s billing_status=%s",
             client_id[:8], client.billing_status,

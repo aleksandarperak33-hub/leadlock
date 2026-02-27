@@ -231,6 +231,131 @@ async def send_subscription_confirmation(
     return await _send_transactional(email, f"LeadLock {plan_name} Plan Confirmed", html, text)
 
 
+async def send_trial_started(email: str, business_name: str, trial_end_date: str) -> dict:
+    """Send welcome email when a free trial begins."""
+    settings = get_settings()
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="display: inline-block; background: #f97316; width: 40px; height: 40px; border-radius: 10px; line-height: 40px; text-align: center;">
+          <span style="color: white; font-weight: bold; font-size: 18px;">L</span>
+        </div>
+        <h2 style="margin: 12px 0 0; color: #111; font-size: 20px;">Your Free Trial Is Active!</h2>
+      </div>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        Hey {business_name} team! Your {settings.trial_period_days}-day free trial is now active. You have full access to every feature until <strong>{trial_end_date}</strong>.
+      </p>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        Your card will not be charged during the trial. If you cancel before {trial_end_date}, you won't be billed at all.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{settings.dashboard_base_url}/dashboard" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+          Go to Dashboard
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
+      <p style="color: #bbb; font-size: 11px; text-align: center;">LeadLock &mdash; AI Speed-to-Lead Platform</p>
+    </div>
+    """
+
+    text = (
+        f"Your Free Trial Is Active!\n\n"
+        f"Hey {business_name} team! Your {settings.trial_period_days}-day free trial is now active. "
+        f"You have full access to every feature until {trial_end_date}.\n\n"
+        f"Your card will not be charged during the trial. If you cancel before "
+        f"{trial_end_date}, you won't be billed at all.\n\n"
+        f"Go to your dashboard: {settings.dashboard_base_url}/dashboard\n\n"
+        "-- LeadLock"
+    )
+
+    return await _send_transactional(email, "Your LeadLock free trial is active!", html, text)
+
+
+async def send_trial_ending_soon(email: str, business_name: str, days_left: int) -> dict:
+    """Send reminder that trial ends soon."""
+    settings = get_settings()
+    urgency = "tomorrow" if days_left <= 1 else f"in {days_left} days"
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="display: inline-block; background: #f97316; width: 40px; height: 40px; border-radius: 10px; line-height: 40px; text-align: center;">
+          <span style="color: white; font-weight: bold; font-size: 18px;">L</span>
+        </div>
+        <h2 style="margin: 12px 0 0; color: #111; font-size: 20px;">Your Trial Ends {urgency.title()}</h2>
+      </div>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        Hi {business_name}, your free trial ends {urgency}. After that, your subscription will activate automatically using the card on file.
+      </p>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        No action needed if you want to continue &mdash; everything stays the same. If you'd like to cancel or change plans, you can do so from your billing page.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{settings.dashboard_base_url}/billing" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+          Manage Billing
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
+      <p style="color: #bbb; font-size: 11px; text-align: center;">LeadLock &mdash; AI Speed-to-Lead Platform</p>
+    </div>
+    """
+
+    text = (
+        f"Your Trial Ends {urgency.title()}\n\n"
+        f"Hi {business_name}, your free trial ends {urgency}. "
+        "After that, your subscription will activate automatically using the card on file.\n\n"
+        "No action needed if you want to continue. If you'd like to cancel or change plans, "
+        "visit your billing page.\n\n"
+        f"Manage billing: {settings.dashboard_base_url}/billing\n\n"
+        "-- LeadLock"
+    )
+
+    return await _send_transactional(
+        email, f"LeadLock: Your trial ends {urgency}", html, text,
+    )
+
+
+async def send_trial_expired(email: str, business_name: str) -> dict:
+    """Send notification that trial ended and subscription is now active."""
+    settings = get_settings()
+    html = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="display: inline-block; background: #f97316; width: 40px; height: 40px; border-radius: 10px; line-height: 40px; text-align: center;">
+          <span style="color: white; font-weight: bold; font-size: 18px;">L</span>
+        </div>
+        <h2 style="margin: 12px 0 0; color: #111; font-size: 20px;">Trial Ended &mdash; You're All Set</h2>
+      </div>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        Hi {business_name}, your free trial has ended and your subscription is now active. Your card on file has been charged.
+      </p>
+      <p style="color: #555; font-size: 15px; line-height: 1.6;">
+        Everything continues working exactly as it did during the trial. You can manage your subscription or update your payment method anytime.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="{settings.dashboard_base_url}/billing" style="background: #f97316; color: white; padding: 12px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+          View Billing
+        </a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
+      <p style="color: #bbb; font-size: 11px; text-align: center;">LeadLock &mdash; AI Speed-to-Lead Platform</p>
+    </div>
+    """
+
+    text = (
+        "Trial Ended - You're All Set\n\n"
+        f"Hi {business_name}, your free trial has ended and your subscription is now active. "
+        "Your card on file has been charged.\n\n"
+        "Everything continues working exactly as it did during the trial. "
+        "Manage your subscription anytime.\n\n"
+        f"View billing: {settings.dashboard_base_url}/billing\n\n"
+        "-- LeadLock"
+    )
+
+    return await _send_transactional(
+        email, "LeadLock: Your trial ended — subscription active", html, text,
+    )
+
+
 async def send_payment_failed(email: str, business_name: str) -> dict:
     """Send payment failure notification."""
     html = f"""

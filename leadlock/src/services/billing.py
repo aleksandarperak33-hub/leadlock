@@ -7,6 +7,7 @@ the asyncio event loop.
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.config import get_settings
@@ -100,6 +101,7 @@ async def create_checkout_session(
     """
     try:
         stripe = _get_stripe()
+        settings = get_settings()
         session = await _run_sync(
             stripe.checkout.Session.create,
             customer=stripe_customer_id,
@@ -108,8 +110,10 @@ async def create_checkout_session(
             success_url=success_url,
             cancel_url=cancel_url,
             metadata={"leadlock_client_id": client_id},
+            payment_method_collection="always",
             subscription_data={
                 "metadata": {"leadlock_client_id": client_id},
+                "trial_period_days": settings.trial_period_days,
             },
         )
         logger.info(
@@ -208,20 +212,25 @@ async def _handle_checkout_completed(session: dict) -> None:
     import uuid
 
     dashboard_email = None
+    business_name = None
+    billing_status = "active"
+    trial_ends_at = None
     plan_slug = "unknown"
+    sub = None
 
     # Fetch subscription from Stripe BEFORE acquiring DB session to avoid
     # holding the connection open during a network call
-    try:
-        stripe = _get_stripe()
-        sub = await _run_sync(stripe.Subscription.retrieve, subscription_id)
-        price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
-        plan_slug = _price_id_to_plan(price_id)
-    except Exception as e:
-        logger.warning(
-            "Failed to retrieve Stripe subscription %s: %s. "
-            "Proceeding without tier sync.", subscription_id, str(e),
-        )
+    if subscription_id:
+        try:
+            stripe = _get_stripe()
+            sub = await _run_sync(stripe.Subscription.retrieve, subscription_id)
+            price_id = sub["items"]["data"][0]["price"]["id"] if sub["items"]["data"] else ""
+            plan_slug = _price_id_to_plan(price_id)
+        except Exception as e:
+            logger.warning(
+                "Failed to retrieve Stripe subscription %s: %s. "
+                "Proceeding without tier sync.", subscription_id, str(e),
+            )
 
     try:
         client_uuid = uuid.UUID(client_id)
@@ -240,7 +249,15 @@ async def _handle_checkout_completed(session: dict) -> None:
 
         client.stripe_customer_id = customer_id
         client.stripe_subscription_id = subscription_id
-        client.billing_status = "active"
+
+        # Determine billing status: trial or active
+        sub_status = sub.get("status", "active") if sub else "active"
+        trial_end_ts = sub.get("trial_end") if sub else None
+        if sub_status == "trialing" and trial_end_ts:
+            client.billing_status = "trial"
+            client.trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=timezone.utc)
+        else:
+            client.billing_status = "active"
 
         if plan_slug != "unknown":
             client.tier = plan_slug
@@ -248,18 +265,32 @@ async def _handle_checkout_completed(session: dict) -> None:
 
         # Capture values before session closes to avoid DetachedInstanceError
         dashboard_email = client.dashboard_email
+        business_name = client.business_name
+        billing_status = client.billing_status
+        trial_ends_at = client.trial_ends_at
 
         await db.commit()
 
-    logger.info("Subscription activated for client %s", client_id[:8])
+    logger.info(
+        "Subscription %s for client %s",
+        "trial started" if billing_status == "trial" else "activated",
+        client_id[:8],
+    )
 
-    # Send confirmation email (using captured values, session is closed)
+    # Send appropriate email (using captured values, session is closed)
     if dashboard_email and plan_slug != "unknown":
-        plan_name = PLAN_NAMES.get(plan_slug, "Unknown")
-        amount = PLAN_AMOUNTS.get(plan_slug, "N/A")
-
-        from src.services.transactional_email import send_subscription_confirmation
-        await send_subscription_confirmation(dashboard_email, plan_name, amount)
+        if billing_status == "trial" and trial_ends_at:
+            from src.services.transactional_email import send_trial_started
+            await send_trial_started(
+                dashboard_email,
+                business_name,
+                trial_ends_at.strftime("%B %d, %Y"),
+            )
+        else:
+            plan_name = PLAN_NAMES.get(plan_slug, "Unknown")
+            amount = PLAN_AMOUNTS.get(plan_slug, "N/A")
+            from src.services.transactional_email import send_subscription_confirmation
+            await send_subscription_confirmation(dashboard_email, plan_name, amount)
 
 
 async def _handle_invoice_paid(invoice: dict) -> None:
@@ -351,15 +382,25 @@ async def _handle_subscription_updated(subscription: dict) -> None:
         "unpaid": "past_due",
     }
 
+    dashboard_email = None
+    business_name = None
+    was_trial = False
+
     async with async_session_factory() as db:
         result = await db.execute(
             select(Client).where(Client.stripe_customer_id == customer_id)
         )
         client = result.scalar_one_or_none()
         if client:
+            old_status = client.billing_status
             new_status = status_mapping.get(status, client.billing_status)
             client.billing_status = new_status
             client.stripe_subscription_id = subscription.get("id")
+
+            # Detect trial → active conversion
+            was_trial = old_status == "trial" and new_status == "active"
+            if was_trial:
+                client.trial_ends_at = None
 
             # Sync tier from subscription price (handles upgrades/downgrades)
             items = subscription.get("items", {}).get("data", [])
@@ -375,10 +416,19 @@ async def _handle_subscription_updated(subscription: dict) -> None:
                             client.business_name, old_tier, plan_slug,
                         )
 
+            # Capture before session closes
+            dashboard_email = client.dashboard_email
+            business_name = client.business_name
+
             await db.commit()
             logger.info(
                 "Subscription updated for %s: %s", client.business_name, new_status,
             )
+
+    # Send trial-expired notification when trial converts to active
+    if was_trial and dashboard_email:
+        from src.services.transactional_email import send_trial_expired
+        await send_trial_expired(dashboard_email, business_name)
 
 
 async def _handle_subscription_deleted(subscription: dict) -> None:

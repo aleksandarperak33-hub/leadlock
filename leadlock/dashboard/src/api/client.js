@@ -5,6 +5,10 @@ const ADMIN_BASE = '/api/v1/admin';
 const SALES_BASE = '/api/v1/sales';
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const TOKEN_REFRESH_BUFFER_MS = 60 * 60 * 1000; // Refresh when within 1 hour of expiry
+
+/** In-flight refresh promise to avoid concurrent refresh calls. */
+let _refreshPromise = null;
 
 /**
  * Clears all auth state from localStorage and redirects to login.
@@ -15,11 +19,74 @@ function clearSession() {
 }
 
 /**
+ * Decode the payload of a JWT without verification (browser-side).
+ * Returns null if the token is malformed.
+ */
+function decodeTokenPayload(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Proactively refresh the JWT if it's within 1 hour of expiry.
+ * Deduplicates concurrent calls via a shared promise.
+ */
+async function maybeRefreshToken() {
+  const token = localStorage.getItem(AUTH_KEYS.TOKEN);
+  if (!token) return;
+
+  const payload = decodeTokenPayload(token);
+  if (!payload?.exp) return;
+
+  const expiresAt = payload.exp * 1000;
+  const now = Date.now();
+  if (expiresAt - now > TOKEN_REFRESH_BUFFER_MS) return; // Still fresh
+
+  // Already refreshing — wait for it
+  if (_refreshPromise) {
+    await _refreshPromise.catch(() => {});
+    return;
+  }
+
+  _refreshPromise = (async () => {
+    try {
+      const res = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) return; // Silent fail — the next 401 will clear session
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem(AUTH_KEYS.TOKEN, data.token);
+      }
+    } catch {
+      // Silent fail — don't block the original request
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  await _refreshPromise.catch(() => {});
+}
+
+/**
  * Factory that creates a request function for a given base URL.
  * Handles auth headers, 401 auto-logout, 403 errors, timeout, and JSON parsing.
+ * Proactively refreshes the JWT when it's close to expiry.
  */
 function createRequest(basePath) {
   return async function request(path, options = {}) {
+    await maybeRefreshToken();
+
     const token = localStorage.getItem(AUTH_KEYS.TOKEN);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
