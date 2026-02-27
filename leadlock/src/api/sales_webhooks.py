@@ -626,7 +626,10 @@ async def email_events_webhook(
         for event in events:
             try:
                 event_type = event.get("event", "")
-                sg_message_id = event.get("sg_message_id", "").split(".")[0]
+                # sg_message_id format: "{X-Message-Id}.filter{server}.{seq}"
+                # X-Message-Id itself can contain dots, so split on ".filter"
+                sg_message_id_raw = event.get("sg_message_id", "")
+                sg_message_id = sg_message_id_raw.split(".filter")[0] if sg_message_id_raw else ""
                 outreach_id = event.get("outreach_id")
                 outreach_uuid = _safe_uuid(outreach_id)
                 timestamp = _safe_event_timestamp(event.get("timestamp"))
@@ -660,6 +663,11 @@ async def email_events_webhook(
                         email_record = result.scalar_one_or_none()
 
                 if not email_record:
+                    if event_type in ("open", "click", "spam_report"):
+                        logger.warning(
+                            "Email event lookup failed: type=%s sg_message_id=%s outreach_id=%s step=%s",
+                            event_type, sg_message_id, outreach_id, event.get("step"),
+                        )
                     continue
                 prospect_id = email_record.outreach_id or outreach_uuid
 

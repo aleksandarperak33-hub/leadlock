@@ -184,8 +184,11 @@ async def _send_email_alert(
         alert_email = (
             settings.alert_recipient_email
             or settings.from_email_transactional
-            or "noreply@leadlock.org"
+            or ""
         )
+        if not alert_email:
+            logger.debug("Skipping email alert: no alert_recipient_email configured")
+            return
 
         subject = f"LeadLock Alert: {alert_type}"
         details = ""
