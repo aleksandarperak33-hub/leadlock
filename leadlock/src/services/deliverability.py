@@ -344,8 +344,8 @@ async def get_email_reputation(redis_client) -> dict:
     # unmistakably bad early signals. This protects sender reputation immediately.
     MIN_SAMPLE_SIZE = 50
     MIN_GUARDRAIL_SAMPLE = 20
-    BOUNCE_RATE_CRITICAL = 0.08  # 8% = severe throttle
-    BOUNCE_RATE_PAUSE = 0.12     # 12% = immediate pause
+    BOUNCE_RATE_CRITICAL = 0.12  # 12% = severe throttle
+    BOUNCE_RATE_PAUSE = 0.18     # 18% = immediate pause
     COMPLAINT_RATE_PAUSE = 0.005  # 0.5% spam complaint rate = immediate pause
 
     warmup_bounce_rate = values["bounced"] / sent if sent > 0 else 0.0
