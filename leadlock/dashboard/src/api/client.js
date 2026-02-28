@@ -144,6 +144,23 @@ export const api = {
       return r.json();
     }),
 
+  gmbLookup: (url) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    return fetch('/api/v1/auth/gmb-lookup', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).then(async r => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ detail: 'Lookup failed' }));
+        throw new Error(err.detail || `HTTP ${r.status}`);
+      }
+      return r.json();
+    }).finally(() => clearTimeout(timeoutId));
+  },
+
   getMetrics: (period = '7d') => request(`/metrics?period=${period}`),
   getROI: (period = '30d') => request(`/roi?period=${period}`),
 

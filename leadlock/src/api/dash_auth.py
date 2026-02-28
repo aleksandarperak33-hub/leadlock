@@ -208,6 +208,46 @@ async def signup(
     }
 
 
+# === GMB LOOKUP ===
+
+@router.post("/api/v1/auth/gmb-lookup")
+async def gmb_lookup(request: Request):
+    """
+    Look up a business from a Google Maps URL or name via Brave Search.
+    Public endpoint (no auth) — used during signup/onboarding.
+    Rate limited: 10 per IP per hour.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    await _check_auth_rate_limit("gmb_lookup", client_ip, max_attempts=10, window_seconds=3600)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    url = (payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL or business name is required")
+    if len(url) > 2000:
+        raise HTTPException(status_code=400, detail="Input too long")
+
+    from src.config import get_settings
+    settings = get_settings()
+
+    api_key = settings.brave_api_key
+    if not api_key:
+        logger.error("GMB lookup failed: BRAVE_API_KEY not configured")
+        raise HTTPException(status_code=503, detail="Business lookup temporarily unavailable")
+
+    from src.services.gmb_lookup import lookup_business
+    result = await lookup_business(url, api_key)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Business not found"))
+
+    return result
+
+
 # === AUTH DEPENDENCIES ===
 
 async def get_current_client(

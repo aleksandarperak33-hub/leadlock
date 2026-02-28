@@ -40,6 +40,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Landing = lazy(() => import('./pages/Landing'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
+const QuickSetup = lazy(() => import('./pages/QuickSetup'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
 const About = lazy(() => import('./pages/About'));
@@ -76,6 +77,7 @@ function App() {
           <Route path="/login" element={<Page component={Login} />} />
           <Route path="/signup" element={<Page component={Signup} />} />
           <Route path="/onboarding" element={<Page component={Onboarding} />} />
+          <Route path="/quick-setup" element={<Page component={QuickSetup} />} />
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/terms" element={<Page component={Terms} />} />
           <Route path="/about" element={<Page component={About} />} />
@@ -129,6 +131,7 @@ function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/onboarding" element={<Page component={Onboarding} />} />
+          <Route path="/quick-setup" element={<Page component={QuickSetup} />} />
           <Route path="/privacy" element={<Page component={Privacy} />} />
           <Route path="/terms" element={<Page component={Terms} />} />
           <Route path="/about" element={<Page component={About} />} />

@@ -106,7 +106,7 @@ export default function Signup() {
       localStorage.setItem('ll_trade_type', form.trade_type);
       localStorage.setItem('ll_onboarding_status', data.onboarding_status || 'pending');
       localStorage.setItem('ll_owner_phone', form.phone);
-      window.location.href = '/onboarding';
+      window.location.href = '/quick-setup';
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {

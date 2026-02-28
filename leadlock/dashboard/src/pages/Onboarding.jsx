@@ -124,6 +124,9 @@ export default function Onboarding() {
   const [testSmsSending, setTestSmsSending] = useState(false);
   const [testSmsSent, setTestSmsSent] = useState(false);
 
+  // GMB pre-fill banner
+  const [gmbPreFilled, setGmbPreFilled] = useState(false);
+
   const [config, setConfig] = useState({
     // Step 0: Business
     business_hours_start: '08:00',
@@ -200,6 +203,44 @@ export default function Onboarding() {
       })
       .catch(() => {});
   }, [token]);
+
+  // Consume GMB pre-fill data from QuickSetup page
+  useEffect(() => {
+    const raw = localStorage.getItem('ll_gmb_data');
+    if (!raw) return;
+
+    try {
+      const gmb = JSON.parse(raw);
+      localStorage.removeItem('ll_gmb_data');
+
+      // Sanitize fields from localStorage (could be tampered)
+      const safePhone = typeof gmb.phone === 'string' && /^\+?[\d\s\-().]{7,20}$/.test(gmb.phone.trim())
+        ? gmb.phone.trim()
+        : '';
+      const safeServices = Array.isArray(gmb.suggested_services)
+        ? gmb.suggested_services.filter(s => typeof s === 'string').slice(0, 20)
+        : [];
+      const safeTrade = typeof gmb.trade_type === 'string' ? gmb.trade_type : '';
+
+      if (safeTrade && safeTrade !== 'other') {
+        localStorage.setItem('ll_trade_type', safeTrade);
+      }
+
+      setConfig(prev => ({
+        ...prev,
+        service_area_radius: prev.service_area_radius || '30',
+        primary_services: prev.primary_services.length > 0
+          ? prev.primary_services
+          : safeServices,
+        emergency_contact: prev.emergency_contact || safePhone,
+      }));
+
+      setGmbPreFilled(true);
+    } catch (err) {
+      localStorage.removeItem('ll_gmb_data');
+      console.warn('GMB pre-fill parse error:', err);
+    }
+  }, [tradeType]);
 
   // Save step to localStorage
   useEffect(() => {
@@ -357,8 +398,6 @@ export default function Onboarding() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Checkout failed');
-      // Override the default success URL to return to onboarding
-      const checkoutUrl = new URL(data.url);
       window.location.href = data.url;
     } catch (err) {
       setError(err.message);
@@ -494,6 +533,14 @@ export default function Onboarding() {
         </div>
 
         <StepIndicator currentStep={step} />
+
+        {/* GMB pre-fill banner */}
+        {gmbPreFilled && (
+          <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2.5 text-sm bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            Pre-filled from your Google Business Profile
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
