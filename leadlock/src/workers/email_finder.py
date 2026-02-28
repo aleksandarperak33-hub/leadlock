@@ -215,12 +215,24 @@ async def _process_batch():
 
             try:
                 # Pass db session for bounce-retry prospects to enable blacklist checks
-                discovery = await discover_email(
-                    website=prospect.website,
-                    company_name=prospect.prospect_company or prospect.prospect_name,
-                    enrichment_data=prospect.enrichment_data,
-                    db=db if is_bounce_retry else None,
+                # 60s per-prospect timeout to prevent worker hangs on stuck domains
+                discovery = await asyncio.wait_for(
+                    discover_email(
+                        website=prospect.website,
+                        company_name=prospect.prospect_company or prospect.prospect_name,
+                        enrichment_data=prospect.enrichment_data,
+                        db=db if is_bounce_retry else None,
+                    ),
+                    timeout=60.0,
                 )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Email finder: discovery TIMED OUT for %s (%s) after 60s",
+                    prospect.prospect_name, domain or "no domain",
+                )
+                prospect.email_discovery_attempted_at = now
+                failed += 1
+                continue
             except Exception as e:
                 logger.warning(
                     "Email finder: discovery failed for %s: %s",
