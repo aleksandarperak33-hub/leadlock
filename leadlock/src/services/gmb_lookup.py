@@ -270,23 +270,20 @@ async def lookup_business(url_or_name: str, api_key: str) -> dict:
     if not business_name:
         return {"success": False, "error": "Could not extract business name from URL"}
 
-    # Use Brave Search to find the business (limit to 1 batch for speed).
-    # Pass the full business name as the query — if it contains a city/state
-    # (e.g. from a Maps URL), that provides geographic context automatically.
-    search_result = await search_local_businesses(
-        query=business_name,
-        location="",
-        api_key=api_key,
-        max_poi_batches=1,
-    )
+    # For single-business GMB lookups, use the broader search first (without
+    # result_filter=locations) since Brave's location filter often misses
+    # specific business names. Fall back to location-filtered search only
+    # if the broad search finds nothing.
+    results = await _fallback_brave_search(business_name, api_key)
 
-    results = search_result.get("results") or []
-
-    # Fallback: retry without result_filter=locations via a direct POI search.
-    # Brave's location filter can be too restrictive for single-business lookups,
-    # so we try a broader web search and extract any location IDs from it.
     if not results:
-        results = await _fallback_brave_search(business_name, api_key)
+        search_result = await search_local_businesses(
+            query=business_name,
+            location="",
+            api_key=api_key,
+            max_poi_batches=1,
+        )
+        results = search_result.get("results") or []
 
     if not results:
         return {"success": False, "error": f"No business found for '{business_name}'"}
