@@ -1,0 +1,1 @@
+import{j as o}from"./index-C6CvHDG0.js";const r={green:"bg-emerald-500",yellow:"bg-amber-500",red:"bg-red-500",gray:"bg-gray-300"};function n({color:e="gray"}){const a=r[e]||r.gray;return o.jsx("span",{className:`w-2 h-2 rounded-full inline-block ${a}`})}export{n as S};

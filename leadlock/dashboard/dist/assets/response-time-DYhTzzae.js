@@ -1,0 +1,1 @@
+import{s as e}from"./index-C6CvHDG0.js";function n(r){return r?r<=e.EXCELLENT?"text-emerald-600":r<=e.GOOD?"text-orange-500":r<=e.ACCEPTABLE?"text-amber-600":"text-red-600":"text-gray-400"}function E(r){return r?r<=e.EXCELLENT?"green":r<=e.ACCEPTABLE?"yellow":"red":"brand"}export{n as a,E as r};

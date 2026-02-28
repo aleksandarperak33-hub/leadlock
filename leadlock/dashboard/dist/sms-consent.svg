@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#ffffff" rx="12"/>
+  <rect x="40" y="20" width="720" height="560" fill="#f8fafc" rx="8" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Header -->
+  <text x="400" y="70" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1e293b" text-anchor="middle">SMS Consent &amp; Opt-In Disclosure</text>
+  <line x1="80" y1="90" x2="720" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Service Request Form -->
+  <text x="80" y="130" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#334155">Service Request Form</text>
+
+  <text x="80" y="165" font-family="Arial, sans-serif" font-size="14" fill="#64748b">Name</text>
+  <rect x="80" y="175" width="300" height="32" fill="#ffffff" rx="4" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="92" y="196" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">John Smith</text>
+
+  <text x="420" y="165" font-family="Arial, sans-serif" font-size="14" fill="#64748b">Phone Number</text>
+  <rect x="420" y="175" width="300" height="32" fill="#ffffff" rx="4" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="432" y="196" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">(512) 555-0123</text>
+
+  <text x="80" y="235" font-family="Arial, sans-serif" font-size="14" fill="#64748b">Service Needed</text>
+  <rect x="80" y="245" width="640" height="32" fill="#ffffff" rx="4" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="92" y="266" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8">AC not cooling, need repair</text>
+
+  <!-- Consent Checkbox -->
+  <rect x="80" y="305" width="640" height="100" fill="#eff6ff" rx="6" stroke="#bfdbfe" stroke-width="1"/>
+  <rect x="96" y="322" width="18" height="18" fill="#ffffff" rx="3" stroke="#3b82f6" stroke-width="2"/>
+  <text x="100" y="337" font-family="Arial, sans-serif" font-size="16" fill="#3b82f6" font-weight="bold">&#x2713;</text>
+
+  <text x="124" y="332" font-family="Arial, sans-serif" font-size="13" fill="#1e40af" font-weight="bold">I agree to receive SMS/text messages</text>
+  <text x="96" y="355" font-family="Arial, sans-serif" font-size="11" fill="#475569">By checking this box, you consent to receive automated SMS text messages from us regarding</text>
+  <text x="96" y="372" font-family="Arial, sans-serif" font-size="11" fill="#475569">your service request. Message frequency varies. Msg &amp; data rates may apply.</text>
+  <text x="96" y="389" font-family="Arial, sans-serif" font-size="11" fill="#475569">Reply STOP to cancel at any time. Reply HELP for help. This consent is not required to purchase.</text>
+
+  <!-- Submit Button -->
+  <rect x="80" y="425" width="200" height="40" fill="#2563eb" rx="6"/>
+  <text x="180" y="451" font-family="Arial, sans-serif" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="bold">Submit Request</text>
+
+  <!-- Footer notes -->
+  <line x1="80" y1="490" x2="720" y2="490" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="80" y="515" font-family="Arial, sans-serif" font-size="11" fill="#94a3b8">First SMS message always includes: business name, opt-out instructions ("Reply STOP to opt out"),</text>
+  <text x="80" y="532" font-family="Arial, sans-serif" font-size="11" fill="#94a3b8">and AI disclosure where required (California SB 1001). Maximum 3 follow-up messages per lead.</text>
+  <text x="80" y="555" font-family="Arial, sans-serif" font-size="11" fill="#94a3b8">Privacy Policy: https://leadlock.org/privacy | Terms: https://leadlock.org/terms</text>
+</svg>
