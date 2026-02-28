@@ -177,6 +177,74 @@ async def resolve_short_url(url: str) -> str:
         return url
 
 
+async def _fallback_brave_search(query: str, api_key: str) -> list[dict]:
+    """
+    Fallback search without result_filter=locations.
+
+    Brave's location filter can miss businesses when the query lacks
+    geographic context. This does a broader web search, extracts any
+    location IDs from the response, and fetches their POI details.
+    """
+    from src.services.scraping import (
+        BRAVE_SEARCH_URL,
+        BRAVE_POI_URL,
+        BRAVE_COST_PER_SEARCH,
+        POI_BATCH_SIZE,
+    )
+
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": api_key,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Broader search without location filter
+            resp = await client.get(
+                BRAVE_SEARCH_URL,
+                params={"q": query, "count": 10},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Extract location IDs if Brave included them
+            locations = (data.get("locations") or {}).get("results") or []
+            location_ids = [loc["id"] for loc in locations if loc.get("id")]
+            if not location_ids:
+                return []
+
+            # Fetch POI details for first batch
+            poi_params = [("ids", lid) for lid in location_ids[:POI_BATCH_SIZE]]
+            poi_resp = await client.get(BRAVE_POI_URL, params=poi_params, headers=headers)
+            poi_resp.raise_for_status()
+            poi_results = poi_resp.json().get("results") or []
+
+            # Convert to our standard format
+            from src.services.scraping import normalize_biz_name
+            results = []
+            for poi in poi_results:
+                if not poi:
+                    continue
+                name = poi.get("title") or poi.get("name") or ""
+                postal = poi.get("postal_address") or {}
+                contact = poi.get("contact") or {}
+                results.append({
+                    "name": name,
+                    "address": postal.get("displayAddress") or "",
+                    "phone": contact.get("telephone") or "",
+                    "website": poi.get("url") or "",
+                    "rating": None,
+                    "reviews": None,
+                    "type": ", ".join(poi.get("categories") or []),
+                })
+            return results
+    except Exception as exc:
+        logger.warning("Fallback Brave search failed for '%s': %s", query[:40], exc)
+        return []
+
+
 async def lookup_business(url_or_name: str, api_key: str) -> dict:
     """
     Full GMB lookup pipeline: parse URL → resolve redirects → Brave search → best match.
@@ -202,15 +270,24 @@ async def lookup_business(url_or_name: str, api_key: str) -> dict:
     if not business_name:
         return {"success": False, "error": "Could not extract business name from URL"}
 
-    # Use Brave Search to find the business (limit to 1 batch for speed)
+    # Use Brave Search to find the business (limit to 1 batch for speed).
+    # Pass the full business name as the query — if it contains a city/state
+    # (e.g. from a Maps URL), that provides geographic context automatically.
     search_result = await search_local_businesses(
         query=business_name,
-        location="",  # No location filter — the name from the URL is specific enough
+        location="",
         api_key=api_key,
         max_poi_batches=1,
     )
 
     results = search_result.get("results") or []
+
+    # Fallback: retry without result_filter=locations via a direct POI search.
+    # Brave's location filter can be too restrictive for single-business lookups,
+    # so we try a broader web search and extract any location IDs from it.
+    if not results:
+        results = await _fallback_brave_search(business_name, api_key)
+
     if not results:
         return {"success": False, "error": f"No business found for '{business_name}'"}
 
