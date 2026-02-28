@@ -28,6 +28,8 @@ from src.services.email_quality_gate import MAX_SUBJECT_LENGTH
 
 logger = logging.getLogger(__name__)
 
+MAX_SENDS_PER_DOMAIN_PER_DAY = 3
+
 
 async def _maybe_await(value):
     if inspect.isawaitable(value):
@@ -165,7 +167,7 @@ async def _verify_or_find_working_email(
         )
         return None
 
-    if require_high_confidence and not is_high:
+    if require_high_confidence and confidence not in ("high", "medium"):
         logger.info(
             "Low-confidence discovery for prospect %s (%s via %s), skipping",
             str(prospect.id)[:8],
@@ -176,8 +178,8 @@ async def _verify_or_find_working_email(
 
     # Update source metadata on the prospect
     prospect.email_source = source
-    prospect.email_verified = is_high
-    if is_high:
+    prospect.email_verified = confidence in ("high", "medium")
+    if confidence in ("high", "medium"):
         prospect.verified_at = datetime.now(timezone.utc)
     cost = discovery.get("cost_usd", 0.0)
     if cost > 0:
@@ -220,6 +222,16 @@ async def _pre_send_checks(
     email_check = await validate_email(prospect.prospect_email)
     if not email_check["valid"]:
         return f"invalid email ({email_check['reason']})"
+
+    # MX recheck at send time — domains can lose MX records between
+    # discovery (days/weeks ago) and actual send.
+    domain = normalized_email.split("@")[1] if "@" in normalized_email else ""
+    if domain:
+        from src.utils.email_validation import has_mx_record
+        if not await has_mx_record(domain):
+            prospect.status = "no_verified_email"
+            prospect.email_verified = False
+            return f"domain has no MX records at send time ({domain})"
 
     # Gate: first-touch outreach requires a high-confidence email.
     # Pattern-guess sources are always revalidated, even if a stale row was marked verified.
@@ -291,6 +303,19 @@ async def _pre_send_checks(
                 return f"domain cooldown active ({ttl}s remaining)"
         except Exception as e:
             logger.debug("Domain cooldown check unavailable: %s", str(e))
+
+    # Per-domain daily send cap — prevents reputation damage from domain concentration
+    if domain:
+        try:
+            from src.utils.dedup import get_redis
+            redis = await get_redis()
+            day_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            domain_send_key = f"leadlock:domain_sends:{domain}:{day_str}"
+            domain_sends = _to_int(await redis.get(domain_send_key), 0)
+            if domain_sends >= MAX_SENDS_PER_DOMAIN_PER_DAY:
+                return f"per-domain daily cap reached ({domain}: {domain_sends}/{MAX_SENDS_PER_DOMAIN_PER_DAY})"
+        except Exception as e:
+            logger.debug("Per-domain send limit check failed: %s", str(e))
 
     # Dedup: skip if another record with same email was already contacted
     if prospect.prospect_email:
@@ -849,12 +874,22 @@ async def _record_send(
     sender_profile: dict,
 ) -> None:
     """Record the sent email and update prospect state."""
-    # Record email reputation event
+    # Record email reputation event + per-domain send counter
     try:
         from src.utils.dedup import get_redis
         from src.services.deliverability import record_email_event
         redis = await get_redis()
         await record_email_event(redis, "sent")
+        # Increment per-domain daily send counter
+        try:
+            send_domain = prospect.prospect_email.split("@")[1] if "@" in (prospect.prospect_email or "") else ""
+            if send_domain:
+                day_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                domain_send_key = f"leadlock:domain_sends:{send_domain}:{day_str}"
+                await redis.incr(domain_send_key)
+                await redis.expire(domain_send_key, 86400)
+        except Exception:
+            pass  # Non-critical
     except Exception as rep_err:
         logger.debug("Failed to record email send event: %s", str(rep_err))
 

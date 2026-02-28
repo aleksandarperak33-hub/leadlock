@@ -65,14 +65,14 @@ async def run_email_finder():
         await asyncio.sleep(POLL_INTERVAL)
 
 
-STALE_VERIFICATION_DAYS = 14  # Re-verify emails older than this
+STALE_VERIFICATION_DAYS = 7  # Re-verify emails older than this
 
 
 def _eligible_filter():
     """Base WHERE clause for unverified OR stale-verified prospects eligible for rediscovery."""
     stale_cutoff = datetime.now(timezone.utc) - timedelta(days=STALE_VERIFICATION_DAYS)
     return and_(
-        # Unverified OR stale verification (verified_at older than 14 days or NULL)
+        # Unverified OR stale verification (verified_at older than STALE_VERIFICATION_DAYS or NULL)
         or_(
             Outreach.email_verified == False,  # noqa: E712
             Outreach.verified_at.is_(None),
@@ -260,8 +260,8 @@ async def _process_batch():
 
             # Did we find something better than current unverified data?
             current_email = prospect.prospect_email
-            if source == "pattern_guess" or confidence != "high":
-                # Keep prospect parked; only high-confidence non-pattern addresses
+            if source == "pattern_guess" or confidence not in ("high", "medium"):
+                # Keep prospect parked; only high/medium-confidence non-pattern addresses
                 # are send-eligible for first-touch outreach.
                 kept += 1
                 logger.debug(

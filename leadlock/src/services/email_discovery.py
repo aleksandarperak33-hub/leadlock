@@ -34,6 +34,30 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Personal email detection for catch-all domain confidence upgrade
+# ---------------------------------------------------------------------------
+_GENERIC_PREFIXES = frozenset({
+    "info", "contact", "office", "admin", "support", "help",
+    "service", "sales", "hello", "team", "general", "enquiry",
+    "inquiry", "mail", "email",
+})
+
+
+def _is_personal_email(email: str) -> bool:
+    """Check if email looks like a personal address (first.last, fname, etc.) vs generic."""
+    local = email.split("@")[0] if "@" in email else ""
+    if local in _GENERIC_PREFIXES:
+        return False
+    # first.last pattern (e.g., john.smith@domain.com)
+    if "." in local and len(local) >= 5:
+        return True
+    # Short unique local parts (e.g., john@, alek@) are likely personal
+    if 3 <= len(local) <= 12 and local.isalpha() and local not in _GENERIC_PREFIXES:
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Blacklist check helper
 # ---------------------------------------------------------------------------
 async def _is_blacklisted(email: str, db: Optional[DBSession]) -> bool:
@@ -69,6 +93,10 @@ _EXTENDED_PATHS = [
     "/contact", "/contact-us", "/about", "/about-us", "/",
     "/team", "/our-team", "/staff", "/people", "/leadership",
     "/privacy", "/privacy-policy", "/terms",
+    # SMB contractor sites often use these
+    "/get-in-touch", "/reach-us", "/connect",
+    "/service-area", "/locations", "/schedule",
+    "/get-a-quote", "/request-quote", "/free-estimate",
 ]
 
 # Paths for internal link crawling (skip these patterns)
@@ -180,7 +208,10 @@ async def discover_email(
             if scraped:
                 candidate = scraped[0]
                 if not await _is_blacklisted(candidate, db):
-                    confidence = "medium" if domain_is_catch_all else "high"
+                    if domain_is_catch_all:
+                        confidence = "medium" if _is_personal_email(candidate) else "low"
+                    else:
+                        confidence = "high"
                     return {
                         "email": candidate,
                         "source": "website_deep_scrape",
@@ -191,7 +222,8 @@ async def discover_email(
         except Exception as e:
             logger.warning("Deep scrape failed for %s: %s", domain or website, str(e))
 
-    # Strategy 2: Brave Search for emails (medium confidence)
+    # Strategy 2a: Brave Search by domain (high confidence for non-catch-all)
+    brave_emails: list[str] = []
     if domain:
         try:
             brave_emails = await search_brave_for_email(domain)
@@ -199,7 +231,7 @@ async def discover_email(
             if brave_emails:
                 candidate = brave_emails[0]
                 if not await _is_blacklisted(candidate, db):
-                    confidence = "low" if domain_is_catch_all else "medium"
+                    confidence = "low" if domain_is_catch_all else "high"
                     return {
                         "email": candidate,
                         "source": "brave_search",
@@ -209,6 +241,24 @@ async def discover_email(
                 logger.debug("Blacklisted email %s from Brave, falling through", candidate[:20])
         except Exception as e:
             logger.debug("Brave search failed for %s: %s", domain, str(e))
+
+    # Strategy 2b: Brave Search by company name (catches directory/review site listings)
+    if domain and company_name and not brave_emails:
+        try:
+            brave_company_emails = await _search_brave_by_company(domain, company_name)
+            total_cost += 0.005
+            if brave_company_emails:
+                candidate = brave_company_emails[0]
+                if not await _is_blacklisted(candidate, db):
+                    confidence = "low" if domain_is_catch_all else "high"
+                    return {
+                        "email": candidate,
+                        "source": "brave_search_company",
+                        "confidence": _downgrade_confidence(confidence),
+                        "cost_usd": total_cost,
+                    }
+        except Exception as e:
+            logger.debug("Brave company search failed for %s: %s", domain, str(e))
 
     # Strategy 3: Use enrichment_data email_candidates (medium confidence)
     if enrichment_data and domain:
@@ -587,5 +637,50 @@ async def search_brave_for_email(domain: str) -> list[str]:
 
     if found:
         logger.info("Brave search found %d email(s) for %s", len(found), domain)
+
+    return found
+
+
+def _get_settings_cached():
+    """Thin wrapper to import and call get_settings (avoids circular imports at module level)."""
+    from src.config import get_settings
+    return get_settings()
+
+
+async def _search_brave_by_company(domain: str, company_name: str) -> list[str]:
+    """Search Brave for company name + email — finds directory/review site listings."""
+    settings = _get_settings_cached()
+    api_key = settings.brave_api_key
+    if not api_key:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                BRAVE_SEARCH_URL,
+                params={"q": f'"{company_name}" email contact', "count": 10},
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": api_key,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        logger.debug("Brave company search API call failed for %s: %s", company_name[:30], str(e))
+        return []
+
+    found: list[str] = []
+    seen: set[str] = set()
+    for result in (data.get("web", {}).get("results") or []):
+        text = f"{result.get('description', '')} {result.get('title', '')}"
+        for email in _EMAIL_REGEX.findall(text):
+            clean = unquote(email).lower().strip()
+            if clean not in seen and _is_valid_business_email(clean, target_domain=domain):
+                found.append(clean)
+                seen.add(clean)
+
+    if found:
+        logger.info("Brave company search found %d email(s) for %s", len(found), company_name[:30])
 
     return found

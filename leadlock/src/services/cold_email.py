@@ -163,6 +163,11 @@ async def send_cold_email(
             click_tracking=ClickTracking(enable=False, enable_text=False),
         )
 
+        # Route through dedicated IP pool if configured
+        if settings.sendgrid_ip_pool_name:
+            from sendgrid.helpers.mail import IpPoolName
+            message.ip_pool_name = IpPoolName(settings.sendgrid_ip_pool_name)
+
         sg = SendGridAPIClient(api_key=settings.sendgrid_api_key)
 
         # Retry with exponential backoff on transient errors
