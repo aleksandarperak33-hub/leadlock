@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/api/(.*)", "dest": "https://api.leadlock.org/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
