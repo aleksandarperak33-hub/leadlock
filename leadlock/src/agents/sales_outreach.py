@@ -51,8 +51,9 @@ ANTI-REPETITION (critical):
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
 
-body_html: simple <p> tags only. If a booking_url is provided, wrap it in an anchor tag: <a href="URL">URL</a>. No other complex HTML.
-body_text: plain text version (no HTML tags) with \\n\\n between paragraphs. Include raw URL (no anchor tag). End with {sender_name} on its own line.
+WRITE THE EMAIL AS PLAIN TEXT FIRST (body_text), then wrap each paragraph in <p> tags for body_html. The email should read like a personal note, not a marketing email.
+body_text: plain text with \\n\\n between paragraphs. Include raw URL if booking_url provided. End with {sender_name} on its own line.
+body_html: wrap each paragraph in <p> tags. If booking_url provided, wrap it in <a href="URL">URL</a>. No other HTML formatting — no bold, no colors, no images.
 
 """ + EMAIL_HUMANIZER
 
@@ -221,7 +222,7 @@ CTA: Ask a genuine question about their workflow. Examples: "How fast is your cr
 SUBJECT: Must include their company name, city, or first name. Keep it conversational, not salesy.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 BANNED PATTERNS: Do NOT use the phrase "slipping through" in any email. Do NOT use "exactly how much revenue" — too templated.
-Under 100 words. Subject under 50 chars.""",
+KEEP IT SHORT: Under 60 words total (excluding greeting and sign-off). Brevity = replies. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
 GREETING: Follow the GREETING instruction in the prospect details exactly.
@@ -232,7 +233,7 @@ CTA: If a booking_url is provided, use a short nudge: "Happy to show you how it 
 SUBJECT: MUST include their company name, first name, OR city. Never use a generic stat as the subject line. Create curiosity about what their local competitors are doing.
 BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-Under 80 words. Subject under 50 chars.""",
+KEEP IT SHORT: Under 50 words total (excluding greeting and sign-off). Subject under 50 chars.""",
 
     3: """STEP 3 — FAREWELL / HAIL MARY CLOSE (final email — make it count).
 GREETING: Follow the GREETING instruction in the prospect details exactly.

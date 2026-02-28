@@ -222,7 +222,7 @@ async def discover_email(
         except Exception as e:
             logger.warning("Deep scrape failed for %s: %s", domain or website, str(e))
 
-    # Strategy 2a: Brave Search by domain (high confidence for non-catch-all)
+    # Strategy 2a: Brave Search by domain (medium confidence — 17% bounce rate observed)
     brave_emails: list[str] = []
     if domain:
         try:
@@ -231,7 +231,7 @@ async def discover_email(
             if brave_emails:
                 candidate = brave_emails[0]
                 if not await _is_blacklisted(candidate, db):
-                    confidence = "low" if domain_is_catch_all else "high"
+                    confidence = "low" if domain_is_catch_all else "medium"
                     return {
                         "email": candidate,
                         "source": "brave_search",
@@ -250,7 +250,7 @@ async def discover_email(
             if brave_company_emails:
                 candidate = brave_company_emails[0]
                 if not await _is_blacklisted(candidate, db):
-                    confidence = "low" if domain_is_catch_all else "high"
+                    confidence = "low" if domain_is_catch_all else "medium"
                     return {
                         "email": candidate,
                         "source": "brave_search_company",

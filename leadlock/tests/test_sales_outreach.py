@@ -181,12 +181,12 @@ class TestStepInstructions:
     def test_step_1_is_curiosity_pain(self):
         assert "STEP 1" in STEP_INSTRUCTIONS[1]
         assert "CURIOSITY" in STEP_INSTRUCTIONS[1]
-        assert "100 words" in STEP_INSTRUCTIONS[1]
+        assert "60 words" in STEP_INSTRUCTIONS[1]
 
     def test_step_2_is_social_proof(self):
         assert "STEP 2" in STEP_INSTRUCTIONS[2]
         assert "SOCIAL PROOF" in STEP_INSTRUCTIONS[2]
-        assert "80 words" in STEP_INSTRUCTIONS[2]
+        assert "50 words" in STEP_INSTRUCTIONS[2]
 
     def test_step_3_is_farewell(self):
         assert "STEP 3" in STEP_INSTRUCTIONS[3]
