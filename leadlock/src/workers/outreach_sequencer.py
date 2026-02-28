@@ -37,6 +37,13 @@ from src.workers.outreach_sending import (  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+# Generic email prefixes — deprioritized in outreach ordering
+# (personal emails like first.last@ are sent first for higher reply rates)
+_GENERIC_EMAIL_PREFIXES = frozenset({
+    "info", "contact", "admin", "support", "sales", "hello", "help",
+    "team", "office", "service", "general", "mail", "email",
+})
+
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
 # Email warmup schedule - conservative ramp for sender reputation stability.
@@ -752,7 +759,12 @@ async def _sequence_cycle_for_tenant(
             Outreach.email_source != "pattern_guess",
         )
     ).order_by(
-        # Quality-based priority: enriched first, then by rating and reviews
+        # Quality-based priority: personal emails first (not info@, service@, etc.)
+        # PostgreSQL-specific: deprioritize generic prefixes (info@, service@, etc.)
+        func.split_part(Outreach.prospect_email, "@", 1).in_(
+            sorted(_GENERIC_EMAIL_PREFIXES)
+        ).asc(),
+        # Then enriched first, then by rating and reviews
         Outreach.enrichment_data.is_(None).asc(),
         Outreach.google_rating.desc().nulls_last(),
         Outreach.review_count.desc().nulls_last(),
@@ -933,7 +945,13 @@ async def _process_campaign_prospects(
                     # Source quality: block pattern_guess from first-touch
                     Outreach.email_source != "pattern_guess",
                 )
-            ).order_by(Outreach.created_at).limit(remaining).with_for_update(skip_locked=True)
+            ).order_by(
+                # Personal emails first (not info@, service@, etc.)
+                func.split_part(Outreach.prospect_email, "@", 1).in_(
+                    list(_GENERIC_EMAIL_PREFIXES)
+                ).asc(),
+                Outreach.created_at,
+            ).limit(remaining).with_for_update(skip_locked=True)
         else:
             # Follow-up steps: at previous step, delay elapsed
             delay_cutoff = datetime.now(timezone.utc) - timedelta(hours=MIN_FOLLOWUP_DELAY_HOURS)

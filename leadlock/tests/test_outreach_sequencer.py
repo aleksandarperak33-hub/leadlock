@@ -3218,8 +3218,8 @@ class TestVerifyOrFindWorkingEmail:
         assert prospect.email_source == "brave_search"
         assert prospect.email_verified is True
 
-    async def test_rejects_medium_confidence_by_default(self):
-        """Medium-confidence discovery is rejected when require_high_confidence=True (default)."""
+    async def test_accepts_medium_confidence(self):
+        """Medium-confidence discovery is accepted (high and medium are both send-eligible)."""
         prospect = _make_prospect(total_cost_usd=0.01)
         prospect.email_source = "pattern_guess"
         prospect.email_verified = False
@@ -3236,9 +3236,9 @@ class TestVerifyOrFindWorkingEmail:
         ):
             result = await _verify_or_find_working_email(prospect)
 
-        assert result is None
-        # Cost is NOT tracked for rejected discoveries
-        assert prospect.total_cost_usd == pytest.approx(0.01)
+        assert result == "found@acmehvac.com"
+        assert prospect.email_source == "brave_search"
+        assert prospect.email_verified is True
 
 
 # ---------------------------------------------------------------------------

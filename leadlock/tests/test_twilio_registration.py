@@ -668,7 +668,7 @@ class TestSubmitTollfreeVerification:
         assert call_kwargs["business_website"] == "https://acme.com"
         assert call_kwargs["notification_email"] == "admin@acme.com"
         assert call_kwargs["use_case_categories"] == ["CUSTOMER_CARE"]
-        assert call_kwargs["opt_in_type"] == "VERBAL"
+        assert call_kwargs["opt_in_type"] == "VIA_WEBSITE"
         assert call_kwargs["message_volume"] == "1,000"
         assert "Acme HVAC" in call_kwargs["production_message_sample"]
 

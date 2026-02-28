@@ -17,7 +17,7 @@ SYSTEM_PROMPT = """You write cold outreach emails from {sender_name} at LeadLock
 VOICE:
 - You ARE {sender_name}. Write like a real person texting a colleague, not a marketer.
 - Casual, direct, zero fluff. Talk like you'd talk to a buddy in the trades.
-- GREETING RULE (non-negotiable): If you have their first name, open with "Hey [first_name]," — if you only have a company name, open with "Hey [Company] team," — NEVER use "Hey there," or just "Hey," alone
+- GREETING RULE (non-negotiable): Follow the GREETING instruction in prospect details EXACTLY. If a first name is available, use "Hey [first_name],". If only a company name, use "Hey [Company] team,". If neither is available, use "Hey there,". NEVER use just "Hey," alone with nothing after it.
 - ALWAYS sign off with just "{sender_name}" on its own line at the end. No "Best," or "Thanks," prefix - just the name.
 
 IDENTITY:
@@ -30,6 +30,7 @@ CONTENT:
 - Reference something SPECIFIC about their business - their Google rating, their city, their trade
 - One pain point per email: slow lead response kills revenue
 - CTA: Follow the step-specific CTA instructions exactly. If a booking_url is in the prospect details, you MUST include it as a clickable link. If no booking_url, ask a genuine question about their workflow.
+- NEVER use the prospect's website URL as a CTA or link. The website is for personalization context only. Only use booking_url as a link. If there is no booking_url, do NOT include any link.
 
 FORMATTING:
 - No exclamation marks. No "game-changer", "revolutionary", "transform", or "unlock"
@@ -208,7 +209,7 @@ async def _get_learning_context(trade_type: str, state: str, step: int = 1) -> s
 
 STEP_INSTRUCTIONS = {
     1: """STEP 1 — CURIOSITY / PAIN (first contact).
-GREETING: Start with "Hey {first_name}," if a first name is available. If no first name, use "Hey {company} team," — NEVER "Hey there,".
+GREETING: Follow the GREETING instruction in the prospect details exactly.
 HOOK (pick ONE — do NOT combine, vary across prospects):
   A) Dollar stat: "Most {trade} contractors lose $X,000/month to slow lead follow-up."
   B) Speed stat: "78% of homeowners hire the first contractor who calls back. The second one doesn't get a shot."
@@ -223,7 +224,7 @@ BANNED PATTERNS: Do NOT use the phrase "slipping through" in any email. Do NOT u
 Under 100 words. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
-GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
+GREETING: Follow the GREETING instruction in the prospect details exactly.
 HOOK: Lead with what similar contractors in their SPECIFIC CITY and TRADE are doing differently. Frame it as "a few {trade} shops in {city} already respond to leads in under 60 seconds — and they're closing 3x more jobs because of it." Make it about THEIR local competitors, not a generic stat.
 ANGLE: Do NOT rehash the pain point from step 1. Talk about the competitive advantage — contractors who respond faster win the job. Frame it as an observation about their market, not a sales pitch.
 REFERENCE: You MUST mention their city and trade in the body. Reference their Google rating or review count if available — e.g. "With {review_count} reviews and a {rating} rating, you're clearly doing the work — the leads just need faster follow-up."
@@ -234,7 +235,7 @@ BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", 
 Under 80 words. Subject under 50 chars.""",
 
     3: """STEP 3 — FAREWELL / HAIL MARY CLOSE (final email — make it count).
-GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
+GREETING: Follow the GREETING instruction in the prospect details exactly.
 TONE: Confident, direct, zero desperation. This is your last shot — deliver VALUE, not a goodbye.
 CONTENT: Lead with ONE specific insight they haven't heard yet. Options:
   - A mini case study: "A {trade} shop in {city} similar to yours added $12K/month just by cutting their response time from 4 hours to 45 seconds."
@@ -266,7 +267,15 @@ STEP_SUBJECT_EXAMPLES = {
     ],
 }
 
-STEP_TEMPERATURE = {1: 0.6, 2: 0.6, 3: 0.7}
+STEP_TEMPERATURE = {1: 0.7, 2: 0.7, 3: 0.8}
+
+# Hook variants for forced variation (indexed by hash of prospect identifier)
+_STEP1_HOOKS = ["A", "B", "C", "D"]
+_STEP2_ANGLES = [
+    "competitor speed advantage",
+    "local market data",
+    "review-to-revenue conversion",
+]
 
 
 def _extract_first_name(full_name: str) -> str:
@@ -437,8 +446,7 @@ def _build_fallback_outreach_email(
             step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
         if booking_url:
             ask_line = (
-                f"I can show you exactly how much revenue is slipping through "
-                f"on slow follow-ups - takes 10 min: {booking_url}"
+                f"Happy to show you the numbers - takes 10 min: {booking_url}"
             )
         else:
             ask_line = "How fast is your crew getting back to new leads right now?"
@@ -554,25 +562,31 @@ async def generate_outreach_email(
             if not decision_maker_name:
                 effective_name = email_name
 
-    clean_company = _clean_company_name(company_name) if company_name else company_name
-    greeting_instruction = (
-        f'Open with: "Hey {first_name},"'
-        if first_name
-        else f'Open with: "Hey {clean_company} team,"'
-    )
+    clean_company = _clean_company_name(company_name) if company_name else ""
+
+    # Build greeting instruction with robust fallbacks
+    if first_name:
+        greeting_instruction = f'Open with: "Hey {first_name},"'
+    elif clean_company:
+        greeting_instruction = f'Open with: "Hey {clean_company} team,"'
+    else:
+        greeting_instruction = 'Open with: "Hey there," — no name available'
 
     prospect_details = f"""Prospect details:
 - First name: {first_name or '(unavailable)'}
-- Company: {clean_company}
+- Company: {clean_company or '(unknown)'}
 - Trade: {trade_type}
 - Location: {city}, {state}
 - GREETING: {greeting_instruction}"""
 
+    # Include website for personalization context only (NOT as a CTA link)
     if website:
-        prospect_details += f"\n- Website: {website}"
+        prospect_details += f"\n- Website (for context only, NEVER use as CTA link): {website}"
 
     if booking_url:
-        prospect_details += f"\n- booking_url: {booking_url}"
+        prospect_details += f"\n- booking_url (use this as CTA link): {booking_url}"
+    else:
+        prospect_details += "\n- booking_url: (none — do NOT include any link, ask a question instead)"
 
     # Structured personalization instructions from enrichment data
     personalization: list[str] = []
@@ -607,6 +621,19 @@ async def generate_outreach_email(
     learning_context = await _get_learning_context(trade_type, state, step)
     if learning_context:
         prospect_details += f"\n\n{learning_context}"
+
+    # Force hook variation based on prospect identity to prevent repetitive openers
+    # Use hashlib (not hash()) for stable results across process restarts
+    import hashlib
+    variation_seed = int(
+        hashlib.md5(f"{clean_company}:{city}:{trade_type}".encode()).hexdigest(), 16
+    ) % 100
+    if step == 1:
+        hook_idx = variation_seed % len(_STEP1_HOOKS)
+        prospect_details += f"\n\nVARIATION (mandatory): Use hook {_STEP1_HOOKS[hook_idx]} from the HOOK options above. Do NOT use a different hook."
+    elif step == 2:
+        angle_idx = variation_seed % len(_STEP2_ANGLES)
+        prospect_details += f"\n\nVARIATION (mandatory): Lead with the {_STEP2_ANGLES[angle_idx]} angle."
 
     if extra_instructions:
         prospect_details += f"\n\nAdditional instructions: {extra_instructions}"

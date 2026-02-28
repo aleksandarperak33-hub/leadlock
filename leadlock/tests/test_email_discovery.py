@@ -69,7 +69,7 @@ class TestDiscoverEmail:
 
         assert result["email"] == "info@hvacpro.com"
         assert result["source"] == "brave_search"
-        assert result["confidence"] == "medium"
+        assert result["confidence"] == "high"  # non-catch-all domains get high confidence
         assert result["cost_usd"] == 0.005
 
     @pytest.mark.asyncio

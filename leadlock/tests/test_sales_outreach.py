@@ -495,13 +495,13 @@ class TestStepTemperature:
     """Verify per-step temperature configuration."""
 
     def test_step_1_low_temperature(self):
-        assert STEP_TEMPERATURE[1] == 0.6
+        assert STEP_TEMPERATURE[1] == 0.7
 
     def test_step_2_medium_temperature(self):
-        assert STEP_TEMPERATURE[2] == 0.6
+        assert STEP_TEMPERATURE[2] == 0.7
 
     def test_step_3_high_temperature(self):
-        assert STEP_TEMPERATURE[3] == 0.7
+        assert STEP_TEMPERATURE[3] == 0.8
 
     def test_all_steps_covered(self):
         assert set(STEP_TEMPERATURE.keys()) == {1, 2, 3}
@@ -509,7 +509,7 @@ class TestStepTemperature:
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_step_1_uses_correct_temperature(self, mock_ai, mock_learning):
-        """Step 1 should pass temperature=0.6 to AI."""
+        """Step 1 should pass temperature=0.7 to AI."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response(_valid_email_json())
 
@@ -517,12 +517,12 @@ class TestStepTemperature:
             prospect_name="John", company_name="HVAC Co",
             trade_type="hvac", city="Austin", state="TX", sequence_step=1,
         )
-        assert mock_ai.call_args.kwargs["temperature"] == 0.6
+        assert mock_ai.call_args.kwargs["temperature"] == 0.7
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_step_2_uses_correct_temperature(self, mock_ai, mock_learning):
-        """Step 2 should pass temperature=0.6 to AI."""
+        """Step 2 should pass temperature=0.7 to AI."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response(_valid_email_json())
 
@@ -530,12 +530,12 @@ class TestStepTemperature:
             prospect_name="John", company_name="HVAC Co",
             trade_type="hvac", city="Austin", state="TX", sequence_step=2,
         )
-        assert mock_ai.call_args.kwargs["temperature"] == 0.6
+        assert mock_ai.call_args.kwargs["temperature"] == 0.7
 
     @patch("src.agents.sales_outreach._get_learning_context", new_callable=AsyncMock)
     @patch("src.agents.sales_outreach.generate_response", new_callable=AsyncMock)
     async def test_step_3_uses_correct_temperature(self, mock_ai, mock_learning):
-        """Step 3 should pass temperature=0.7 to AI."""
+        """Step 3 should pass temperature=0.8 to AI."""
         mock_learning.return_value = ""
         mock_ai.return_value = _mock_ai_response(_valid_email_json())
 
@@ -543,7 +543,7 @@ class TestStepTemperature:
             prospect_name="John", company_name="HVAC Co",
             trade_type="hvac", city="Austin", state="TX", sequence_step=3,
         )
-        assert mock_ai.call_args.kwargs["temperature"] == 0.7
+        assert mock_ai.call_args.kwargs["temperature"] == 0.8
 
 
 class TestStepSubjectExamples:

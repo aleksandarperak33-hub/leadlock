@@ -535,9 +535,11 @@ async def get_email_reputation(redis_client) -> dict:
     elif bounce_rate >= BOUNCE_RATE_CRITICAL and sent >= MIN_GUARDRAIL_SAMPLE and throttle == "normal":
         score = min(score, 45.0)
         status, throttle = "poor", "critical"
-    elif sent >= 50 and open_rate < 0.03:
+    elif sent >= 50 and open_rate < 0.03 and values.get("opened", 0) > 0:
         # Open rate floor: < 3% opens after 50+ sends means emails are
         # going to spam or invalid — pause to prevent reputation spiral.
+        # Skip when opened=0: open tracking may be disabled, so zero opens
+        # is expected and not a deliverability signal.
         score = min(score, 30.0)
         status, throttle = "critical", "paused"
         pause_reason = "open_rate_floor"
@@ -545,8 +547,9 @@ async def get_email_reputation(redis_client) -> dict:
             "Open rate floor triggered: %.1f%% opens at %d sends",
             open_rate * 100, sent,
         )
-    elif open_rate < 0.05 and sent >= 100 and throttle in ("normal", "reduced"):
+    elif open_rate < 0.05 and sent >= 100 and values.get("opened", 0) > 0 and throttle in ("normal", "reduced"):
         # Protect sender reputation when opens collapse at scale.
+        # Skip when opened=0 (open tracking disabled).
         score = min(score, 55.0)
         status, throttle = "warning", "reduced"
 

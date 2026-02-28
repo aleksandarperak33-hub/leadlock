@@ -152,14 +152,16 @@ async def send_cold_email(
             for key, value in custom_args.items():
                 message.custom_arg = CustomArg(key, str(value))
 
-        # Open tracking: enabled for reputation monitoring (invisible pixel).
-        # Click tracking: DISABLED — SendGrid rewrites every URL to a
-        # u.sendgrid.net redirect, which triggers spam filters on cold outreach.
+        # Open tracking: DISABLED for cold outreach — the 1x1 tracking pixel
+        # in short emails is a spam signal, and Gmail inflates open rates via
+        # image proxy (downloads all images on delivery regardless of read).
+        # Click tracking: DISABLED — SendGrid rewrites URLs to u.sendgrid.net
+        # redirects which trigger spam filters on cold outreach.
         from sendgrid.helpers.mail import (
             TrackingSettings, OpenTracking, ClickTracking,
         )
         message.tracking_settings = TrackingSettings(
-            open_tracking=OpenTracking(enable=True),
+            open_tracking=OpenTracking(enable=False),
             click_tracking=ClickTracking(enable=False, enable_text=False),
         )
 
