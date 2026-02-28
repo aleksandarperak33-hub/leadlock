@@ -106,18 +106,27 @@ def parse_gmb_url(raw_url: str) -> dict:
     return {"business_name": url, "lat": None, "lng": None}
 
 
-def detect_trade_type(categories: list[str]) -> str:
+def detect_trade_type(categories: list[str], business_name: str = "") -> str:
     """
     Map Brave POI categories to a LeadLock trade type.
 
-    Scans each category for known keywords and returns the first match.
-    Falls back to 'other' if no match found.
+    Scans each category for known keywords, then falls back to scanning
+    the business name itself (e.g. "Baker Brothers Plumbing" → plumbing).
+    Returns 'other' if no match found.
     """
     for cat in categories:
         cat_lower = cat.lower()
         for keyword, trade in CATEGORY_TRADE_MAP.items():
             if keyword in cat_lower:
                 return trade
+
+    # Fallback: scan business name for trade keywords
+    if business_name:
+        name_lower = business_name.lower()
+        for keyword, trade in CATEGORY_TRADE_MAP.items():
+            if keyword in name_lower:
+                return trade
+
     return "other"
 
 
@@ -132,7 +141,8 @@ def map_to_onboarding_data(poi: dict) -> dict:
         Structured dict ready for the frontend QuickSetup confirmation card.
     """
     categories_raw = [c.strip() for c in (poi.get("type") or "").split(",") if c.strip()]
-    trade_type = detect_trade_type(categories_raw)
+    name = poi.get("name") or ""
+    trade_type = detect_trade_type(categories_raw, business_name=name)
     address_parts = parse_address_components(poi.get("address") or "")
 
     return {
