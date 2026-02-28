@@ -213,6 +213,10 @@ async def generate_response(
     """
     from src.config import get_settings
     settings = get_settings()
+    anthropic_key = getattr(settings, "anthropic_api_key", None)
+    openai_key = getattr(settings, "openai_api_key", None)
+    has_anthropic = isinstance(anthropic_key, str) and bool(anthropic_key.strip())
+    has_openai = isinstance(openai_key, str) and bool(openai_key.strip())
 
     # Check daily budget before making any API call
     allowed, current_spend = await _check_daily_budget()
@@ -226,7 +230,7 @@ async def generate_response(
         )
 
     # Try Anthropic first
-    if settings.anthropic_api_key:
+    if has_anthropic:
         try:
             result = await _generate_anthropic(
                 system_prompt, user_message, model_tier, max_tokens, temperature,
@@ -237,7 +241,7 @@ async def generate_response(
             logger.error("Anthropic failed: %s", str(e))
 
     # Fallback to OpenAI
-    if settings.openai_api_key:
+    if has_openai:
         try:
             result = await _generate_openai(
                 system_prompt, user_message, model_tier, max_tokens, temperature,
@@ -246,6 +250,7 @@ async def generate_response(
             return result
         except Exception as e:
             logger.error("OpenAI fallback failed: %s", str(e))
+            return _error_result("OpenAI request failed")
 
     return _error_result("No AI provider available (check API keys)")
 

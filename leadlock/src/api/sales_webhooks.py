@@ -93,6 +93,31 @@ def _safe_event_timestamp(raw_ts) -> datetime:
         return datetime.now(timezone.utc)
 
 
+def _sendgrid_message_id_candidates(raw_value: str) -> list[str]:
+    """
+    Extract plausible SendGrid X-Message-ID values from sg_message_id payloads.
+    Handles suffix patterns like `.filter...`, `.recvd...`, and generic dot-suffixes.
+    """
+    raw = str(raw_value or "").strip().strip("<>")
+    if not raw:
+        return []
+
+    candidates: list[str] = []
+
+    def _add(value: str) -> None:
+        normalized = str(value or "").strip().strip("<>")
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+
+    _add(raw)
+    for marker in (".filter", ".recvd", ".processed", ".open", ".click", ".bounce", ".spamreport"):
+        if marker in raw:
+            _add(raw.split(marker, 1)[0])
+    if "." in raw:
+        _add(raw.split(".", 1)[0])
+    return candidates
+
+
 async def _is_duplicate_email_event(redis_client, event: dict) -> bool:
     """
     Best-effort dedupe for SendGrid events.
@@ -626,20 +651,19 @@ async def email_events_webhook(
         for event in events:
             try:
                 event_type = event.get("event", "")
-                # sg_message_id format: "{X-Message-Id}.filter{server}.{seq}"
-                # X-Message-Id itself can contain dots, so split on ".filter"
                 sg_message_id_raw = event.get("sg_message_id", "")
-                sg_message_id = sg_message_id_raw.split(".filter")[0] if sg_message_id_raw else ""
+                sg_message_candidates = _sendgrid_message_id_candidates(sg_message_id_raw)
+                sg_message_id = sg_message_candidates[0] if sg_message_candidates else ""
                 outreach_id = event.get("outreach_id")
                 outreach_uuid = _safe_uuid(outreach_id)
                 timestamp = _safe_event_timestamp(event.get("timestamp"))
 
                 # Find email record
                 email_record = None
-                if sg_message_id:
+                if sg_message_candidates:
                     result = await db.execute(
                         select(OutreachEmail).where(
-                            OutreachEmail.sendgrid_message_id == sg_message_id
+                            OutreachEmail.sendgrid_message_id.in_(sg_message_candidates)
                         ).limit(1)
                     )
                     email_record = result.scalar_one_or_none()
@@ -663,10 +687,10 @@ async def email_events_webhook(
                         email_record = result.scalar_one_or_none()
 
                 if not email_record:
-                    if event_type in ("open", "click", "spam_report"):
+                    if event_type in ("open", "click", "spam_report", "spamreport"):
                         logger.warning(
-                            "Email event lookup failed: type=%s sg_message_id=%s outreach_id=%s step=%s",
-                            event_type, sg_message_id, outreach_id, event.get("step"),
+                            "Email event lookup failed: type=%s sg_message_id=%s normalized=%s outreach_id=%s step=%s",
+                            event_type, sg_message_id_raw, sg_message_id, outreach_id, event.get("step"),
                         )
                     continue
                 prospect_id = email_record.outreach_id or outreach_uuid

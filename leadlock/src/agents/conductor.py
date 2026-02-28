@@ -636,8 +636,11 @@ async def _route_to_book(
             sales_config = await get_sales_config(tenant_id=client.id)
             if sales_config:
                 booking_url = sales_config.get("booking_url")
-        except (KeyError, TypeError, ValueError, OSError):
-            pass  # Non-critical — proceed without booking URL
+        except Exception as e:
+            logger.debug(
+                "Booking URL fallback lookup failed for client %s: %s",
+                str(client.id)[:8], str(e),
+            )
 
     result = await process_booking(
         lead_message=message,

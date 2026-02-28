@@ -110,10 +110,10 @@ def get_query_variants(trade: str) -> list[str]:
 
 async def get_next_variant_and_offset(
     db: AsyncSession,
-    tenant_id,
     city: str,
     state: str,
     trade: str,
+    tenant_id=None,
     cooldown_days: int = DEFAULT_VARIANT_COOLDOWN_DAYS,
 ) -> tuple[int, int]:
     """
@@ -131,18 +131,31 @@ async def get_next_variant_and_offset(
     cooldown_cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
     # Get variants used within cooldown period
-    result = await db.execute(
-        select(ScrapeJob.query_variant).where(
-            and_(
-                ScrapeJob.city == city,
-                ScrapeJob.state_code == state,
-                ScrapeJob.trade_type == trade,
-                ScrapeJob.tenant_id == tenant_id,
-                ScrapeJob.status == "completed",
-                ScrapeJob.completed_at >= cooldown_cutoff,
+    if tenant_id is not None:
+        result = await db.execute(
+            select(ScrapeJob.query_variant).where(
+                and_(
+                    ScrapeJob.city == city,
+                    ScrapeJob.state_code == state,
+                    ScrapeJob.trade_type == trade,
+                    ScrapeJob.tenant_id == tenant_id,
+                    ScrapeJob.status == "completed",
+                    ScrapeJob.completed_at >= cooldown_cutoff,
+                )
             )
         )
-    )
+    else:
+        result = await db.execute(
+            select(ScrapeJob.query_variant).where(
+                and_(
+                    ScrapeJob.city == city,
+                    ScrapeJob.state_code == state,
+                    ScrapeJob.trade_type == trade,
+                    ScrapeJob.status == "completed",
+                    ScrapeJob.completed_at >= cooldown_cutoff,
+                )
+            )
+        )
     used_variants = {row[0] for row in result.all()}
 
     # Find the next unused variant
@@ -160,22 +173,46 @@ async def _get_poll_interval() -> int:
         async with async_session_factory() as db:
             result = await db.execute(
                 select(SalesEngineConfig.scraper_interval_minutes).where(
-                    and_(
-                        SalesEngineConfig.is_active == True,  # noqa: E712
-                        SalesEngineConfig.tenant_id.isnot(None),
-                    )
+                    SalesEngineConfig.is_active == True  # noqa: E712
                 )
             )
-            intervals = [
-                int(row[0]) * 60
-                for row in result.all()
-                if row[0]
-            ]
+            rows = result.all() if hasattr(result, "all") else []
+            intervals = [int(row[0]) * 60 for row in rows if row and row[0]]
+            if not intervals and hasattr(result, "scalar_one_or_none"):
+                maybe_config = result.scalar_one_or_none()
+                maybe_minutes = getattr(maybe_config, "scraper_interval_minutes", None)
+                if maybe_minutes:
+                    intervals = [int(maybe_minutes) * 60]
             if intervals:
                 return max(60, min(intervals))
     except Exception as e:
         logger.debug("Config interval read failed: %s", str(e))
     return DEFAULT_POLL_INTERVAL_SECONDS
+
+
+async def _has_unpaused_active_config() -> bool:
+    """Return True when at least one active scraper config is not paused."""
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(SalesEngineConfig).where(SalesEngineConfig.is_active == True)  # noqa: E712
+            )
+            if hasattr(result, "scalar_one_or_none"):
+                try:
+                    maybe_config = result.scalar_one_or_none()
+                    if maybe_config is None:
+                        return True  # No row -> fail-open (legacy single-config behavior)
+                    return not bool(getattr(maybe_config, "scraper_paused", False))
+                except Exception:
+                    pass
+
+            configs = result.scalars().all() if hasattr(result, "scalars") else []
+            if not configs:
+                return True
+            return any(not bool(getattr(cfg, "scraper_paused", False)) for cfg in configs)
+    except Exception as e:
+        logger.debug("Paused-state check failed (fail-open): %s", str(e))
+        return True
 
 
 async def run_scraper():
@@ -185,7 +222,10 @@ async def run_scraper():
 
     while True:
         try:
-            await scrape_cycle()
+            if await _has_unpaused_active_config():
+                await scrape_cycle()
+            else:
+                logger.debug("All active scraper configs are paused - skipping cycle")
         except Exception as e:
             logger.error("Scraper cycle error: %s", str(e))
 
@@ -218,10 +258,7 @@ async def scrape_cycle():
         # Load active tenant configs
         result = await db.execute(
             select(SalesEngineConfig).where(
-                and_(
-                    SalesEngineConfig.is_active == True,  # noqa: E712
-                    SalesEngineConfig.tenant_id.isnot(None),
-                )
+                SalesEngineConfig.is_active == True  # noqa: E712
             )
         )
         configs = [c for c in result.scalars().all() if not getattr(c, "scraper_paused", False)]
@@ -274,10 +311,10 @@ async def scrape_cycle():
             cooldown_days = getattr(config, "variant_cooldown_days", DEFAULT_VARIANT_COOLDOWN_DAYS)
             variant_idx, offset = await get_next_variant_and_offset(
                 db,
-                tenant_id,
                 city,
                 state,
                 trade,
+                tenant_id=tenant_id,
                 cooldown_days=cooldown_days,
             )
             if variant_idx == -1:
@@ -359,12 +396,10 @@ async def scrape_location_trade(
             if not place_id and not phone:
                 continue
 
-            # Quality gate: require both website AND phone for actionable outreach.
-            # Without a website, email discovery is impossible (no domain to guess from).
-            # Without a phone, SMS follow-up is impossible. Either alone creates a
-            # prospect that will never progress through the outreach pipeline.
+            # Quality gate: require at least one direct contact channel.
+            # If both website and phone are missing, the lead is non-actionable.
             website = biz.get("website", "")
-            if not website or not phone:
+            if not website and not phone:
                 skipped_quality += 1
                 continue
 
@@ -425,6 +460,16 @@ async def scrape_location_trade(
                     email = enrichment["email"]
                     email_source = enrichment["source"]
                     email_verified = enrichment.get("verified", False)
+            else:
+                # Defensive fallback for edge cases where a domain can still be inferred.
+                domain = extract_domain(website)
+                if domain:
+                    from src.services.enrichment import guess_email_patterns
+                    candidates = guess_email_patterns(domain, name=biz.get("name", ""))
+                    if candidates:
+                        email = candidates[0]
+                        email_source = "pattern_guess"
+                        email_verified = False
 
             # Validate email before storing
             if email:

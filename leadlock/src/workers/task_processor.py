@@ -22,6 +22,23 @@ BRPOP_TIMEOUT = 30  # seconds to wait for Redis notification
 from src.services.task_dispatch import TASK_NOTIFY_KEY  # noqa: F401 — single source of truth
 
 
+def _strip_nul_chars(value):
+    """
+    Recursively remove NUL bytes from task payload data before JSONB writes.
+    Prevents asyncpg UntranslatableCharacterError on enrichment_data updates.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_strip_nul_chars(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _strip_nul_chars(key): _strip_nul_chars(item)
+            for key, item in value.items()
+        }
+    return value
+
+
 async def _heartbeat():
     """Store heartbeat timestamp in Redis."""
     try:
@@ -197,9 +214,11 @@ async def _handle_enrich_prospect(payload: dict) -> dict:
             google_rating=prospect.google_rating,
             review_count=prospect.review_count,
         )
+        enrichment_clean = _strip_nul_chars(enrichment or {})
+        existing_clean = _strip_nul_chars(prospect.enrichment_data or {})
 
         # Store enrichment data (immutable update)
-        prospect.enrichment_data = {**(prospect.enrichment_data or {}), **enrichment}
+        prospect.enrichment_data = {**existing_clean, **enrichment_clean}
 
         # Update prospect_name with decision-maker name if found and current name is generic
         if enrichment.get("decision_maker_name"):
@@ -218,10 +237,10 @@ async def _handle_enrich_prospect(payload: dict) -> dict:
 
         return {
             "status": "enriched",
-            "decision_maker": enrichment.get("decision_maker_name"),
-            "source": enrichment.get("research_source"),
-            "email_candidates": len(enrichment.get("email_candidates", [])),
-            "ai_cost_usd": enrichment.get("ai_cost_usd", 0.0),
+            "decision_maker": enrichment_clean.get("decision_maker_name"),
+            "source": enrichment_clean.get("research_source"),
+            "email_candidates": len(enrichment_clean.get("email_candidates", [])),
+            "ai_cost_usd": enrichment_clean.get("ai_cost_usd", 0.0),
         }
 
 
@@ -420,7 +439,11 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
     from src.models.outreach_email import OutreachEmail
     from src.services.outreach_timing import followup_readiness
     from src.services.sales_tenancy import get_sales_config_for_tenant
-    from src.workers.outreach_sequencer import send_sequence_email, is_within_send_window
+    from src.workers.outreach_sequencer import (
+        send_sequence_email,
+        is_within_send_window,
+        _check_email_health,
+    )
     from src.config import get_settings
 
     outreach_id = payload.get("outreach_id")
@@ -461,6 +484,19 @@ async def _handle_send_sequence_email(payload: dict) -> dict:
                 delay_seconds=1800,
             )
             return {"status": "re-queued", "reason": "outside send window"}
+
+        # Honor global deliverability circuit breaker for deferred sends too.
+        email_healthy, _ = await _check_email_health()
+        if not email_healthy:
+            from src.services.task_dispatch import enqueue_task
+
+            await enqueue_task(
+                task_type="send_sequence_email",
+                payload={"outreach_id": outreach_id},
+                priority=5,
+                delay_seconds=3600,
+            )
+            return {"status": "re-queued", "reason": "deliverability paused"}
 
         # Check daily limit before sending deferred email
         daily_limit = config.daily_email_limit or 50

@@ -66,7 +66,10 @@ async def run_sms_dispatch():
             await _send_due_reminders()
 
             # Phase 3: Same-day reminders (2h before appointment)
-            await _send_same_day_reminders()
+            try:
+                await _send_same_day_reminders()
+            except Exception as same_day_err:
+                logger.warning("Same-day reminders skipped this cycle: %s", str(same_day_err))
         except Exception as e:
             logger.error("SMS dispatch error: %s", str(e))
 
@@ -256,15 +259,18 @@ async def _execute_followup_task(db: AsyncSession, task: FollowupTask):
                 pass
 
     # Generate followup message
-    response = await process_followup(
-        lead_first_name=lead.first_name,
-        service_type=lead.service_type,
-        business_name=client.business_name,
-        rep_name=config.persona.rep_name,
-        followup_type=task.task_type,
-        sequence_number=task.sequence_number,
-        booking_url=task_booking_url,
-    )
+    followup_kwargs = {
+        "lead_first_name": lead.first_name,
+        "service_type": lead.service_type,
+        "business_name": client.business_name,
+        "rep_name": config.persona.rep_name,
+        "followup_type": task.task_type,
+        "sequence_number": task.sequence_number,
+    }
+    if task_booking_url:
+        followup_kwargs["booking_url"] = task_booking_url
+
+    response = await process_followup(**followup_kwargs)
 
     # Send via shared compliance helper
     sms_result = await _send_compliant_sms(db, lead, client, response.message)

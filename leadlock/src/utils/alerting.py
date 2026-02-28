@@ -181,11 +181,13 @@ async def _send_email_alert(
 
         from src.config import get_settings
         settings = get_settings()
-        alert_email = (
-            settings.alert_recipient_email
-            or settings.from_email_transactional
-            or ""
-        )
+        configured_recipient = getattr(settings, "alert_recipient_email", "")
+        configured_sender = getattr(settings, "from_email_transactional", "")
+        alert_recipient = configured_recipient.strip() if isinstance(configured_recipient, str) else ""
+        from_address = configured_sender.strip() if isinstance(configured_sender, str) else ""
+
+        # Prefer explicit alert recipient, then transactional sender, then safe default.
+        alert_email = alert_recipient or from_address or "noreply@leadlock.org"
         if not alert_email:
             logger.debug("Skipping email alert: no alert_recipient_email configured")
             return

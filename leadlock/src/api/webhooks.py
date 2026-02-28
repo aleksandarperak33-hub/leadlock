@@ -520,6 +520,11 @@ async def facebook_webhook(
             await _complete_webhook_event(event, "rejected", gate_result["status"])
             return WebhookPayloadResponse(status=gate_result["status"], message=gate_result["status"])
 
+        entries = payload.get("entry")
+        if not entries:
+            await _complete_webhook_event(event)
+            return WebhookPayloadResponse(status="accepted", message="No entries")
+
         envelopes = parse_facebook_leads(payload, client_id)
         if not envelopes:
             await _complete_webhook_event(event)

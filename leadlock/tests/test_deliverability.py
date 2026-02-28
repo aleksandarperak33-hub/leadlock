@@ -343,3 +343,26 @@ class TestGetEmailReputation:
         if 60 <= result["score"] < 75:
             assert result["status"] == "warning"
             assert result["throttle"] == "reduced"
+
+    async def test_score_only_pause_softened_to_critical(self):
+        """Moderate bounce without hard guardrails should run critical, not paused."""
+        redis = AsyncMock()
+
+        async def mock_get(key):
+            return {
+                "email:reputation:sent": b"100",
+                "email:reputation:delivered": b"80",
+                "email:reputation:bounced": b"7",
+                "email:reputation:complained": b"0",
+                "email:reputation:opened": b"7",
+                "email:reputation:clicked": b"2",
+            }.get(key)
+
+        redis.get = mock_get
+
+        result = await get_email_reputation(redis)
+
+        assert result["status"] == "poor"
+        assert result["throttle"] == "critical"
+        assert result["score"] >= 40
+        assert result["metrics"].get("score_pause_softened") is True

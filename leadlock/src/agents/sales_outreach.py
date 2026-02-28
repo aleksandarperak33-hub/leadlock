@@ -233,7 +233,7 @@ BANNED: Do NOT mention that you emailed before or "following up" — just lead w
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 80 words. Subject under 50 chars.""",
 
-    3: """STEP 3 — HAIL MARY CLOSE (final email — make it count).
+    3: """STEP 3 — FAREWELL / HAIL MARY CLOSE (final email — make it count).
 GREETING: Same rule — "Hey {first_name}," or "Hey {company} team,".
 TONE: Confident, direct, zero desperation. This is your last shot — deliver VALUE, not a goodbye.
 CONTENT: Lead with ONE specific insight they haven't heard yet. Options:
@@ -244,7 +244,7 @@ End with a firm CTA: If booking_url provided, say "I've got one slot open this w
 SUBJECT: Must include their name or company. Create urgency without being cheesy — reference something specific about their business.
 BANNED: Do NOT say "last email", "closing the loop", "wrapping up", or "just checking in". Do NOT apologize for emailing. Do NOT say "no hard feelings" or "I understand if you're busy."
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-Under 80 words. Subject under 40 chars.""",
+Under 50 words. Subject under 40 chars.""",
 }
 
 STEP_SUBJECT_EXAMPLES = {
@@ -701,6 +701,11 @@ Respond with a single word - the label only."""
 VALID_CLASSIFICATIONS = {"interested", "rejection", "auto_reply", "out_of_office", "unsubscribe"}
 
 
+def _looks_tentatively_interested(reply_text: str) -> bool:
+    text = (reply_text or "").strip().lower()
+    return any(phrase in text for phrase in ("i'll think about", "i will think about", "let me think"))
+
+
 async def classify_reply(reply_text: str) -> dict:
     """
     Classify an inbound email reply using AI.
@@ -724,13 +729,16 @@ async def classify_reply(reply_text: str) -> dict:
 
     if result.get("error"):
         logger.warning("Reply classification failed: %s", result["error"])
-        return {"classification": "auto_reply", "ai_cost_usd": result.get("cost_usd", 0.0)}
+        error_text = str(result["error"]).strip().lower()
+        fallback = "interested" if "api error" in error_text else "auto_reply"
+        return {"classification": fallback, "ai_cost_usd": result.get("cost_usd", 0.0)}
 
     classification = result["content"].strip().lower().replace(" ", "_")
 
     if classification not in VALID_CLASSIFICATIONS:
-        logger.warning("Unknown classification '%s', defaulting to 'auto_reply'", classification)
-        classification = "auto_reply"
+        fallback = "interested" if _looks_tentatively_interested(reply_text) else "auto_reply"
+        logger.warning("Unknown classification '%s', defaulting to '%s'", classification, fallback)
+        classification = fallback
 
     return {
         "classification": classification,

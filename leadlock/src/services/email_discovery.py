@@ -14,7 +14,7 @@ import json
 import logging
 import re
 from typing import Optional
-from urllib.parse import urlparse, urljoin, unquote
+from urllib.parse import urlparse, urljoin, urlunparse, unquote
 
 import httpx
 from curl_cffi.requests import AsyncSession
@@ -114,8 +114,8 @@ async def discover_email(
     Catch-all detection: domains hosted on known catch-all providers have
     their confidence downgraded since any address appears valid.
 
-    Domain bounce risk: domains with 3+ historical bounces (90-day window)
-    are blocked entirely. Domains with 2 bounces get confidence downgraded.
+    Domain bounce risk: domains with 2+ historical bounces (90-day window)
+    are blocked entirely. Domains with 1 bounce get confidence downgraded.
 
     Blacklist check: when a db session is provided, each candidate email is
     checked against the EmailBlacklist table before returning. Blacklisted
@@ -148,12 +148,12 @@ async def discover_email(
                 "skip_reason": "no_mx_record",
             }
 
-    # Domain bounce risk gate — skip domains with 5+ historical bounces
+    # Domain bounce risk gate — skip domains that crossed the blocked threshold.
     domain_bounce_risk = "safe"
     if domain:
         domain_bounce_risk = await get_domain_bounce_risk(domain)
         if domain_bounce_risk == "blocked":
-            logger.info("Domain %s blocked (5+ historical bounces) — skipping email discovery", domain)
+            logger.info("Domain %s blocked by historical bounce risk — skipping email discovery", domain)
             return {
                 "email": None,
                 "source": None,
@@ -260,54 +260,96 @@ async def deep_scrape_website(website: str) -> list[str]:
     if not website:
         return []
 
+    candidates = _candidate_base_urls(website)
+    if not candidates:
+        return []
+
+    safe_checked = 0
+    for base in candidates:
+        if not await _is_safe_url(base):
+            logger.debug("Skipping unsafe/unresolvable scrape base: %s", base)
+            continue
+        safe_checked += 1
+
+        target_domain = extract_domain(base)
+        found_emails: list[str] = []
+        seen: set[str] = set()
+        pages_fetched = 0
+
+        async with AsyncSession(impersonate="chrome") as session:
+            # Phase 1: Scrape extended paths
+            for path in _EXTENDED_PATHS:
+                if pages_fetched >= _MAX_PAGES:
+                    break
+                url = f"{base}{path}" if path != "/" else base
+                emails = await _fetch_and_extract(session, url, target_domain)
+                pages_fetched += 1
+                for email in emails:
+                    if email not in seen:
+                        found_emails.append(email)
+                        seen.add(email)
+
+            # Phase 2: Crawl internal links from homepage (find pages we missed)
+            if pages_fetched < _MAX_PAGES:
+                homepage_html = await _fetch_html(session, base)
+                if homepage_html:
+                    internal_links = _extract_internal_links(homepage_html, base)
+                    for link_url in internal_links[:_MAX_INTERNAL_LINKS]:
+                        if pages_fetched >= _MAX_PAGES:
+                            break
+                        link_emails = await _fetch_and_extract(session, link_url, target_domain)
+                        pages_fetched += 1
+                        for email in link_emails:
+                            if email not in seen:
+                                found_emails.append(email)
+                                seen.add(email)
+
+        if found_emails:
+            logger.info(
+                "Deep scrape found %d email(s) for %s across %d pages (base=%s)",
+                len(found_emails), target_domain or website, pages_fetched, base,
+            )
+            return found_emails
+
+    if safe_checked == 0:
+        logger.warning("SSRF protection blocked all candidate URLs: %s", website)
+    return []
+
+
+def _candidate_base_urls(website: str) -> list[str]:
+    """Build ordered website base candidates, including www/apex fallback."""
+    if not website:
+        return []
     if not website.startswith(("http://", "https://")):
         website = f"https://{website}"
 
-    if not await _is_safe_url(website):
-        logger.warning("SSRF protection blocked: %s", website)
-        return []
+    parsed = urlparse(website)
+    if not parsed.hostname:
+        return [website.rstrip("/")]
 
-    base = website.rstrip("/")
-    target_domain = extract_domain(website)
-    found_emails: list[str] = []
-    seen: set[str] = set()
-    pages_fetched = 0
+    path = (parsed.path or "").rstrip("/")
+    host = parsed.hostname.lower()
+    scheme = parsed.scheme or "https"
+    port = parsed.port
+    candidates: list[str] = []
 
-    async with AsyncSession(impersonate="chrome") as session:
-        # Phase 1: Scrape extended paths
-        for path in _EXTENDED_PATHS:
-            if pages_fetched >= _MAX_PAGES:
-                break
-            url = f"{base}{path}" if path != "/" else base
-            emails = await _fetch_and_extract(session, url, target_domain)
-            pages_fetched += 1
-            for email in emails:
-                if email not in seen:
-                    found_emails.append(email)
-                    seen.add(email)
+    def _add_candidate(hostname: str, candidate_scheme: str):
+        netloc = hostname if port is None else f"{hostname}:{port}"
+        url = urlunparse((candidate_scheme, netloc, path, "", "", "")).rstrip("/")
+        if url and url not in candidates:
+            candidates.append(url)
 
-        # Phase 2: Crawl internal links from homepage (find pages we missed)
-        if pages_fetched < _MAX_PAGES:
-            homepage_html = await _fetch_html(session, base)
-            if homepage_html:
-                internal_links = _extract_internal_links(homepage_html, base)
-                for link_url in internal_links[:_MAX_INTERNAL_LINKS]:
-                    if pages_fetched >= _MAX_PAGES:
-                        break
-                    link_emails = await _fetch_and_extract(session, link_url, target_domain)
-                    pages_fetched += 1
-                    for email in link_emails:
-                        if email not in seen:
-                            found_emails.append(email)
-                            seen.add(email)
+    _add_candidate(host, scheme)
+    if host.startswith("www."):
+        _add_candidate(host[4:], scheme)
 
-    if found_emails:
-        logger.info(
-            "Deep scrape found %d email(s) for %s across %d pages",
-            len(found_emails), target_domain or website, pages_fetched,
-        )
+    # HTTPS-first, then fallback to HTTP for legacy sites.
+    if scheme == "https":
+        _add_candidate(host, "http")
+        if host.startswith("www."):
+            _add_candidate(host[4:], "http")
 
-    return found_emails
+    return candidates
 
 
 async def _fetch_html(session: AsyncSession, url: str) -> Optional[str]:

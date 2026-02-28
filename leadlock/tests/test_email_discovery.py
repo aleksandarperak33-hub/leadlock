@@ -18,6 +18,7 @@ from src.services.email_discovery import (
     discover_email,
     deep_scrape_website,
     search_brave_for_email,
+    _candidate_base_urls,
     _extract_all_emails,
     _extract_json_ld_emails,
     _extract_footer_emails,
@@ -399,6 +400,39 @@ class TestDeepScrapeWebsite:
             result = await deep_scrape_website("https://biz.com")
 
         assert "owner@biz.com" in result
+
+    @pytest.mark.asyncio
+    async def test_retries_apex_when_www_candidate_is_blocked(self):
+        """If www host is unsafe/unresolvable, retry apex domain before giving up."""
+        mock_html = '<a href="mailto:owner@biz.com">Email</a>'
+
+        with patch(
+            "src.services.email_discovery._is_safe_url",
+            new_callable=AsyncMock,
+            side_effect=[False, True],
+        ) as mock_safe, patch(
+            "src.services.email_discovery._fetch_html",
+            new_callable=AsyncMock,
+            return_value=mock_html,
+        ):
+            result = await deep_scrape_website("https://www.biz.com")
+
+        assert "owner@biz.com" in result
+        checked = [call.args[0] for call in mock_safe.await_args_list[:2]]
+        assert checked == ["https://www.biz.com", "https://biz.com"]
+
+
+class TestCandidateBaseUrls:
+    """Tests for deep-scrape base candidate expansion."""
+
+    def test_builds_www_and_apex_fallbacks_for_https(self):
+        candidates = _candidate_base_urls("https://www.hvacpro.com")
+        assert candidates == [
+            "https://www.hvacpro.com",
+            "https://hvacpro.com",
+            "http://www.hvacpro.com",
+            "http://hvacpro.com",
+        ]
 
 
 # ---------------------------------------------------------------------------

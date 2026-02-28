@@ -13,13 +13,14 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Standard warmup schedule (same as outreach_sequencer)
+# Standard warmup schedule (kept aligned with outreach_sequencer).
 STANDARD_SCHEDULE = [
-    (0, 2, 20),
-    (3, 6, 50),
-    (7, 13, 100),
-    (14, 20, 150),
-    (21, None, None),
+    (0, 3, 10),
+    (4, 7, 20),
+    (8, 14, 40),
+    (15, 21, 75),
+    (22, 28, 120),
+    (29, None, None),
 ]
 
 # Acceleration/deceleration thresholds

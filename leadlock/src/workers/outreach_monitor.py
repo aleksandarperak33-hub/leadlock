@@ -441,6 +441,7 @@ async def _cleanup_exhausted_sequences():
             return
 
         total_marked = 0
+        performed_updates = False
         from src.models.campaign import Campaign
 
         for config in configs:
@@ -494,6 +495,7 @@ async def _cleanup_exhausted_sequences():
                     .values(status="lost", updated_at=datetime.now(timezone.utc))
                 )
                 result = await db.execute(stmt)
+                performed_updates = True
                 campaign_marked = result.rowcount
                 if campaign_marked > 0:
                     logger.info(
@@ -519,6 +521,7 @@ async def _cleanup_exhausted_sequences():
             )
 
             result = await db.execute(stmt)
+            performed_updates = True
             unbound_marked = result.rowcount
             total_marked += unbound_marked
 
@@ -533,4 +536,5 @@ async def _cleanup_exhausted_sequences():
         if total_marked > 0:
             logger.info("Total marked %d exhausted outreach sequences as lost", total_marked)
 
-        await db.commit()
+        if performed_updates:
+            await db.commit()

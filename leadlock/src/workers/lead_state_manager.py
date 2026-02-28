@@ -14,7 +14,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, or_, update, func
 
 from src.database import async_session_factory
 from src.models.lead import Lead
@@ -43,6 +43,8 @@ COLD_RECYCLE_DAYS = 7
 MAX_COLD_OUTREACH = 3
 COMPLETE_AFTER_DAYS = 1  # Mark booked→completed 1 day after appointment
 REVIEW_REQUEST_DELAY_HOURS = 24  # Send review request 24h after completion
+BOOKING_ESCALATION_COOLDOWN_HOURS = 12
+MAX_BOOKING_ESCALATIONS_PER_LEAD = 3
 
 
 async def _heartbeat():
@@ -116,12 +118,71 @@ async def _sweep_stuck_leads() -> int:
 
             for lead in stuck_leads:
                 total_found += 1
+                if state == "booking":
+                    should_schedule = await _should_schedule_booking_escalation(db, lead.id, now)
+                    if not should_schedule:
+                        logger.info(
+                            "Skipping booking escalation for lead %s due to cooldown/cap",
+                            str(lead.id)[:8],
+                        )
+                        continue
                 _handle_stuck_lead(db, lead, state, now)
 
         if total_found > 0:
             await db.commit()
 
     return total_found
+
+
+async def _should_schedule_booking_escalation(db, lead_id, now: datetime) -> bool:
+    """Return True when a booking escalation can be scheduled for this lead."""
+    # Never enqueue duplicates while one is still pending.
+    pending_result = await db.execute(
+        select(FollowupTask.id).where(
+            and_(
+                FollowupTask.lead_id == lead_id,
+                FollowupTask.task_type == "booking_escalation",
+                FollowupTask.status == "pending",
+            )
+        ).limit(1)
+    )
+    if pending_result.scalar_one_or_none():
+        return False
+
+    sent_count_result = await db.execute(
+        select(func.count()).select_from(FollowupTask).where(
+            and_(
+                FollowupTask.lead_id == lead_id,
+                FollowupTask.task_type == "booking_escalation",
+                FollowupTask.status == "sent",
+            )
+        )
+    )
+    sent_count = sent_count_result.scalar() or 0
+    if sent_count >= MAX_BOOKING_ESCALATIONS_PER_LEAD:
+        return False
+
+    cooldown_cutoff = now - timedelta(hours=BOOKING_ESCALATION_COOLDOWN_HOURS)
+    recent_sent_result = await db.execute(
+        select(FollowupTask.id).where(
+            and_(
+                FollowupTask.lead_id == lead_id,
+                FollowupTask.task_type == "booking_escalation",
+                FollowupTask.status == "sent",
+                or_(
+                    FollowupTask.sent_at >= cooldown_cutoff,
+                    and_(
+                        FollowupTask.sent_at.is_(None),
+                        FollowupTask.created_at >= cooldown_cutoff,
+                    ),
+                ),
+            )
+        ).limit(1)
+    )
+    if recent_sent_result.scalar_one_or_none():
+        return False
+
+    return True
 
 
 def _handle_stuck_lead(db, lead, state: str, now: datetime) -> None:

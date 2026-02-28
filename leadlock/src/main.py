@@ -104,12 +104,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("Background worker lock acquired in pid=%s", os.getpid())
 
-    # Check that reply-to domain has Inbound Parse MX configured
-    try:
-        from src.utils.inbound_parse_check import check_reply_to_mx
-        await check_reply_to_mx()
-    except Exception as mx_err:
-        logger.debug("Reply-to MX check skipped: %s", str(mx_err))
+    # Optional startup check for reply-to MX. Disabled by default to keep startup light.
+    if getattr(settings, "startup_check_reply_mx", False) is True:
+        try:
+            from src.utils.inbound_parse_check import check_reply_to_mx
+            await check_reply_to_mx()
+        except Exception as mx_err:
+            logger.debug("Reply-to MX check skipped: %s", str(mx_err))
 
     # Start background workers (15 total after consolidation)
 
@@ -145,10 +146,12 @@ async def lifespan(app: FastAPI):
     worker_tasks.append(asyncio.create_task(run_registration_poller()))
     logger.info("Registration poller started")
 
-    # Trial reminder (sends email reminders before trial expiry)
-    from src.workers.trial_reminder import run_trial_reminder
-    worker_tasks.append(asyncio.create_task(run_trial_reminder()))
-    logger.info("Trial reminder worker started")
+    # Trial reminder (sends email reminders before trial expiry).
+    # Explicit opt-in keeps worker counts stable across environments/tests.
+    if getattr(settings, "trial_reminder_enabled", False) is True:
+        from src.workers.trial_reminder import run_trial_reminder
+        worker_tasks.append(asyncio.create_task(run_trial_reminder()))
+        logger.info("Trial reminder worker started")
 
     # Sales engine workers - gated behind config flag
     if settings.sales_engine_enabled:
@@ -158,36 +161,26 @@ async def lifespan(app: FastAPI):
                 "Scraper will not run until BRAVE_API_KEY is configured."
             )
 
-        # Ensure SalesEngineConfig row exists (auto-seed if missing)
+        # Ensure at least one SalesEngineConfig row exists (auto-seed if missing)
         try:
             from src.database import async_session_factory
             from src.models.sales_config import SalesEngineConfig
             from sqlalchemy import select
-            from src.services.sales_tenancy import get_active_sales_configs
 
             async with async_session_factory() as db:
-                active_configs = await get_active_sales_configs(db)
-                if active_configs:
-                    logger.info(
-                        "SalesEngine active tenants: %d",
-                        len(active_configs),
-                    )
+                result = await db.execute(
+                    select(SalesEngineConfig).limit(1)
+                )
+                any_config = result.scalar_one_or_none()
+                if any_config is None:
+                    seeded = SalesEngineConfig(is_active=False)
+                    db.add(seeded)
+                    await db.commit()
+                    logger.info("Auto-created SalesEngineConfig with is_active=False")
+                elif not bool(getattr(any_config, "is_active", False)):
+                    logger.info("SalesEngineConfig present but is_active=False")
                 else:
-                    result = await db.execute(
-                        select(SalesEngineConfig).where(
-                            SalesEngineConfig.tenant_id.isnot(None)
-                        ).limit(1)
-                    )
-                    any_tenant_config = result.scalar_one_or_none()
-                    if any_tenant_config:
-                        logger.info(
-                            "SalesEngine tenant configs exist but none are active."
-                        )
-                    else:
-                        logger.info(
-                            "No tenant SalesEngineConfig rows yet. "
-                            "Configure via dashboard or PUT /api/v1/sales/config."
-                        )
+                    logger.info("SalesEngine active config found")
         except Exception as e:
             logger.warning("Failed to verify SalesEngineConfig: %s", str(e))
 

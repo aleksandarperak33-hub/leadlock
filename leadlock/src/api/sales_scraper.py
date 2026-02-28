@@ -131,10 +131,10 @@ async def _run_scrape_background(
         # Pick next unused query variant + offset for this location+trade
         variant_idx, offset = await get_next_variant_and_offset(
             db,
-            tenant_id,
             city,
             state,
             trade,
+            tenant_id=tenant_id,
         )
 
         if variant_idx == -1:

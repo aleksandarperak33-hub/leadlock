@@ -16,6 +16,8 @@ Why reputation drops:
 """
 import logging
 import time
+import uuid
+import inspect
 from datetime import datetime, timezone, timedelta
 from typing import Literal, Optional
 
@@ -37,6 +39,30 @@ THROTTLE_WINDOW_SECONDS = 60  # 1-minute sliding window
 THROTTLE_MAX_NORMAL = 30      # Normal: max 30 SMS per minute per number
 THROTTLE_MAX_WARNING = 15     # Warning: reduce to 15/min
 THROTTLE_MAX_CRITICAL = 5     # Critical: reduce to 5/min
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+def _coerce_int(value, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, bytes):
+        value = value.decode(errors="ignore")
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("-"):
+            body = stripped[1:]
+            return int(stripped) if body.isdigit() else default
+        return int(stripped) if stripped.isdigit() else default
+    return default
 
 
 async def record_sms_outcome(
@@ -283,6 +309,7 @@ async def check_send_allowed(from_phone: str) -> tuple[bool, str]:
 # email:reputation:clicked - total clicked
 
 EMAIL_REPUTATION_TTL = 86400  # 24 hour rolling window
+EMAIL_REPUTATION_ZSET_PREFIX = "email:reputation:z"
 
 # Throttle factor mapping for email reputation
 EMAIL_THROTTLE_FACTORS = {
@@ -307,11 +334,21 @@ async def record_email_event(redis_client, event_type: str) -> None:
         return
 
     try:
-        key = f"email:reputation:{event_type}"
+        now = time.time()
+        zkey = f"{EMAIL_REPUTATION_ZSET_PREFIX}:{event_type}"
+        member = f"{now}:{uuid.uuid4().hex[:8]}"
+
+        # Rolling-window source of truth: timestamped events in sorted sets.
+        await _maybe_await(redis_client.zadd(zkey, {member: now}))
+        await _maybe_await(redis_client.zremrangebyscore(zkey, 0, now - EMAIL_REPUTATION_TTL))
+        await _maybe_await(redis_client.expire(zkey, EMAIL_REPUTATION_TTL * 2))
+
+        # Legacy counters retained as compatibility fallback.
+        legacy_key = f"email:reputation:{event_type}"
         pipe = redis_client.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, EMAIL_REPUTATION_TTL)
-        await pipe.execute()
+        pipe.incr(legacy_key)
+        pipe.expire(legacy_key, EMAIL_REPUTATION_TTL)
+        await _maybe_await(pipe.execute())
     except Exception as e:
         logger.warning("Failed to record email event '%s': %s", event_type, str(e))
 
@@ -327,14 +364,33 @@ async def get_email_reputation(redis_client) -> dict:
         Dict with score (0-100), status, throttle level, and detailed metrics.
     """
     metric_keys = ["sent", "delivered", "bounced", "complained", "opened", "clicked"]
-    values = {}
-    for k in metric_keys:
-        val = await redis_client.get(f"email:reputation:{k}")
-        if val is not None:
-            val_str = val.decode() if isinstance(val, bytes) else str(val)
-            values[k] = int(val_str)
-        else:
-            values[k] = 0
+    values = {k: 0 for k in metric_keys}
+
+    now_ts = time.time()
+    cutoff_ts = now_ts - EMAIL_REPUTATION_TTL
+    used_zset_window = False
+
+    # Preferred path: true rolling window via timestamped sorted sets.
+    try:
+        for k in metric_keys:
+            zkey = f"{EMAIL_REPUTATION_ZSET_PREFIX}:{k}"
+            exists_raw = await redis_client.exists(zkey)
+            exists = int(exists_raw) if isinstance(exists_raw, (bool, int)) else 0
+            if exists:
+                used_zset_window = True
+                count_raw = await redis_client.zcount(zkey, cutoff_ts, now_ts)
+                values[k] = int(count_raw) if isinstance(count_raw, (bool, int)) else 0
+    except Exception as zset_err:
+        logger.debug("Email reputation zset read failed, falling back: %s", str(zset_err))
+        used_zset_window = False
+
+    # Compatibility fallback: legacy expiring counters.
+    if not used_zset_window:
+        for k in metric_keys:
+            val = await redis_client.get(f"email:reputation:{k}")
+            if val is not None:
+                val_str = val.decode() if isinstance(val, bytes) else str(val)
+                values[k] = int(val_str)
 
     sent = values["sent"]
     if sent == 0:
@@ -379,9 +435,54 @@ async def get_email_reputation(redis_client) -> dict:
         values["delivered"] = delivered
         values["delivered_inferred"] = True
 
-    delivery_rate = delivered / sent if sent > 0 else 0.0
-    bounce_rate = values["bounced"] / sent
-    complaint_rate = values["complained"] / sent
+    # Delivery callback grace window:
+    # SendGrid delivery webhooks can trail sends by minutes; penalizing those
+    # unresolved recent sends as hard "not delivered" causes false pauses.
+    # Use a 60-minute matured window when enough aged data exists.
+    scored_sent = sent
+    scored_delivered = delivered
+    scored_bounced = values["bounced"]
+    scored_complained = values["complained"]
+
+    DELIVERY_GRACE_SECONDS = 3600
+    if used_zset_window and sent >= MIN_SAMPLE_SIZE:
+        try:
+            grace_cutoff_ts = now_ts - DELIVERY_GRACE_SECONDS
+            sent_aged_raw = await redis_client.zcount(
+                f"{EMAIL_REPUTATION_ZSET_PREFIX}:sent", cutoff_ts, grace_cutoff_ts,
+            )
+            sent_aged = _coerce_int(sent_aged_raw, 0)
+            if sent_aged >= MIN_GUARDRAIL_SAMPLE:
+                delivered_aged = _coerce_int(
+                    await redis_client.zcount(
+                        f"{EMAIL_REPUTATION_ZSET_PREFIX}:delivered", cutoff_ts, grace_cutoff_ts,
+                    ),
+                    0,
+                )
+                bounced_aged = _coerce_int(
+                    await redis_client.zcount(
+                        f"{EMAIL_REPUTATION_ZSET_PREFIX}:bounced", cutoff_ts, grace_cutoff_ts,
+                    ),
+                    0,
+                )
+                complained_aged = _coerce_int(
+                    await redis_client.zcount(
+                        f"{EMAIL_REPUTATION_ZSET_PREFIX}:complained", cutoff_ts, grace_cutoff_ts,
+                    ),
+                    0,
+                )
+                scored_sent = max(1, sent_aged)
+                scored_delivered = min(scored_sent, delivered_aged)
+                scored_bounced = max(0, min(scored_sent, bounced_aged))
+                scored_complained = max(0, min(scored_sent, complained_aged))
+                values["delivery_grace_applied"] = True
+                values["sent_aged_60m"] = sent_aged
+        except Exception as grace_err:
+            logger.debug("Delivery grace window unavailable: %s", str(grace_err))
+
+    delivery_rate = scored_delivered / scored_sent if scored_sent > 0 else 0.0
+    bounce_rate = scored_bounced / scored_sent if scored_sent > 0 else 0.0
+    complaint_rate = scored_complained / scored_sent if scored_sent > 0 else 0.0
     open_rate = values["opened"] / delivered if delivered > 0 else 0.0
 
     # Weighted score (0-100)
@@ -409,6 +510,7 @@ async def get_email_reputation(redis_client) -> dict:
     score = max(0.0, min(100.0, score))
 
     # Status and throttle
+    pause_reason: Optional[str] = None
     if score >= 90:
         status, throttle = "excellent", "normal"
     elif score >= 75:
@@ -419,14 +521,17 @@ async def get_email_reputation(redis_client) -> dict:
         status, throttle = "poor", "critical"  # 25% of limit
     else:
         status, throttle = "critical", "paused"  # STOP sending
+        pause_reason = "score"
 
     # Hard guardrails override score-based throttling.
     if complaint_rate >= COMPLAINT_RATE_PAUSE:
         score = min(score, 20.0)
         status, throttle = "critical", "paused"
+        pause_reason = "complaint_rate"
     elif bounce_rate >= BOUNCE_RATE_PAUSE and sent >= MIN_GUARDRAIL_SAMPLE:
         score = min(score, 30.0)
         status, throttle = "critical", "paused"
+        pause_reason = "bounce_rate"
     elif bounce_rate >= BOUNCE_RATE_CRITICAL and sent >= MIN_GUARDRAIL_SAMPLE and throttle == "normal":
         score = min(score, 45.0)
         status, throttle = "poor", "critical"
@@ -435,6 +540,7 @@ async def get_email_reputation(redis_client) -> dict:
         # going to spam or invalid — pause to prevent reputation spiral.
         score = min(score, 30.0)
         status, throttle = "critical", "paused"
+        pause_reason = "open_rate_floor"
         logger.warning(
             "Open rate floor triggered: %.1f%% opens at %d sends",
             open_rate * 100, sent,
@@ -443,6 +549,21 @@ async def get_email_reputation(redis_client) -> dict:
         # Protect sender reputation when opens collapse at scale.
         score = min(score, 55.0)
         status, throttle = "warning", "reduced"
+
+    # Soft-recovery path: if we paused only because weighted score dipped below 40
+    # (without hard guardrail triggers), continue in critical-throttle mode instead
+    # of full stop. This prevents extended deadlock after moderate bounce spikes.
+    SOFT_RECOVERY_BOUNCE_RATE_MAX = 0.13
+    if (
+        throttle == "paused"
+        and pause_reason == "score"
+        and complaint_rate == 0.0
+        and bounce_rate < SOFT_RECOVERY_BOUNCE_RATE_MAX
+        and sent >= MIN_SAMPLE_SIZE
+    ):
+        score = max(score, 40.0)
+        status, throttle = "poor", "critical"
+        values["score_pause_softened"] = True
 
     return {
         "score": round(score, 1),
@@ -515,8 +636,8 @@ async def get_deliverability_summary() -> dict:
 
 DOMAIN_BOUNCE_WINDOW = 90 * 86400  # 90 days in seconds
 DOMAIN_BOUNCE_TTL = 91 * 86400     # TTL slightly longer than window
-DOMAIN_BOUNCE_RISKY = 2            # 2+ bounces = risky
-DOMAIN_BOUNCE_BLOCKED = 3          # 3+ bounces = blocked
+DOMAIN_BOUNCE_RISKY = 1            # 1+ bounce = risky for first-touch
+DOMAIN_BOUNCE_BLOCKED = 2          # 2+ bounces = blocked
 
 DomainBounceRisk = Literal["safe", "risky", "blocked"]
 
@@ -570,7 +691,8 @@ async def get_domain_bounce_risk(domain: str) -> DomainBounceRisk:
         now = time.time()
         cutoff = now - DOMAIN_BOUNCE_WINDOW
 
-        count = await redis.zcount(key, cutoff, now)
+        count_raw = await _maybe_await(redis.zcount(key, cutoff, now))
+        count = _coerce_int(count_raw, 0)
 
         if count >= DOMAIN_BOUNCE_BLOCKED:
             return "blocked"

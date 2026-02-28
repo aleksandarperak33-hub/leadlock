@@ -101,6 +101,108 @@ class TestSweepStuckLeads:
             assert found == 2
             assert mock_handle.call_count == 2
 
+    async def test_booking_stuck_lead_respects_escalation_guard(self):
+        """Booking leads are counted as stuck but skipped when guard disallows escalation."""
+        now = datetime.now(timezone.utc)
+        stuck_booking = _make_lead(
+            state="booking",
+            updated_at=now - timedelta(hours=3),
+        )
+
+        call_count = 0
+        state_results = {
+            "intake_sent": [],
+            "qualifying": [],
+            "qualified": [],
+            "booking": [stuck_booking],
+        }
+        state_order = list(state_results.keys())
+
+        async def mock_execute(query):
+            nonlocal call_count
+            state_key = state_order[call_count] if call_count < len(state_order) else None
+            call_count += 1
+            scalars_mock = MagicMock()
+            scalars_mock.all.return_value = state_results.get(state_key, [])
+            result = MagicMock()
+            result.scalars.return_value = scalars_mock
+            return result
+
+        @asynccontextmanager
+        async def session_factory():
+            db = MagicMock()
+            db.execute = AsyncMock(side_effect=mock_execute)
+            db.commit = AsyncMock()
+            db.add = MagicMock()
+            yield db
+
+        with (
+            patch("src.workers.lead_state_manager.async_session_factory", side_effect=session_factory),
+            patch("src.workers.lead_state_manager._should_schedule_booking_escalation", new=AsyncMock(return_value=False)),
+            patch("src.workers.lead_state_manager._handle_stuck_lead") as mock_handle,
+        ):
+            from src.workers.lead_state_manager import _sweep_stuck_leads
+
+            found = await _sweep_stuck_leads()
+
+            assert found == 1
+            mock_handle.assert_not_called()
+
+
+class TestBookingEscalationGuard:
+    """Tests for booking escalation cooldown and caps."""
+
+    async def test_skips_when_pending_task_exists(self):
+        """Any pending booking escalation should block new scheduling."""
+        lead_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        db = MagicMock()
+
+        pending = MagicMock()
+        pending.scalar_one_or_none.return_value = object()
+        db.execute = AsyncMock(return_value=pending)
+
+        from src.workers.lead_state_manager import _should_schedule_booking_escalation
+
+        assert await _should_schedule_booking_escalation(db, lead_id, now) is False
+        assert db.execute.await_count == 1
+
+    async def test_skips_when_sent_cap_reached(self):
+        """Leads with 3+ sent escalations should not get additional messages."""
+        lead_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        db = MagicMock()
+
+        pending = MagicMock()
+        pending.scalar_one_or_none.return_value = None
+        sent_count = MagicMock()
+        sent_count.scalar.return_value = 3
+        db.execute = AsyncMock(side_effect=[pending, sent_count])
+
+        from src.workers.lead_state_manager import _should_schedule_booking_escalation
+
+        assert await _should_schedule_booking_escalation(db, lead_id, now) is False
+        assert db.execute.await_count == 2
+
+    async def test_allows_when_under_cap_and_outside_cooldown(self):
+        """Allow scheduling when there is no pending task and no recent sends."""
+        lead_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        db = MagicMock()
+
+        pending = MagicMock()
+        pending.scalar_one_or_none.return_value = None
+        sent_count = MagicMock()
+        sent_count.scalar.return_value = 1
+        recent = MagicMock()
+        recent.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[pending, sent_count, recent])
+
+        from src.workers.lead_state_manager import _should_schedule_booking_escalation
+
+        assert await _should_schedule_booking_escalation(db, lead_id, now) is True
+        assert db.execute.await_count == 3
+
 
 # ---------------------------------------------------------------------------
 # _handle_stuck_lead - state transitions

@@ -376,7 +376,7 @@ async def submit_tollfree_verification(
                 "Are you available Thursday between 9-11 AM? "
                 "Reply STOP to opt out."
             ),
-            opt_in_type="WEB_FORM",
+            opt_in_type="VERBAL",
             opt_in_image_urls=opt_in_image_urls or default_opt_in_urls,
             message_volume="1,000",
             additional_information=(

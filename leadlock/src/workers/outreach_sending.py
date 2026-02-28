@@ -3,6 +3,7 @@ Outreach email sending — generate and send a single outreach email for a prosp
 Extracted from outreach_sequencer.py for file size compliance.
 """
 import hashlib
+import inspect
 import logging
 import re
 import uuid
@@ -23,8 +24,45 @@ from src.services.cold_email import send_cold_email
 from src.services.sender_mailboxes import get_active_sender_mailboxes
 from src.services.outreach_timing import followup_readiness
 from src.utils.email_validation import validate_email
+from src.services.email_quality_gate import MAX_SUBJECT_LENGTH
 
 logger = logging.getLogger(__name__)
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+def _to_int(value, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, bytes):
+        value = value.decode(errors="ignore")
+    if isinstance(value, str):
+        stripped = value.strip()
+        if re.fullmatch(r"-?\d+", stripped):
+            return int(stripped)
+    return default
+
+
+async def _result_scalar_one_or_none(result):
+    fn = getattr(result, "scalar_one_or_none", None)
+    if not callable(fn):
+        return None
+    return await _maybe_await(fn())
+
+
+async def _result_scalar(result):
+    fn = getattr(result, "scalar", None)
+    if not callable(fn):
+        return None
+    return await _maybe_await(fn())
 
 
 def sanitize_dashes(text: str) -> str:
@@ -66,6 +104,18 @@ def normalize_email(raw_email: str) -> str:
     # Strip whitespace that can be URL-encoded as %20 or copied from HTML.
     email = "".join(email.split())
     return email.lower()
+
+
+def normalize_subject(subject: str) -> str:
+    """Enforce subject length and normalize whitespace/punctuation."""
+    cleaned = sanitize_dashes(subject or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) <= MAX_SUBJECT_LENGTH:
+        return cleaned
+    clipped = cleaned[:MAX_SUBJECT_LENGTH].rsplit(" ", 1)[0].strip()
+    if len(clipped) < 12:
+        clipped = cleaned[:MAX_SUBJECT_LENGTH].strip()
+    return clipped.rstrip(" -,:;")
 
 
 async def _verify_or_find_working_email(
@@ -199,20 +249,24 @@ async def _pre_send_checks(
             EmailBlacklist.value.in_([email_lower, domain])
         ).limit(1)
     )
-    if blacklist_check.scalar_one_or_none():
+    if await _result_scalar_one_or_none(blacklist_check):
         return "blacklisted"
 
-    # First-touch: block non-contact generic prefixes that rarely exist
-    # on small business domains and cause bounces (privacy@, accounts@, etc.)
-    if prospect.outreach_sequence_step <= 0 and domain:
+    # Block non-contact generic prefixes that frequently bounce
+    # on SMB domains (privacy@, accounts@, info@, etc.).
+    if domain:
         local_part = email_lower.split("@")[0]
         _non_contact_prefixes = frozenset({
             "privacy", "legal", "compliance", "gdpr",
             "webmaster", "hostmaster", "postmaster", "abuse",
             "accounts", "accounting", "billing",
+            "info",
+            "sales", "marketing", "careers", "jobs", "hiring",
+            "recruiting", "recruitment", "noreply", "no-reply",
         })
         if local_part in _non_contact_prefixes:
-            return f"non-contact prefix ({local_part}@) blocked for first-touch"
+            prospect.status = "no_verified_email"
+            return f"non-contact prefix ({local_part}@) blocked"
 
     # Check domain bounce risk score (blocks high-bounce domains)
     if domain:
@@ -232,7 +286,7 @@ async def _pre_send_checks(
             from src.utils.dedup import get_redis
             redis = await get_redis()
             cooldown_key = f"leadlock:email_domain_cooldown:{domain}"
-            ttl = await redis.ttl(cooldown_key)
+            ttl = _to_int(await redis.ttl(cooldown_key), 0)
             if ttl and ttl > 0:
                 return f"domain cooldown active ({ttl}s remaining)"
         except Exception as e:
@@ -249,7 +303,7 @@ async def _pre_send_checks(
                 )
             ).limit(1)
         )
-        if dupe_check.scalar_one_or_none():
+        if await _result_scalar_one_or_none(dupe_check):
             prospect.status = "duplicate_email"
             return "email already contacted via another record"
 
@@ -293,7 +347,7 @@ async def _generate_email_with_template(
         body_html = body_text.replace("\n", "<br>")
 
         return {
-            "subject": sanitize_dashes(subject),
+            "subject": normalize_subject(subject),
             "body_html": sanitize_dashes(body_html),
             "body_text": sanitize_dashes(body_text),
             "ai_cost_usd": 0.0,
@@ -414,24 +468,6 @@ async def send_sequence_email(
     """Generate and send a single outreach email for a prospect."""
     next_step = prospect.outreach_sequence_step + 1
 
-    # Idempotency guard: skip if an outbound email for this step already exists.
-    # Prevents duplicate sends when task retries after post-send recording failure.
-    existing_email = await db.execute(
-        select(OutreachEmail).where(
-            and_(
-                OutreachEmail.outreach_id == prospect.id,
-                OutreachEmail.direction == "outbound",
-                OutreachEmail.sequence_step == next_step,
-            )
-        ).limit(1)
-    )
-    if existing_email.scalar_one_or_none():
-        logger.info(
-            "Prospect %s already has outbound email for step %d — skipping (idempotency)",
-            str(prospect.id)[:8], next_step,
-        )
-        return
-
     # Hard cap: never exceed max_sequence_steps regardless of campaign definition.
     if next_step > config.max_sequence_steps:
         logger.info(
@@ -466,18 +502,27 @@ async def send_sequence_email(
     if template_id:
         try:
             template_uuid = uuid.UUID(template_id)
-            template_result = await db.execute(
-                select(EmailTemplate).where(
-                    and_(
-                        EmailTemplate.id == template_uuid,
-                        or_(
-                            EmailTemplate.tenant_id == prospect.tenant_id,
-                            EmailTemplate.tenant_id.is_(None),
-                        ),
-                    )
-                ).limit(1)
-            )
-            template = template_result.scalar_one_or_none()
+            get_fn = getattr(db, "get", None)
+            if callable(get_fn):
+                fetched = await _maybe_await(get_fn(EmailTemplate, template_uuid))
+                if fetched and (
+                    getattr(fetched, "tenant_id", None) in (None, getattr(prospect, "tenant_id", None))
+                ):
+                    template = fetched
+
+            if template is None:
+                template_result = await db.execute(
+                    select(EmailTemplate).where(
+                        and_(
+                            EmailTemplate.id == template_uuid,
+                            or_(
+                                EmailTemplate.tenant_id == prospect.tenant_id,
+                                EmailTemplate.tenant_id.is_(None),
+                            ),
+                        )
+                    ).limit(1)
+                )
+                template = await _result_scalar_one_or_none(template_result)
         except Exception as e:
             logger.warning(
                 "Template %s not found for prospect %s",
@@ -523,7 +568,7 @@ async def send_sequence_email(
     # Sanitize dashes, auto-link bare URLs, and attach CTA variant for tracking
     email_result = {
         **email_result,
-        "subject": sanitize_dashes(email_result.get("subject", "")),
+        "subject": normalize_subject(email_result.get("subject", "")),
         "body_html": auto_link_urls(sanitize_dashes(email_result.get("body_html", ""))),
         "body_text": sanitize_dashes(email_result.get("body_text", "")),
         "cta_variant": cta_variant,
@@ -542,6 +587,25 @@ async def send_sequence_email(
     in_reply_to, references, send_subject = await _resolve_threading(
         db, prospect, next_step, email_result["subject"],
     )
+
+    # Idempotency guard: skip if an outbound email for this step already exists.
+    # Keep this right before send to prevent duplicate retries after record failures.
+    existing_count_result = await db.execute(
+        select(func.count()).select_from(OutreachEmail).where(
+            and_(
+                OutreachEmail.outreach_id == prospect.id,
+                OutreachEmail.direction == "outbound",
+                OutreachEmail.sequence_step == next_step,
+            )
+        )
+    )
+    existing_count = _to_int(await _result_scalar(existing_count_result), 0)
+    if existing_count > 0:
+        logger.info(
+            "Prospect %s already has outbound email for step %d — skipping (idempotency)",
+            str(prospect.id)[:8], next_step,
+        )
+        return
 
     # Send email
     send_result = await send_cold_email(
@@ -629,7 +693,7 @@ async def _choose_sender_profile(
             )
         )
         sent_today_result = await db.execute(sent_today_query)
-        sent_today = sent_today_result.scalar() or 0
+        sent_today = _to_int(await _result_scalar(sent_today_result), 0)
         if sent_today < mailbox_limit:
             return profile
 
@@ -680,7 +744,7 @@ async def _run_quality_gate(
             if not retry_result.get("error"):
                 retry_result = {
                     **retry_result,
-                    "subject": sanitize_dashes(retry_result.get("subject", "")),
+                    "subject": normalize_subject(retry_result.get("subject", "")),
                     "body_html": auto_link_urls(sanitize_dashes(retry_result.get("body_html", ""))),
                     "body_text": sanitize_dashes(retry_result.get("body_text", "")),
                     "cta_variant": email_result.get("cta_variant"),
@@ -711,7 +775,7 @@ async def _run_quality_gate(
             )
             result = {
                 **fallback,
-                "subject": sanitize_dashes(fallback["subject"]),
+                "subject": normalize_subject(fallback["subject"]),
                 "body_html": auto_link_urls(sanitize_dashes(fallback["body_html"])),
                 "body_text": sanitize_dashes(fallback["body_text"]),
                 "cta_variant": email_result.get("cta_variant"),
@@ -750,7 +814,7 @@ async def _resolve_threading(
                 )
             ).order_by(OutreachEmail.sequence_step.desc()).limit(1)
         )
-        prev_email = prev_email_result.scalar_one_or_none()
+        prev_email = await _result_scalar_one_or_none(prev_email_result)
         if prev_email and prev_email.sendgrid_message_id:
             in_reply_to = prev_email.sendgrid_message_id
             references = f"<{prev_email.sendgrid_message_id}>"
@@ -766,7 +830,7 @@ async def _resolve_threading(
                     )
                 ).limit(1)
             )
-            step1_subject = step1_result.scalar()
+            step1_subject = await _result_scalar(step1_result)
             if step1_subject:
                 send_subject = f"Re: {step1_subject}"
 

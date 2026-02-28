@@ -167,15 +167,17 @@ def _is_valid_business_email(email: str, target_domain: Optional[str] = None) ->
     """Check if an email looks like a real business contact email."""
     from urllib.parse import unquote
 
+    raw_email = (email or "").lower().strip()
+    # URL-encoded artifacts are common in scraped HTML attributes (%20, %40, etc.).
+    # Reject these early rather than trying to "fix" potentially corrupted strings.
+    if "%" in raw_email:
+        return False
+
     # URL-decode first (catches %20, %40 artifacts from scraping)
     email_lower = unquote(email).lower().strip()
 
     # Reject if whitespace or control chars remain after decoding
     if " " in email_lower or "\t" in email_lower or "\n" in email_lower:
-        return False
-
-    # Reject if URL-encoded artifacts remain (double-encoded or broken encoding)
-    if "%" in email_lower:
         return False
 
     # Basic sanity: must have exactly one @, reasonable length

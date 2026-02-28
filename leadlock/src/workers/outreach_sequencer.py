@@ -39,16 +39,16 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
-# Email warmup schedule - ramps daily send volume over 20 days.
-# Aggressive but safe: domain already has SPF/DKIM/DMARC and send history.
+# Email warmup schedule - conservative ramp for sender reputation stability.
 # Format: (day_range_start, day_range_end, max_daily_emails)
 # day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
 EMAIL_WARMUP_SCHEDULE = [
-    (0, 2, 20),       # Days 0-2: 20 emails/day
-    (3, 6, 50),       # Days 3-6: 50 emails/day
-    (7, 13, 100),     # Week 2: 100 emails/day
-    (14, 20, 150),    # Week 3: 150 emails/day
-    (21, None, None), # After 3 weeks: use configured limit
+    (0, 3, 10),        # Days 0-3: 10 emails/day
+    (4, 7, 20),        # Days 4-7: 20 emails/day
+    (8, 14, 40),       # Days 8-14: 40 emails/day
+    (15, 21, 75),      # Days 15-21: 75 emails/day
+    (22, 28, 120),     # Days 22-28: 120 emails/day
+    (29, None, None),  # Day 29+: use configured limit
 ]
 
 
@@ -233,7 +233,7 @@ async def _get_warmup_limit(
                 # Truly first email ever — start warmup now
                 started_at = datetime.now(timezone.utc)
                 await redis.set(warmup_key, started_at.isoformat())
-                logger.info("Email warmup started - day 0, limit=5")
+                logger.info("Email warmup started - day 0, limit=10")
         else:
             started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
             started_at = datetime.fromisoformat(started_at_str)
@@ -503,6 +503,22 @@ async def _trip_ai_circuit_breaker() -> None:
         logger.debug("Circuit breaker write failed: %s", str(e))
 
 
+async def _all_active_configs_paused() -> bool:
+    """
+    Lightweight pre-check so the main loop can skip a cycle when every active
+    config is paused.
+    """
+    try:
+        async with async_session_factory() as db:
+            configs = await get_active_sales_configs(db)
+            if not configs:
+                return False
+            return all(bool(getattr(cfg, "sequencer_paused", False)) for cfg in configs)
+    except Exception as e:
+        logger.debug("Sequencer pause pre-check failed: %s", str(e))
+        return False
+
+
 async def run_outreach_sequencer():
     """Main loop - process outreach sequences every 30 minutes."""
     logger.info("Outreach sequencer started (poll every %ds)", POLL_INTERVAL_SECONDS)
@@ -510,6 +526,11 @@ async def run_outreach_sequencer():
     while True:
         await _heartbeat()
         try:
+            if await _all_active_configs_paused():
+                logger.info("All active sequencer configs are paused — skipping cycle")
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                continue
+
             # Persistent circuit breaker — skip cycle if AI provider is down
             if await _is_ai_circuit_open():
                 logger.info("AI circuit breaker is open — skipping outreach cycle")
@@ -798,6 +819,9 @@ async def _sequence_cycle_for_tenant(
             prev_failures = prospect.generation_failures or 0
             await send_sequence_email(db, config, settings, prospect)
             await db.flush()
+            # Commit each send immediately so webhooks can resolve records
+            # without waiting for end-of-tenant batch commit.
+            await db.commit()
 
             new_failures = prospect.generation_failures or 0
             if new_failures > prev_failures:
@@ -980,6 +1004,9 @@ async def _process_campaign_prospects(
                 template_id=template_id, campaign=campaign,
             )
             await db.flush()
+            # Commit each send immediately so event webhooks can correlate
+            # sendgrid_message_id records in near real-time.
+            await db.commit()
 
             new_failures = prospect.generation_failures or 0
             if new_failures > prev_failures:

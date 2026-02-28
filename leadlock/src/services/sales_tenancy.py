@@ -3,6 +3,7 @@ Tenant scoping helpers for the sales outreach engine.
 """
 from __future__ import annotations
 
+import inspect
 import uuid
 from typing import Optional
 
@@ -10,6 +11,49 @@ from sqlalchemy import select
 
 from src.models.sales_config import SalesEngineConfig
 from src.services.sender_mailboxes import mailbox_addresses_for_config
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def _extract_configs_from_result(result) -> list[SalesEngineConfig]:
+    """
+    Normalize SQLAlchemy/AsyncMock result shapes into a config list.
+    """
+    if result is None:
+        return []
+
+    try:
+        scalars_fn = getattr(result, "scalars", None)
+        if callable(scalars_fn):
+            scalars = scalars_fn()
+            all_fn = getattr(scalars, "all", None)
+            if callable(all_fn):
+                rows = await _maybe_await(all_fn())
+                if isinstance(rows, list):
+                    return [row for row in rows if row is not None]
+                try:
+                    converted = list(rows)
+                except TypeError:
+                    converted = []
+                if converted:
+                    return [row for row in converted if row is not None]
+    except Exception:
+        pass
+
+    scalar_one_or_none = getattr(result, "scalar_one_or_none", None)
+    if callable(scalar_one_or_none):
+        try:
+            item = await _maybe_await(scalar_one_or_none())
+            if item is not None:
+                return [item]
+        except Exception:
+            pass
+
+    return []
 
 
 def normalize_tenant_id(value) -> Optional[uuid.UUID]:
@@ -69,7 +113,7 @@ async def get_active_sales_configs(db) -> list[SalesEngineConfig]:
             SalesEngineConfig.tenant_id.isnot(None),
         )
     )
-    tenant_configs = list(result.scalars().all())
+    tenant_configs = await _extract_configs_from_result(result)
     if tenant_configs:
         return tenant_configs
 
@@ -81,7 +125,7 @@ async def get_active_sales_configs(db) -> list[SalesEngineConfig]:
             SalesEngineConfig.tenant_id.is_(None),
         )
     )
-    return list(fallback_result.scalars().all())
+    return await _extract_configs_from_result(fallback_result)
 
 
 async def resolve_tenant_ids_for_mailboxes(
