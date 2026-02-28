@@ -177,18 +177,46 @@ async def resolve_short_url(url: str) -> str:
         return url
 
 
-async def _fallback_brave_search(query: str, api_key: str) -> list[dict]:
-    """
-    Fallback search without result_filter=locations.
+def _parse_infobox_location(infobox: dict) -> Optional[dict]:
+    """Extract business data from a Brave infobox with location info."""
+    results = infobox.get("results") or []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        # Check for location data in the infobox result
+        location = item.get("location") or {}
+        postal = location.get("postal_address") or item.get("postal_address") or {}
+        contact = location.get("contact") or item.get("contact") or {}
+        address = postal.get("displayAddress") or ""
+        phone = contact.get("telephone") or ""
+        name = item.get("title") or ""
+        website = item.get("website_url") or item.get("url") or ""
 
-    Brave's location filter can miss businesses when the query lacks
-    geographic context. This does a broader web search, extracts any
-    location IDs from the response, and fetches their POI details.
+        # Only use if we have at least a name and address or phone
+        if name and (address or phone):
+            return {
+                "name": name,
+                "address": address,
+                "phone": phone,
+                "website": website,
+                "rating": None,
+                "reviews": None,
+                "type": "",
+            }
+    return None
+
+
+async def _brave_web_search(query: str, api_key: str) -> list[dict]:
+    """
+    Broad Brave web search that extracts business data from either
+    location IDs or the infobox knowledge graph.
+
+    Brave's result_filter=locations misses specific business names,
+    but often returns an infobox with address/phone for branded queries.
     """
     from src.services.scraping import (
         BRAVE_SEARCH_URL,
         BRAVE_POI_URL,
-        BRAVE_COST_PER_SEARCH,
         POI_BATCH_SIZE,
     )
 
@@ -200,7 +228,6 @@ async def _fallback_brave_search(query: str, api_key: str) -> list[dict]:
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Broader search without location filter
             resp = await client.get(
                 BRAVE_SEARCH_URL,
                 params={"q": query, "count": 10},
@@ -209,39 +236,42 @@ async def _fallback_brave_search(query: str, api_key: str) -> list[dict]:
             resp.raise_for_status()
             data = resp.json()
 
-            # Extract location IDs if Brave included them
+            # Strategy 1: Extract location IDs if Brave included them
             locations = (data.get("locations") or {}).get("results") or []
             location_ids = [loc["id"] for loc in locations if loc.get("id")]
-            if not location_ids:
-                return []
+            if location_ids:
+                poi_params = [("ids", lid) for lid in location_ids[:POI_BATCH_SIZE]]
+                poi_resp = await client.get(BRAVE_POI_URL, params=poi_params, headers=headers)
+                poi_resp.raise_for_status()
+                poi_results = poi_resp.json().get("results") or []
+                results = []
+                for poi in poi_results:
+                    if not poi:
+                        continue
+                    name = poi.get("title") or poi.get("name") or ""
+                    postal = poi.get("postal_address") or {}
+                    contact_info = poi.get("contact") or {}
+                    results.append({
+                        "name": name,
+                        "address": postal.get("displayAddress") or "",
+                        "phone": contact_info.get("telephone") or "",
+                        "website": poi.get("url") or "",
+                        "rating": None,
+                        "reviews": None,
+                        "type": ", ".join(poi.get("categories") or []),
+                    })
+                if results:
+                    return results
 
-            # Fetch POI details for first batch
-            poi_params = [("ids", lid) for lid in location_ids[:POI_BATCH_SIZE]]
-            poi_resp = await client.get(BRAVE_POI_URL, params=poi_params, headers=headers)
-            poi_resp.raise_for_status()
-            poi_results = poi_resp.json().get("results") or []
+            # Strategy 2: Extract from infobox (knowledge graph)
+            infobox = data.get("infobox") or {}
+            infobox_result = _parse_infobox_location(infobox)
+            if infobox_result:
+                return [infobox_result]
 
-            # Convert to our standard format
-            from src.services.scraping import normalize_biz_name
-            results = []
-            for poi in poi_results:
-                if not poi:
-                    continue
-                name = poi.get("title") or poi.get("name") or ""
-                postal = poi.get("postal_address") or {}
-                contact = poi.get("contact") or {}
-                results.append({
-                    "name": name,
-                    "address": postal.get("displayAddress") or "",
-                    "phone": contact.get("telephone") or "",
-                    "website": poi.get("url") or "",
-                    "rating": None,
-                    "reviews": None,
-                    "type": ", ".join(poi.get("categories") or []),
-                })
-            return results
+            return []
     except Exception as exc:
-        logger.warning("Fallback Brave search failed for '%s': %s", query[:40], exc)
+        logger.warning("Brave web search failed for '%s': %s", query[:40], exc)
         return []
 
 
@@ -272,9 +302,10 @@ async def lookup_business(url_or_name: str, api_key: str) -> dict:
 
     # For single-business GMB lookups, use the broader search first (without
     # result_filter=locations) since Brave's location filter often misses
-    # specific business names. Fall back to location-filtered search only
+    # specific business names. The broad search checks both location IDs and
+    # the infobox knowledge graph. Fall back to location-filtered search only
     # if the broad search finds nothing.
-    results = await _fallback_brave_search(business_name, api_key)
+    results = await _brave_web_search(business_name, api_key)
 
     if not results:
         search_result = await search_local_businesses(
