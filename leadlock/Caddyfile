@@ -32,6 +32,7 @@ leadlock.org {
 
 	handle {
 		root * /srv/dashboard
+		header Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
