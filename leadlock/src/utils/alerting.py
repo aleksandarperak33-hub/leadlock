@@ -186,8 +186,10 @@ async def _send_email_alert(
         alert_recipient = configured_recipient.strip() if isinstance(configured_recipient, str) else ""
         from_address = configured_sender.strip() if isinstance(configured_sender, str) else ""
 
-        # Prefer explicit alert recipient, then transactional sender, then safe default.
-        alert_email = alert_recipient or from_address or "noreply@leadlock.org"
+        # Prefer explicit alert recipient, then transactional sender.
+        # Do NOT fall back to noreply@leadlock.org — domain has no MX record,
+        # every attempt becomes a SendGrid block (~70/day).
+        alert_email = alert_recipient or from_address
         if not alert_email:
             logger.debug("Skipping email alert: no alert_recipient_email configured")
             return
