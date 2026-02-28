@@ -23,8 +23,7 @@
 
   <!-- Consent Checkbox -->
   <rect x="80" y="305" width="640" height="100" fill="#eff6ff" rx="6" stroke="#bfdbfe" stroke-width="1"/>
-  <rect x="96" y="322" width="18" height="18" fill="#ffffff" rx="3" stroke="#3b82f6" stroke-width="2"/>
-  <text x="100" y="337" font-family="Arial, sans-serif" font-size="16" fill="#3b82f6" font-weight="bold">&#x2713;</text>
+  <rect x="96" y="322" width="18" height="18" fill="#ffffff" rx="3" stroke="#94a3b8" stroke-width="1.5"/>
 
   <text x="124" y="332" font-family="Arial, sans-serif" font-size="13" fill="#1e40af" font-weight="bold">I agree to receive SMS/text messages</text>
   <text x="96" y="355" font-family="Arial, sans-serif" font-size="11" fill="#475569">By checking this box, you consent to receive automated SMS text messages from us regarding</text>
