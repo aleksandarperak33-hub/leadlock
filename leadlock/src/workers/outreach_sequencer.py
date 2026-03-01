@@ -11,7 +11,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
-from sqlalchemy import select, and_, not_, func
+from sqlalchemy import select, and_, or_, not_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
@@ -640,6 +640,76 @@ async def sequence_cycle():
                 )
 
 
+async def _auto_assign_unbound_to_campaigns(
+    db: AsyncSession,
+    campaigns: list,
+    tenant_id,
+) -> int:
+    """
+    Assign unbound cold prospects to active campaigns by matching
+    target_trades and target_locations. Runs every sequencer cycle
+    so newly verified prospects are picked up automatically.
+
+    Returns total number of prospects assigned.
+    """
+    total_assigned = 0
+
+    for campaign in campaigns:
+        conditions = [
+            Outreach.tenant_id == tenant_id,
+            Outreach.campaign_id.is_(None),
+            Outreach.status == "cold",
+            Outreach.prospect_email.isnot(None),
+            Outreach.prospect_email != "",
+            Outreach.email_unsubscribed == False,
+        ]
+
+        target_trades = campaign.target_trades or []
+        if target_trades:
+            conditions.append(Outreach.prospect_trade_type.in_(target_trades))
+
+        target_locations = campaign.target_locations or []
+        if target_locations:
+            location_conditions = []
+            for loc in target_locations:
+                loc_parts = []
+                if isinstance(loc, dict):
+                    if loc.get("city"):
+                        loc_parts.append(Outreach.city == loc["city"])
+                    if loc.get("state"):
+                        loc_parts.append(Outreach.state_code == loc["state"])
+                elif isinstance(loc, str) and "," in loc:
+                    parts = [p.strip() for p in loc.split(",")]
+                    if len(parts) == 2:
+                        loc_parts.append(Outreach.city == parts[0])
+                        loc_parts.append(Outreach.state_code == parts[1])
+                if loc_parts:
+                    location_conditions.append(and_(*loc_parts))
+            if location_conditions:
+                conditions.append(or_(*location_conditions))
+
+        result = await db.execute(
+            select(Outreach).where(and_(*conditions))
+        )
+        prospects = result.scalars().all()
+
+        now = datetime.now(timezone.utc)
+        for prospect in prospects:
+            prospect.campaign_id = campaign.id
+            prospect.updated_at = now
+        assigned = len(prospects)
+
+        if assigned > 0:
+            total_assigned += assigned
+            logger.info(
+                "Auto-assigned %d prospects to campaign %s (%s)",
+                assigned, str(campaign.id)[:8],
+                campaign.name or "unnamed",
+            )
+
+    return total_assigned
+
+
 async def _sequence_cycle_for_tenant(
     db: AsyncSession,
     config: SalesEngineConfig,
@@ -657,7 +727,7 @@ async def _sequence_cycle_for_tenant(
 
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # === PASS 1: Active campaigns ===
+    # === PASS 0: Auto-assign unbound prospects to active campaigns ===
     campaigns_result = await db.execute(
         select(Campaign).where(
             and_(
@@ -666,8 +736,21 @@ async def _sequence_cycle_for_tenant(
             )
         )
     )
-    active_campaigns = campaigns_result.scalars().all()
+    active_campaigns = list(campaigns_result.scalars().all())
 
+    try:
+        assigned = await _auto_assign_unbound_to_campaigns(
+            db, active_campaigns, tenant_id,
+        )
+        if assigned > 0:
+            await db.flush()
+    except Exception as assign_err:
+        logger.warning(
+            "Campaign auto-assignment failed for tenant %s: %s",
+            str(tenant_id)[:8], str(assign_err),
+        )
+
+    # === PASS 1: Active campaigns ===
     for campaign in active_campaigns:
         try:
             await _process_campaign_prospects(

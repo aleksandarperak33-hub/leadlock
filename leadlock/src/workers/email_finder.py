@@ -24,15 +24,15 @@ from src.utils.dedup import get_redis
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = 1800  # 30 minutes
-BATCH_SIZE = 75
+POLL_INTERVAL = 900  # 15 minutes
+BATCH_SIZE = 150
 HEARTBEAT_KEY = "leadlock:worker_health:email_finder"
 RETRY_DAYS = 7  # Skip prospects attempted within this window
 
 # Bounce retry: re-process "lost" prospects with a longer cooldown
 BOUNCE_RETRY_DAYS = 14  # Longer than normal retry — give domain time to cool
-BOUNCE_RETRY_BATCH = 15  # Reserve 15 slots (of 75 total) for bounce retries
-NORMAL_BATCH_SIZE = BATCH_SIZE - BOUNCE_RETRY_BATCH  # 60 normal slots
+BOUNCE_RETRY_BATCH = 25  # Reserve 25 slots (of 150 total) for bounce retries
+NORMAL_BATCH_SIZE = BATCH_SIZE - BOUNCE_RETRY_BATCH  # 125 normal slots
 
 
 async def run_email_finder():
@@ -232,6 +232,7 @@ async def _process_batch():
                 )
                 prospect.email_discovery_attempted_at = now
                 failed += 1
+                await db.commit()
                 continue
             except Exception as e:
                 logger.warning(
@@ -241,6 +242,7 @@ async def _process_batch():
                 # Stamp the attempt so we don't retry immediately
                 prospect.email_discovery_attempted_at = now
                 failed += 1
+                await db.commit()
                 continue
 
             new_email = discovery.get("email")
@@ -256,6 +258,7 @@ async def _process_batch():
             if not new_email:
                 logger.debug("Email finder: no email found for %s", prospect.prospect_name)
                 failed += 1
+                await db.commit()
                 continue
 
             # Did we find something better than current unverified data?
@@ -271,6 +274,7 @@ async def _process_batch():
                     prospect.prospect_name,
                     BOUNCE_RETRY_DAYS if is_bounce_retry else RETRY_DAYS,
                 )
+                await db.commit()
                 continue
 
             # Found a real email from a better source
@@ -310,7 +314,9 @@ async def _process_batch():
                 prospect.status = "cold"
                 reactivated += 1
 
-        await db.commit()
+            # Per-prospect commit: prevents infinite-loop when worker dies
+            # mid-batch (already-processed prospects keep their attempt stamp).
+            await db.commit()
 
         logger.info(
             "Email finder cycle: %d found, %d reactivated, %d bounce-reactivated, %d kept, %d failed (of %d processed)",
