@@ -1,23 +1,25 @@
 """
-Tests for src/services/scraping.py - Brave Search API local business discovery.
-Covers: normalize_biz_name, search_local_businesses, parse_address_components.
-All external HTTP calls are mocked via httpx.
+Tests for src/services/scraping.py and src/services/google_scraper.py.
+Covers: normalize_biz_name, search_local_businesses (delegation),
+parse_address_components, and google_scraper internals.
+All external HTTP calls are mocked via curl_cffi.
 """
 
 import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from src.services.scraping import (
-    BRAVE_COST_PER_SEARCH,
-    BRAVE_POI_URL,
-    BRAVE_SEARCH_URL,
-    POI_BATCH_SIZE,
     normalize_biz_name,
     parse_address_components,
     search_local_businesses,
+)
+from src.services.google_scraper import (
+    _generate_place_id,
+    _clean_text,
+    _extract_from_html_fallback,
+    _extract_businesses_from_app_state,
 )
 
 
@@ -81,521 +83,135 @@ class TestNormalizeBizName:
 
 
 # ---------------------------------------------------------------------------
-# search_local_businesses
+# google_scraper helpers
 # ---------------------------------------------------------------------------
 
-def _make_mock_response(json_data, status_code=200):
-    """Create a mock httpx.Response with .json() and .raise_for_status()."""
-    resp = MagicMock(spec=httpx.Response)
-    resp.status_code = status_code
-    resp.json.return_value = json_data
-    if status_code >= 400:
-        resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-            message="error", request=MagicMock(), response=resp,
-        )
-    else:
-        resp.raise_for_status.return_value = None
-    return resp
+class TestGeneratePlaceId:
+    """Tests for deterministic place_id generation."""
 
+    def test_generates_gscrape_prefix(self):
+        pid = _generate_place_id("Cool Air HVAC", "+15125551234", "123 Main St")
+        assert pid.startswith("gscrape_")
+
+    def test_deterministic(self):
+        pid1 = _generate_place_id("Cool Air HVAC", "+15125551234", "123 Main St")
+        pid2 = _generate_place_id("Cool Air HVAC", "+15125551234", "123 Main St")
+        assert pid1 == pid2
+
+    def test_different_inputs_different_ids(self):
+        pid1 = _generate_place_id("Cool Air HVAC", "+15125551234", "123 Main St")
+        pid2 = _generate_place_id("Warm Air HVAC", "+15125551234", "123 Main St")
+        assert pid1 != pid2
+
+    def test_normalizes_name(self):
+        """LLC suffix should be stripped before hashing."""
+        pid1 = _generate_place_id("Acme HVAC LLC", "", "")
+        pid2 = _generate_place_id("Acme HVAC", "", "")
+        assert pid1 == pid2
+
+
+class TestCleanText:
+    def test_strips_html_entities(self):
+        assert _clean_text("Acme &amp; Sons") == "Acme & Sons"
+
+    def test_empty_returns_empty(self):
+        assert _clean_text("") == ""
+
+    def test_none_returns_empty(self):
+        assert _clean_text(None) == ""
+
+
+class TestExtractFromAppState:
+    def test_returns_empty_for_invalid_json(self):
+        assert _extract_businesses_from_app_state("{invalid}") == []
+
+    def test_returns_empty_for_empty_array(self):
+        assert _extract_businesses_from_app_state("[]") == []
+
+
+class TestExtractFromHtmlFallback:
+    def test_returns_empty_for_empty_html(self):
+        assert _extract_from_html_fallback("") == []
+
+    def test_returns_empty_for_non_html(self):
+        assert _extract_from_html_fallback("just plain text") == []
+
+
+# ---------------------------------------------------------------------------
+# search_local_businesses (delegation wrapper)
+# ---------------------------------------------------------------------------
 
 class TestSearchLocalBusinesses:
-    """Tests for the async search_local_businesses function."""
+    """Tests for the async search_local_businesses delegation wrapper."""
 
-    async def test_no_locations_in_search_results(self):
-        """When Brave returns no locations block, return empty results."""
-        search_resp = _make_mock_response({"web": {"results": []}})
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(return_value=search_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
-        assert result["total_location_ids"] == 0
-        assert result["cost_usd"] == pytest.approx(BRAVE_COST_PER_SEARCH)
-
-    async def test_locations_present_but_no_ids(self):
-        """When locations exist but none have an id field."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"name": "No ID Biz"}]}
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(return_value=search_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
-        assert result["total_location_ids"] == 0
-
-    async def test_single_poi_result(self):
-        """Happy path: 1 location ID -> 1 POI batch -> 1 parsed result."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "title": "Cool Air HVAC LLC",
-                "postal_address": {"displayAddress": "123 Main St, Austin, TX 78701"},
-                "contact": {"telephone": "+15125551234"},
-                "url": "https://coolair.com",
-                "categories": ["HVAC", "Air Conditioning"],
-                "results": [{
-                    "rating": {"ratingValue": 4.8, "ratingCount": 120}
-                }],
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert len(result["results"]) == 1
-        biz = result["results"][0]
-        assert biz["name"] == "Cool Air HVAC LLC"
-        assert biz["phone"] == "+15125551234"
-        assert biz["website"] == "https://coolair.com"
-        assert biz["address"] == "123 Main St, Austin, TX 78701"
-        assert biz["rating"] == 4.8
-        assert biz["reviews"] == 120
-        assert biz["type"] == "HVAC, Air Conditioning"
-        assert biz["place_id"].startswith("brave_")
-        assert result["total_location_ids"] == 1
-        # 1 search + 1 POI batch
-        assert result["cost_usd"] == pytest.approx(BRAVE_COST_PER_SEARCH * 2)
-
-    async def test_poi_with_name_fallback(self):
-        """POI with 'name' field instead of 'title'."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "name": "FallbackName Inc.",
-                "postal_address": {},
-                "contact": {},
-                "categories": [],
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"][0]["name"] == "FallbackName Inc."
-
-    async def test_poi_with_no_name_and_no_title(self):
-        """POI with neither 'title' nor 'name' -> empty string."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "postal_address": {},
-                "contact": {},
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"][0]["name"] == ""
-
-    async def test_poi_missing_contact_and_postal_address(self):
-        """POI with no contact or postal_address keys at all."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{"title": "Bare Bones Biz"}]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        biz = result["results"][0]
-        assert biz["phone"] == ""
-        assert biz["address"] == ""
-        assert biz["website"] == ""
-        assert biz["rating"] is None
-        assert biz["reviews"] is None
-        assert biz["type"] == ""
-
-    async def test_null_poi_entries_skipped(self):
-        """Null/None entries in POI results list should be skipped."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [None, {"title": "Real Biz"}, None]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert len(result["results"]) == 1
-        assert result["results"][0]["name"] == "Real Biz"
-
-    async def test_duplicate_pois_deduped(self):
-        """Identical businesses (same hash) should be deduped."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        dup_poi = {
-            "title": "Acme HVAC",
-            "postal_address": {"displayAddress": "100 Oak St"},
-            "contact": {"telephone": "+15125550000"},
+    async def test_delegates_to_google_scraper(self):
+        """search_local_businesses delegates to google_scraper module."""
+        mock_result = {
+            "results": [
+                {
+                    "name": "Cool Air HVAC",
+                    "place_id": "gscrape_abc123def456",
+                    "address": "123 Main St, Austin, TX 78701",
+                    "phone": "+15125551234",
+                    "website": "https://coolair.com",
+                    "rating": 4.8,
+                    "reviews": 120,
+                    "type": "HVAC",
+                }
+            ],
+            "cost_usd": 0.0,
+            "total_location_ids": 1,
         }
-        poi_resp = _make_mock_response({
-            "results": [dup_poi, dup_poi]
-        })
 
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
+        with patch(
+            "src.services.google_scraper.search_local_businesses",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ):
+            result = await search_local_businesses("HVAC", "Austin, TX")
 
         assert len(result["results"]) == 1
-
-    async def test_multiple_poi_batches(self):
-        """25 location IDs should trigger 2 POI batches (20 + 5)."""
-        ids = [{"id": f"loc_{i}"} for i in range(25)]
-        search_resp = _make_mock_response({
-            "locations": {"results": ids}
-        })
-        # Batch 1: 20 POIs, batch 2: 5 POIs
-        poi_resp_1 = _make_mock_response({
-            "results": [{"title": f"Biz {i}", "contact": {"telephone": f"+1512555{i:04d}"}} for i in range(20)]
-        })
-        poi_resp_2 = _make_mock_response({
-            "results": [{"title": f"Biz {i}", "contact": {"telephone": f"+1512555{i:04d}"}} for i in range(20, 25)]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp_1, poi_resp_2])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert len(result["results"]) == 25
-        assert result["total_location_ids"] == 25
-        # 1 search + 2 POI batches = 3
-        assert result["cost_usd"] == pytest.approx(BRAVE_COST_PER_SEARCH * 3)
-
-    async def test_max_poi_batches_limits_requests(self):
-        """max_poi_batches=1 with 25 IDs should only fetch first 20."""
-        ids = [{"id": f"loc_{i}"} for i in range(25)]
-        search_resp = _make_mock_response({
-            "locations": {"results": ids}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{"title": f"Biz {i}", "contact": {"telephone": f"+1512555{i:04d}"}} for i in range(20)]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses(
-                "HVAC", "Austin, TX", "fake-key", max_poi_batches=1
-            )
-
-        assert len(result["results"]) == 20
-        assert result["total_location_ids"] == 25
-        # 1 search + 1 POI batch
-        assert result["cost_usd"] == pytest.approx(BRAVE_COST_PER_SEARCH * 2)
-
-    async def test_search_http_error_returns_error(self):
-        """HTTP error on web search returns empty results with error."""
-        error_resp = _make_mock_response({}, status_code=500)
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(return_value=error_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
-        assert "error" in result
-
-    async def test_poi_http_error_returns_error(self):
-        """HTTP error on POI fetch returns empty results with error."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        error_resp = _make_mock_response({}, status_code=500)
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, error_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
-        assert "error" in result
-
-    async def test_network_timeout_returns_error(self):
-        """Network timeout is caught and returns error dict."""
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
-        assert "error" in result
-
-    async def test_rating_with_non_dict_nested_result(self):
-        """Nested results that are not dicts should be safely skipped."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "title": "Mixed Results Biz",
-                "results": ["not a dict", 42, {"rating": {"ratingValue": 3.5, "ratingCount": 10}}],
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
         biz = result["results"][0]
-        # Non-dict entries skipped; dict entry with rating found
-        assert biz["rating"] == 3.5
-        assert biz["reviews"] == 10
-
-    async def test_rating_obj_not_dict_skipped(self):
-        """If rating field is not a dict, it should be skipped gracefully."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "title": "Weird Rating Biz",
-                "results": [{"rating": "not a dict"}],
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        biz = result["results"][0]
-        assert biz["rating"] is None
-        assert biz["reviews"] is None
-
-    async def test_rating_value_none_keeps_none(self):
-        """ratingValue=None in valid rating object keeps rating as None."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "title": "No Rating Biz",
-                "results": [{"rating": {"ratingValue": None, "ratingCount": None}}],
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        biz = result["results"][0]
-        assert biz["rating"] is None
-        assert biz["reviews"] is None
-
-    async def test_empty_poi_results_list(self):
-        """POI response with empty results list."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({"results": []})
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"] == []
+        assert biz["name"] == "Cool Air HVAC"
+        assert biz["place_id"].startswith("gscrape_")
+        assert result["cost_usd"] == 0.0
         assert result["total_location_ids"] == 1
 
-    async def test_place_id_deterministic(self):
-        """Place ID is deterministic based on normalized name, phone, address."""
-        name = "Cool Air HVAC LLC"
-        phone = "+15125551234"
-        address = "123 Main St"
-
-        normalized = normalize_biz_name(name)
-        hash_input = f"{normalized}|{phone}|{address}".lower()
-        expected_id = f"brave_{hashlib.sha256(hash_input.encode()).hexdigest()[:12]}"
-
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{
-                "title": name,
-                "postal_address": {"displayAddress": address},
-                "contact": {"telephone": phone},
-            }]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"][0]["place_id"] == expected_id
-
-    async def test_locations_obj_none(self):
-        """When locations key exists but is None."""
-        search_resp = _make_mock_response({"locations": None})
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(return_value=search_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
+    async def test_returns_empty_on_no_results(self):
+        """No results returns empty list."""
+        with patch(
+            "src.services.google_scraper.search_local_businesses",
+            new_callable=AsyncMock,
+            return_value={"results": [], "cost_usd": 0.0, "total_location_ids": 0},
+        ):
+            result = await search_local_businesses("HVAC", "Austin, TX")
 
         assert result["results"] == []
         assert result["total_location_ids"] == 0
+        assert result["cost_usd"] == 0.0
 
-    async def test_locations_results_none(self):
-        """When locations.results is None."""
-        search_resp = _make_mock_response({"locations": {"results": None}})
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(return_value=search_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
+    async def test_error_returns_error_dict(self):
+        """Exception in google_scraper returns error dict."""
+        with patch(
+            "src.services.google_scraper.search_local_businesses",
+            new_callable=AsyncMock,
+            return_value={"results": [], "cost_usd": 0.0, "error": "scrape failed"},
+        ):
+            result = await search_local_businesses("HVAC", "Austin, TX")
 
         assert result["results"] == []
-        assert result["total_location_ids"] == 0
+        assert "error" in result
 
-    async def test_poi_results_key_none(self):
-        """When POI response has results=None."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({"results": None})
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
+    async def test_backward_compat_api_key_param_ignored(self):
+        """api_key param is accepted but ignored."""
+        with patch(
+            "src.services.google_scraper.search_local_businesses",
+            new_callable=AsyncMock,
+            return_value={"results": [], "cost_usd": 0.0, "total_location_ids": 0},
+        ):
+            result = await search_local_businesses("HVAC", "Austin, TX", api_key="ignored")
 
         assert result["results"] == []
-        assert result["total_location_ids"] == 1
-
-    async def test_nested_results_empty_list(self):
-        """POI with empty nested results list -> rating stays None."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{"title": "NoRating", "results": []}]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        biz = result["results"][0]
-        assert biz["rating"] is None
-        assert biz["reviews"] is None
-
-    async def test_contact_telephone_none(self):
-        """POI has contact dict but telephone is None -> phone is empty string."""
-        search_resp = _make_mock_response({
-            "locations": {"results": [{"id": "loc_1"}]}
-        })
-        poi_resp = _make_mock_response({
-            "results": [{"title": "NoPhone", "contact": {"telephone": None}}]
-        })
-
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        mock_client.get = AsyncMock(side_effect=[search_resp, poi_resp])
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.services.scraping.httpx.AsyncClient", return_value=mock_client):
-            result = await search_local_businesses("HVAC", "Austin, TX", "fake-key")
-
-        assert result["results"][0]["phone"] == ""
 
 
 # ---------------------------------------------------------------------------

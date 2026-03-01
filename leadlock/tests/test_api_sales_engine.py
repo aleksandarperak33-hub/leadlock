@@ -34,7 +34,7 @@ def _make_prospect(db, **overrides):
         "prospect_phone": "+15125551234",
         "prospect_trade_type": "hvac",
         "status": "cold",
-        "source": "brave",
+        "source": "google_scrape",
         "city": "Austin",
         "state_code": "TX",
         "outreach_sequence_step": 1,
@@ -99,7 +99,7 @@ def _make_scrape_job(db, **overrides):
     """Create a ScrapeJob with sensible defaults."""
     now = datetime.now(timezone.utc)
     defaults = {
-        "platform": "brave",
+        "platform": "google_scrape",
         "trade_type": "hvac",
         "location_query": "hvac in Austin, TX",
         "city": "Austin",
@@ -1222,8 +1222,8 @@ class TestGetSalesMetrics:
         """Should aggregate metrics from prospect and email data."""
         from src.api.sales_engine import get_sales_metrics
 
-        p1 = _make_prospect(db, status="cold", source="brave", total_cost_usd=0.05)
-        p2 = _make_prospect(db, status="demo_scheduled", source="brave", total_cost_usd=0.10, prospect_email="p2@x.com")
+        p1 = _make_prospect(db, status="cold", source="google_scrape", total_cost_usd=0.05)
+        p2 = _make_prospect(db, status="demo_scheduled", source="google_scrape", total_cost_usd=0.10, prospect_email="p2@x.com")
         await db.flush()
 
         _make_email(db, p1.id, direction="outbound")
@@ -1299,32 +1299,10 @@ class TestListScrapeJobs:
 class TestTriggerScrapeJob:
     """Tests for POST /api/v1/sales/scrape-jobs."""
 
-    @patch("src.config.get_settings")
-    async def test_rejects_when_no_brave_key(self, mock_settings):
-        """Should raise 400 when Brave API key is not configured."""
-        from src.api.sales_engine import trigger_scrape_job
-        from fastapi import HTTPException
-
-        settings = MagicMock()
-        settings.brave_api_key = ""
-        mock_settings.return_value = settings
-
-        with pytest.raises(HTTPException) as exc_info:
-            await trigger_scrape_job(
-                {"city": "Austin", "state": "TX", "trade_type": "hvac"},
-                admin=MagicMock(),
-            )
-        assert exc_info.value.status_code == 400
-
-    @patch("src.config.get_settings")
-    async def test_rejects_missing_city_state(self, mock_settings):
+    async def test_rejects_missing_city_state(self):
         """Should raise 400 when city or state is missing."""
         from src.api.sales_engine import trigger_scrape_job
         from fastapi import HTTPException
-
-        settings = MagicMock()
-        settings.brave_api_key = "test_key"
-        mock_settings.return_value = settings
 
         with pytest.raises(HTTPException) as exc_info:
             await trigger_scrape_job(
@@ -1335,14 +1313,9 @@ class TestTriggerScrapeJob:
 
     @patch("src.api.sales_scraper._run_scrape_background", new_callable=AsyncMock)
     @patch("src.api.sales_scraper.asyncio")
-    @patch("src.config.get_settings")
-    async def test_queues_scrape_successfully(self, mock_settings, mock_asyncio, mock_bg):
+    async def test_queues_scrape_successfully(self, mock_asyncio, mock_bg):
         """Should return queued status with job_id."""
         from src.api.sales_engine import trigger_scrape_job
-
-        settings = MagicMock()
-        settings.brave_api_key = "test_key"
-        mock_settings.return_value = settings
 
         result = await trigger_scrape_job(
             {"city": "Austin", "state": "TX", "trade_type": "hvac"},
@@ -2652,9 +2625,9 @@ class TestGetCommandCenter:
         }
 
         _make_config(db)
-        _make_prospect(db, status="cold", source="brave", prospect_email="f1@x.com")
-        _make_prospect(db, status="demo_scheduled", source="brave", prospect_email="f2@x.com")
-        _make_prospect(db, status="won", source="brave", prospect_email="f3@x.com")
+        _make_prospect(db, status="cold", source="google_scrape", prospect_email="f1@x.com")
+        _make_prospect(db, status="demo_scheduled", source="google_scrape", prospect_email="f2@x.com")
+        _make_prospect(db, status="won", source="google_scrape", prospect_email="f3@x.com")
         await db.flush()
 
         result = await get_command_center(db=db, admin=MagicMock())
@@ -2742,7 +2715,7 @@ class TestGetCommandCenter:
 
         _make_config(db, target_locations=[{"city": "Austin", "state": "TX"}])
         _make_scrape_job(db, new_prospects_created=10, duplicates_skipped=5)
-        _make_prospect(db, source="brave", prospect_email="s@x.com")
+        _make_prospect(db, source="google_scrape", prospect_email="s@x.com")
         await db.flush()
 
         result = await get_command_center(db=db, admin=MagicMock())
@@ -2772,7 +2745,7 @@ class TestRunScrapeBackground:
         from src.api.sales_engine import _run_scrape_background
 
         settings = MagicMock()
-        settings.brave_api_key = "test_key"
+        # No brave_api_key needed (removed)
         mock_settings.return_value = settings
 
         mock_search.return_value = {
@@ -2827,7 +2800,7 @@ class TestRunScrapeBackground:
         from src.api.sales_engine import _run_scrape_background
 
         settings = MagicMock()
-        settings.brave_api_key = "test_key"
+        # No brave_api_key needed (removed)
         mock_settings.return_value = settings
 
         mock_db = AsyncMock()
@@ -2861,7 +2834,7 @@ class TestRunScrapeBackground:
         from src.api.sales_engine import _run_scrape_background
 
         settings = MagicMock()
-        settings.brave_api_key = "test_key"
+        # No brave_api_key needed (removed)
         mock_settings.return_value = settings
 
         mock_search.return_value = {"cost_usd": 0.0, "results": []}

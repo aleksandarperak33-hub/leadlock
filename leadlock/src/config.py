@@ -79,7 +79,6 @@ class Settings(BaseSettings):
     allowed_origins: str = ""  # Comma-separated CORS origins (auto-includes localhost in dev)
 
     # Sales Engine
-    brave_api_key: str = ""
     hunter_api_key: str = ""  # DEPRECATED: Hunter.io removed, using website scraping + pattern guessing
     sales_engine_enabled: bool = False
     sales_daily_email_limit: int = 50
@@ -119,6 +118,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()

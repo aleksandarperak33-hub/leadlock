@@ -30,7 +30,6 @@ def _make_mock_settings(**overrides):
         "encryption_key": "test_encryption_key",
         "sentry_dsn": "",
         "sales_engine_enabled": False,
-        "brave_api_key": "",
     }
     defaults.update(overrides)
     settings = MagicMock()
@@ -360,7 +359,6 @@ class TestLifespan:
         """Lifespan starts sales engine workers when enabled."""
         mock_settings = _make_mock_settings(
             sales_engine_enabled=True,
-            brave_api_key="brave_test_key",
         )
         mock_app = MagicMock()
 

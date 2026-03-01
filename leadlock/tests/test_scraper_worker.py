@@ -3,7 +3,7 @@ Scraper worker tests - comprehensive coverage for lead discovery pipeline.
 Tests query rotation, dedup, enrichment, round-robin, heartbeat, and the
 main scrape_cycle / scrape_location_trade flows.
 
-All external services (Redis, Brave API, enrichment, phone validation) are mocked.
+All external services (Redis, Google scraping, enrichment, phone validation) are mocked.
 DB tests use the shared SQLite in-memory fixture from conftest.
 """
 import pytest
@@ -61,10 +61,9 @@ def _make_config(
     )
 
 
-def _make_settings(brave_api_key: str = "test-brave-key"):
+def _make_settings():
     """Create a mock settings object."""
     settings = MagicMock()
-    settings.brave_api_key = brave_api_key
     return settings
 
 
@@ -77,7 +76,7 @@ def _make_biz(
     reviews: int = 100,
     address: str = "123 Main St, Austin, TX 78701",
 ) -> dict:
-    """Create a mock business result from Brave Search."""
+    """Create a mock business result from Google scraping."""
     return {
         "name": name,
         "place_id": place_id,
@@ -149,7 +148,7 @@ class TestGetNextVariantAndOffset:
         # Mark variants 0 and 1 as completed recently
         for v in [0, 1]:
             job = ScrapeJob(
-                platform="brave",
+                platform="google_scrape",
                 trade_type="hvac",
                 location_query=f"query in Austin, TX",
                 city="Austin",
@@ -170,7 +169,7 @@ class TestGetNextVariantAndOffset:
         now = datetime.now(timezone.utc)
         for v in range(6):
             job = ScrapeJob(
-                platform="brave",
+                platform="google_scrape",
                 trade_type="hvac",
                 location_query="query in Austin, TX",
                 city="Austin",
@@ -191,7 +190,7 @@ class TestGetNextVariantAndOffset:
         old_date = datetime.now(timezone.utc) - timedelta(days=8)
         for v in range(6):
             job = ScrapeJob(
-                platform="brave",
+                platform="google_scrape",
                 trade_type="hvac",
                 location_query="query in Austin, TX",
                 city="Austin",
@@ -210,7 +209,7 @@ class TestGetNextVariantAndOffset:
     async def test_different_location_is_independent(self, db):
         """Variant tracking is per-location."""
         job = ScrapeJob(
-            platform="brave",
+            platform="google_scrape",
             trade_type="hvac",
             location_query="query in Dallas, TX",
             city="Dallas",
@@ -229,7 +228,7 @@ class TestGetNextVariantAndOffset:
     async def test_different_trade_is_independent(self, db):
         """Variant tracking is per-trade."""
         job = ScrapeJob(
-            platform="brave",
+            platform="google_scrape",
             trade_type="plumbing",
             location_query="query in Austin, TX",
             city="Austin",
@@ -248,7 +247,7 @@ class TestGetNextVariantAndOffset:
     async def test_failed_jobs_not_counted(self, db):
         """Only 'completed' jobs should block variants."""
         job = ScrapeJob(
-            platform="brave",
+            platform="google_scrape",
             trade_type="hvac",
             location_query="query in Austin, TX",
             city="Austin",
@@ -283,7 +282,7 @@ class TestGetNextVariantAndOffset:
         # completed 3 days ago - default 7-day cooldown: should be blocked
         completed_at = datetime.now(timezone.utc) - timedelta(days=3)
         job = ScrapeJob(
-            platform="brave",
+            platform="google_scrape",
             trade_type="hvac",
             location_query="query in Austin, TX",
             city="Austin",
@@ -433,14 +432,13 @@ class TestScrapeLocationTrade:
         db.add(config)
         await db.flush()
 
-        settings = _make_settings()
         biz = _make_biz()
 
         with (
             patch(
                 "src.workers.scraper.search_local_businesses",
                 new_callable=AsyncMock,
-                return_value={"results": [biz], "cost_usd": 0.005},
+                return_value={"results": [biz], "cost_usd": 0.0},
             ),
             patch(
                 "src.workers.scraper.normalize_phone",
@@ -462,7 +460,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, settings, "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -474,7 +472,7 @@ class TestScrapeLocationTrade:
         assert jobs[0].new_prospects_created == 1
         assert jobs[0].duplicates_skipped == 0
         assert jobs[0].results_found == 1
-        assert jobs[0].api_cost_usd == 0.005
+        assert jobs[0].api_cost_usd == 0.0
 
         # Verify Outreach
         prospects = (await db.execute(select(Outreach))).scalars().all()
@@ -489,7 +487,7 @@ class TestScrapeLocationTrade:
         assert prospects[0].zip_code == "78701"
         assert prospects[0].outreach_sequence_step == 0
         assert prospects[0].status == "cold"
-        assert prospects[0].source == "brave"
+        assert prospects[0].source == "google_scrape"
 
     async def test_skips_biz_without_place_id_and_phone(self, db):
         """Businesses with no place_id and no phone should be skipped."""
@@ -508,7 +506,7 @@ class TestScrapeLocationTrade:
             patch("src.workers.scraper.normalize_phone", return_value=""),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -542,7 +540,7 @@ class TestScrapeLocationTrade:
             patch("src.workers.scraper.parse_address_components", return_value={}),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -577,7 +575,7 @@ class TestScrapeLocationTrade:
             patch("src.workers.scraper.parse_address_components", return_value={}),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -608,7 +606,7 @@ class TestScrapeLocationTrade:
             patch("src.workers.scraper.extract_domain", return_value=None),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -648,7 +646,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -685,7 +683,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -695,7 +693,7 @@ class TestScrapeLocationTrade:
         assert prospects[0].prospect_email is None
 
     async def test_search_api_failure_marks_job_failed(self, db):
-        """If Brave API call raises, job should be marked 'failed'."""
+        """If Google scrape call raises, job should be marked 'failed'."""
         config = _make_config()
         db.add(config)
         await db.flush()
@@ -703,10 +701,10 @@ class TestScrapeLocationTrade:
         with patch(
             "src.workers.scraper.search_local_businesses",
             new_callable=AsyncMock,
-            side_effect=Exception("Brave API timeout"),
+            side_effect=Exception("Google scrape timeout"),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -714,7 +712,7 @@ class TestScrapeLocationTrade:
         jobs = (await db.execute(select(ScrapeJob))).scalars().all()
         assert len(jobs) == 1
         assert jobs[0].status == "failed"
-        assert "Brave API timeout" in jobs[0].error_message
+        assert "Google scrape timeout" in jobs[0].error_message
         assert jobs[0].completed_at is not None
 
     async def test_multiple_businesses_mixed_dupes(self, db):
@@ -748,7 +746,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -781,7 +779,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -816,7 +814,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -848,7 +846,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -894,7 +892,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -927,7 +925,7 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
@@ -944,16 +942,16 @@ class TestScrapeLocationTrade:
         with patch(
             "src.workers.scraper.search_local_businesses",
             new_callable=AsyncMock,
-            return_value={"results": [], "cost_usd": 0.005},
+            return_value={"results": [], "cost_usd": 0.0},
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
 
         jobs = (await db.execute(select(ScrapeJob))).scalars().all()
-        assert jobs[0].api_cost_usd == 0.005
+        assert jobs[0].api_cost_usd == 0.0
         assert jobs[0].results_found == 0
 
     async def test_error_cost_preserved(self, db):
@@ -968,7 +966,7 @@ class TestScrapeLocationTrade:
             patch(
                 "src.workers.scraper.search_local_businesses",
                 new_callable=AsyncMock,
-                return_value={"results": [biz], "cost_usd": 0.005},
+                return_value={"results": [biz], "cost_usd": 0.0},
             ),
             patch(
                 "src.workers.scraper.normalize_phone",
@@ -976,14 +974,14 @@ class TestScrapeLocationTrade:
             ),
         ):
             await scrape_location_trade(
-                db, config, _make_settings(), "Austin", "TX", "Austin, TX",
+                db, config, "Austin", "TX", "Austin, TX",
                 "hvac", "HVAC contractors", 0, 0,
             )
             await db.flush()
 
         jobs = (await db.execute(select(ScrapeJob))).scalars().all()
         assert jobs[0].status == "failed"
-        assert jobs[0].api_cost_usd == 0.005
+        assert jobs[0].api_cost_usd == 0.0
         assert "phone exploded" in jobs[0].error_message
 
 
@@ -1016,24 +1014,6 @@ class TestScrapeCycle:
             await scrape_cycle()
         mock_search.assert_not_called()
 
-    async def test_no_brave_key_skips(self, db):
-        """Missing Brave API key should skip scraping."""
-        await self._setup_active_config(db)
-
-        mock_factory = AsyncMock()
-        mock_factory.__aenter__ = AsyncMock(return_value=db)
-        mock_factory.__aexit__ = AsyncMock(return_value=False)
-
-        mock_settings = _make_settings(brave_api_key="")
-
-        with (
-            patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=mock_settings),
-            patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
-        ):
-            await scrape_cycle()
-        mock_search.assert_not_called()
-
     async def test_no_locations_skips(self, db):
         """Empty target_locations should skip."""
         await self._setup_active_config(db, target_locations=[])
@@ -1044,7 +1024,7 @@ class TestScrapeCycle:
 
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
         ):
             await scrape_cycle()
@@ -1060,7 +1040,7 @@ class TestScrapeCycle:
 
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
         ):
             await scrape_cycle()
@@ -1072,7 +1052,7 @@ class TestScrapeCycle:
 
         # Create a ScrapeJob from today
         job = ScrapeJob(
-            platform="brave",
+            platform="google_scrape",
             trade_type="hvac",
             location_query="test",
             city="Austin",
@@ -1089,7 +1069,7 @@ class TestScrapeCycle:
 
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
         ):
             await scrape_cycle()
@@ -1103,7 +1083,7 @@ class TestScrapeCycle:
         now = datetime.now(timezone.utc)
         for v in range(6):
             job = ScrapeJob(
-                platform="brave",
+                platform="google_scrape",
                 trade_type="hvac",
                 location_query=f"query in Austin, TX",
                 city="Austin",
@@ -1121,7 +1101,7 @@ class TestScrapeCycle:
 
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper._get_round_robin_position", new_callable=AsyncMock, return_value=0),
             patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
         ):
@@ -1138,7 +1118,7 @@ class TestScrapeCycle:
 
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper._get_round_robin_position", new_callable=AsyncMock, return_value=0),
             patch("src.workers.scraper.scrape_location_trade", new_callable=AsyncMock) as mock_slt,
         ):
@@ -1146,9 +1126,9 @@ class TestScrapeCycle:
 
         mock_slt.assert_called_once()
         call_args = mock_slt.call_args
-        assert call_args[0][3] == "Austin"  # city
-        assert call_args[0][4] == "TX"  # state
-        assert call_args[0][6] == "hvac"  # trade
+        assert call_args[0][2] == "Austin"  # city
+        assert call_args[0][3] == "TX"  # state
+        assert call_args[0][5] == "hvac"  # trade
 
     async def test_no_config_row_skips(self, db):
         """No SalesEngineConfig row should skip."""
@@ -1175,7 +1155,7 @@ class TestScrapeCycle:
         # The code does `config.target_locations or []` so None becomes [].
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper.search_local_businesses", new_callable=AsyncMock) as mock_search,
         ):
             await scrape_cycle()
@@ -1199,7 +1179,7 @@ class TestScrapeCycle:
         # Round-robin position 2 -> combos[2] = (Dallas, TX, hvac)
         with (
             patch("src.workers.scraper.async_session_factory", return_value=mock_factory),
-            patch("src.workers.scraper.get_settings", return_value=_make_settings()),
+
             patch("src.workers.scraper._get_round_robin_position", new_callable=AsyncMock, return_value=2),
             patch("src.workers.scraper.scrape_location_trade", new_callable=AsyncMock) as mock_slt,
         ):
@@ -1207,8 +1187,8 @@ class TestScrapeCycle:
 
         mock_slt.assert_called_once()
         call_args = mock_slt.call_args
-        assert call_args[0][3] == "Dallas"  # city
-        assert call_args[0][6] == "hvac"  # trade
+        assert call_args[0][2] == "Dallas"  # city
+        assert call_args[0][5] == "hvac"  # trade
 
 
 # ---------------------------------------------------------------------------

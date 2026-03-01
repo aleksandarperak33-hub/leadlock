@@ -80,12 +80,6 @@ async def trigger_scrape_job(
     """Manually trigger a scrape job. Returns immediately, runs in background.
     Automatically picks the next query variant + offset to avoid repeat results.
     """
-    from src.config import get_settings
-
-    settings = get_settings()
-    if not settings.brave_api_key:
-        raise HTTPException(status_code=400, detail="Brave API key not configured")
-
     city = payload.get("city", "")
     state = payload.get("state", "")
     trade = payload.get("trade_type", "general")
@@ -114,14 +108,12 @@ async def _run_scrape_background(
     tenant_id=None,
 ) -> None:
     """Background task to run a manual scrape job with auto query rotation."""
-    from src.config import get_settings
     from src.services.scraping import search_local_businesses, parse_address_components
     from src.services.enrichment import enrich_prospect_email, extract_domain
     from src.services.phone_validation import normalize_phone
     from src.utils.email_validation import validate_email
     from src.workers.scraper import get_next_variant_and_offset, get_query_variants
 
-    settings = get_settings()
     location_str = f"{city}, {state}"
     total_cost = 0.0
     new_count = 0
@@ -149,7 +141,7 @@ async def _run_scrape_background(
         job = ScrapeJob(
             id=uuid.UUID(job_id),
             tenant_id=tenant_id,
-            platform="brave",
+            platform="google_scrape",
             trade_type=trade,
             location_query=f"{query} in {location_str}",
             city=city,
@@ -163,9 +155,7 @@ async def _run_scrape_background(
         await db.flush()
 
         try:
-            search_results = await search_local_businesses(
-                query, location_str, settings.brave_api_key,
-            )
+            search_results = await search_local_businesses(query, location_str)
             total_cost += search_results.get("cost_usd", 0)
             all_results = search_results.get("results", [])
 
@@ -232,7 +222,7 @@ async def _run_scrape_background(
                     prospect_phone=phone,
                     prospect_trade_type=trade,
                     status="cold",
-                    source="brave",
+                    source="google_scrape",
                     source_place_id=place_id if place_id else None,
                     website=website,
                     google_rating=biz.get("rating"),

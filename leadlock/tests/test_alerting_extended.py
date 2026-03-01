@@ -116,10 +116,11 @@ class TestSendEmailAlert:
             assert "health_check_failed" in args[1]
             assert "N/A" in args[3]
 
-    async def test_uses_default_email_when_not_configured(self):
-        """Falls back to noreply@leadlock.org when from_email_transactional is empty."""
+    async def test_skips_email_when_no_recipient_configured(self):
+        """Skips sending when both alert_recipient_email and from_email_transactional are empty."""
         mock_settings = MagicMock()
         mock_settings.from_email_transactional = ""
+        mock_settings.alert_recipient_email = ""
 
         mock_send = AsyncMock()
 
@@ -139,8 +140,7 @@ class TestSendEmailAlert:
                 extra=None,
             )
 
-            mock_send.assert_called_once()
-            assert mock_send.call_args[0][0] == "noreply@leadlock.org"
+            mock_send.assert_not_called()
 
     async def test_email_exception_is_swallowed(self):
         """_send_email_alert catches exceptions and does not raise (line 162-163)."""

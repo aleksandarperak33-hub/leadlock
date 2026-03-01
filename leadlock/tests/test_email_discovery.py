@@ -4,7 +4,6 @@ Tests for email discovery service — multi-source email finding.
 Covers:
 - discover_email orchestration (strategy priority)
 - deep_scrape_website (extended paths, JSON-LD, footer, internal links)
-- search_brave_for_email (API integration)
 - _extract_all_emails helper (mailto, JSON-LD, footer, regex)
 - _extract_internal_links (dedup, priority, SSRF safety)
 - enrichment_data fallback
@@ -17,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.services.email_discovery import (
     discover_email,
     deep_scrape_website,
-    search_brave_for_email,
     _candidate_base_urls,
     _extract_all_emails,
     _extract_json_ld_emails,
@@ -51,36 +49,10 @@ class TestDiscoverEmail:
         assert result["cost_usd"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_brave_search(self):
-        """When deep scrape returns empty, falls to strategy 2 (Brave)."""
-        with patch(
-            "src.services.email_discovery.deep_scrape_website",
-            new_callable=AsyncMock,
-            return_value=[],
-        ), patch(
-            "src.services.email_discovery.search_brave_for_email",
-            new_callable=AsyncMock,
-            return_value=["info@hvacpro.com"],
-        ):
-            result = await discover_email(
-                website="https://hvacpro.com",
-                company_name="HVAC Pro",
-            )
-
-        assert result["email"] == "info@hvacpro.com"
-        assert result["source"] == "brave_search"
-        assert result["confidence"] == "medium"  # brave_search stays medium (17% bounce rate)
-        assert result["cost_usd"] == 0.005
-
-    @pytest.mark.asyncio
     async def test_falls_back_to_enrichment_candidates(self):
-        """When scrape + Brave fail, uses enrichment_data candidates."""
+        """When scrape fails, uses enrichment_data candidates."""
         with patch(
             "src.services.email_discovery.deep_scrape_website",
-            new_callable=AsyncMock,
-            return_value=[],
-        ), patch(
-            "src.services.email_discovery.search_brave_for_email",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -103,10 +75,6 @@ class TestDiscoverEmail:
             "src.services.email_discovery.deep_scrape_website",
             new_callable=AsyncMock,
             return_value=[],
-        ), patch(
-            "src.services.email_discovery.search_brave_for_email",
-            new_callable=AsyncMock,
-            return_value=[],
         ):
             result = await discover_email(
                 website="https://hvacpro.com",
@@ -119,7 +87,7 @@ class TestDiscoverEmail:
 
     @pytest.mark.asyncio
     async def test_returns_none_without_website_or_domain(self):
-        """No website and no domain → no email."""
+        """No website and no domain -> no email."""
         result = await discover_email(
             website="",
             company_name="Unknown Co",
@@ -135,28 +103,21 @@ class TestDiscoverEmail:
             "src.services.email_discovery.deep_scrape_website",
             new_callable=AsyncMock,
             side_effect=Exception("scrape exploded"),
-        ), patch(
-            "src.services.email_discovery.search_brave_for_email",
-            new_callable=AsyncMock,
-            return_value=["contact@hvacpro.com"],
         ):
             result = await discover_email(
                 website="https://hvacpro.com",
                 company_name="HVAC Pro",
             )
 
-        assert result["email"] == "contact@hvacpro.com"
-        assert result["source"] == "brave_search"
+        # Should fall through to enrichment or pattern_guess
+        assert result["email"] is not None
+        assert result["source"] in ("enrichment_candidate", "pattern_guess")
 
     @pytest.mark.asyncio
     async def test_enrichment_candidate_filters_noreply(self):
         """Enrichment candidates skip noreply addresses."""
         with patch(
             "src.services.email_discovery.deep_scrape_website",
-            new_callable=AsyncMock,
-            return_value=[],
-        ), patch(
-            "src.services.email_discovery.search_brave_for_email",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -433,96 +394,3 @@ class TestCandidateBaseUrls:
             "http://www.hvacpro.com",
             "http://hvacpro.com",
         ]
-
-
-# ---------------------------------------------------------------------------
-# search_brave_for_email
-# ---------------------------------------------------------------------------
-class TestSearchBraveForEmail:
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_without_api_key(self):
-        """No Brave API key → no search."""
-        with patch("src.config.get_settings") as mock_settings:
-            mock_settings.return_value.brave_api_key = None
-            result = await search_brave_for_email("hvacpro.com")
-
-        assert result == []
-
-    @pytest.mark.asyncio
-    async def test_extracts_emails_from_search_results(self):
-        """Parses emails from Brave search snippets."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "web": {
-                "results": [
-                    {
-                        "description": "Contact HVAC Pro at info@hvacpro.com for service",
-                        "title": "HVAC Pro",
-                    },
-                    {
-                        "description": "No email here",
-                        "title": "Random Page",
-                    },
-                ],
-            },
-        }
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.config.get_settings") as mock_settings, \
-             patch("src.services.email_discovery.httpx.AsyncClient", return_value=mock_client):
-            mock_settings.return_value.brave_api_key = "test-key"
-            result = await search_brave_for_email("hvacpro.com")
-
-        assert "info@hvacpro.com" in result
-
-    @pytest.mark.asyncio
-    async def test_filters_wrong_domain_from_brave(self):
-        """Only returns emails matching the target domain."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "web": {
-                "results": [
-                    {
-                        "description": "Contact user@otherdomain.com and info@hvacpro.com",
-                        "title": "Results",
-                    },
-                ],
-            },
-        }
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.config.get_settings") as mock_settings, \
-             patch("src.services.email_discovery.httpx.AsyncClient", return_value=mock_client):
-            mock_settings.return_value.brave_api_key = "test-key"
-            result = await search_brave_for_email("hvacpro.com")
-
-        assert "info@hvacpro.com" in result
-        assert "user@otherdomain.com" not in result
-
-    @pytest.mark.asyncio
-    async def test_handles_api_error_gracefully(self):
-        """Brave API failure returns empty list."""
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=Exception("API down"))
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("src.config.get_settings") as mock_settings, \
-             patch("src.services.email_discovery.httpx.AsyncClient", return_value=mock_client):
-            mock_settings.return_value.brave_api_key = "test-key"
-            result = await search_brave_for_email("hvacpro.com")
-
-        assert result == []

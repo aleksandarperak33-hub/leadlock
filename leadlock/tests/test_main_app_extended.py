@@ -1,7 +1,6 @@
 """
 Extended tests for src/main.py - covers Sentry init failure, sales engine config
-branches (auto-create, inactive, exception), brave_api_key warning, and shutdown
-with pending worker tasks.
+branches (auto-create, inactive, exception), and shutdown with pending worker tasks.
 """
 import asyncio
 import contextlib
@@ -26,7 +25,6 @@ def _make_mock_settings(**overrides):
         "encryption_key": "test_encryption_key",
         "sentry_dsn": "",
         "sales_engine_enabled": False,
-        "brave_api_key": "",
     }
     defaults.update(overrides)
     settings = MagicMock()
@@ -110,50 +108,7 @@ class TestSentryInitFailure:
 
 
 # ---------------------------------------------------------------------------
-# Sales engine - brave_api_key warning (line 116)
-# ---------------------------------------------------------------------------
-
-
-class TestSalesEngineBraveKeyWarning:
-    @pytest.mark.asyncio
-    async def test_logs_error_when_brave_key_missing(self):
-        """Sales engine enabled but BRAVE_API_KEY not set logs an error."""
-        mock_settings = _make_mock_settings(
-            sales_engine_enabled=True,
-            brave_api_key="",
-        )
-        mock_app = MagicMock()
-
-        mock_db = AsyncMock()
-        mock_config = MagicMock()
-        mock_config.is_active = True
-        mock_config.target_locations = ["Austin"]
-        mock_config.target_trade_types = ["hvac"]
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_config
-        mock_db.execute = AsyncMock(return_value=mock_result)
-
-        with contextlib.ExitStack() as stack:
-            stack.enter_context(patch("src.main.get_settings", return_value=mock_settings))
-            mock_logger = stack.enter_context(patch("src.main.logger"))
-            stack.enter_context(patch("asyncio.create_task", side_effect=_dummy_create_task))
-            stack.enter_context(patch("asyncio.wait", new_callable=AsyncMock, return_value=(set(), set())))
-            stack.enter_context(patch("src.database.async_session_factory", return_value=_FakeDbCtx(mock_db)))
-            _enter_worker_patches(stack, _CORE_WORKER_PATHS)
-            _enter_worker_patches(stack, _SALES_WORKER_PATHS)
-
-            async with lifespan(mock_app):
-                pass
-
-            error_calls = [
-                c for c in mock_logger.error.call_args_list
-                if "BRAVE_API_KEY" in str(c)
-            ]
-            assert len(error_calls) == 1
-
-
-# ---------------------------------------------------------------------------
-# Sales engine config - auto-create (lines 131-134)
+# Sales engine config - auto-create
 # ---------------------------------------------------------------------------
 
 
@@ -163,7 +118,6 @@ class TestSalesEngineConfigAutoCreate:
         """When no SalesEngineConfig row exists, one is auto-created inactive."""
         mock_settings = _make_mock_settings(
             sales_engine_enabled=True,
-            brave_api_key="brave_key_123",
         )
         mock_app = MagicMock()
 
@@ -206,7 +160,6 @@ class TestSalesEngineConfigInactive:
         """When SalesEngineConfig exists but is_active=False, info is logged."""
         mock_settings = _make_mock_settings(
             sales_engine_enabled=True,
-            brave_api_key="brave_key_123",
         )
         mock_app = MagicMock()
 
@@ -248,7 +201,6 @@ class TestSalesEngineConfigVerifyFailure:
         """When DB query fails, a warning is logged and startup continues."""
         mock_settings = _make_mock_settings(
             sales_engine_enabled=True,
-            brave_api_key="brave_key_123",
         )
         mock_app = MagicMock()
 

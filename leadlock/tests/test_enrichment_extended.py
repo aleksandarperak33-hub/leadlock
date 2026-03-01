@@ -410,22 +410,22 @@ class TestEnrichProspectEmail:
         assert result["cost_usd"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_brave_search_fallback(self):
-        """When discover_email finds via Brave → medium confidence, small cost."""
+    async def test_enrichment_candidate_fallback(self):
+        """When discover_email finds via enrichment candidate -> medium confidence."""
         with patch(
             "src.services.email_discovery.discover_email",
             new_callable=AsyncMock,
             return_value={
                 "email": "info@hvacpro.com",
-                "source": "brave_search",
+                "source": "enrichment_candidate",
                 "confidence": "medium",
-                "cost_usd": 0.005,
+                "cost_usd": 0.0,
             },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
         assert result["email"] == "info@hvacpro.com"
-        assert result["source"] == "brave_search"
+        assert result["source"] == "enrichment_candidate"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_no_website_and_no_domain(self):

@@ -231,16 +231,8 @@ async def gmb_lookup(request: Request):
     if len(url) > 2000:
         raise HTTPException(status_code=400, detail="Input too long")
 
-    from src.config import get_settings
-    settings = get_settings()
-
-    api_key = settings.brave_api_key
-    if not api_key:
-        logger.error("GMB lookup failed: BRAVE_API_KEY not configured")
-        raise HTTPException(status_code=503, detail="Business lookup temporarily unavailable")
-
     from src.services.gmb_lookup import lookup_business
-    result = await lookup_business(url, api_key)
+    result = await lookup_business(url)
 
     if not result.get("success"):
         raise HTTPException(status_code=404, detail=result.get("error", "Business not found"))

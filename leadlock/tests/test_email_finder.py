@@ -247,9 +247,9 @@ class TestProcessBatch:
 
         discovery_result = {
             "email": "owner@hvacpro.com",
-            "source": "brave_search",
+            "source": "enrichment_candidate",
             "confidence": "medium",
-            "cost_usd": 0.005,
+            "cost_usd": 0.0,
         }
 
         with patch(
@@ -263,7 +263,7 @@ class TestProcessBatch:
             from src.workers.email_finder import _process_batch
             await _process_batch()
 
-        assert prospect.total_cost_usd == pytest.approx(0.105)
+        assert prospect.total_cost_usd == pytest.approx(0.10)
 
     @pytest.mark.asyncio
     async def test_handles_no_email_from_discovery(self):

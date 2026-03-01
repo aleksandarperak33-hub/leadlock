@@ -1,8 +1,7 @@
 """
-Lead scraper worker - discovers home services contractors via Brave Search API.
+Lead scraper worker - discovers home services contractors via Google Maps scraping.
 Runs every 15 minutes (configurable). Uses query rotation (6 variants per trade)
-so re-scrapes always return fresh results instead of duplicates. Each query
-fetches ALL location IDs from Brave (up to 100 POIs via batch requests).
+so re-scrapes always return fresh results instead of duplicates.
 Processes 1 location+trade combo per cycle (round-robin via Redis).
 7-day cooldown on exhausted variants. Deduplicates by place_id and phone number.
 """
@@ -22,15 +21,13 @@ from src.services.scraping import search_local_businesses, parse_address_compone
 from src.services.enrichment import enrich_prospect_email, extract_domain
 from src.services.phone_validation import normalize_phone
 from src.utils.email_validation import validate_email
-from src.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL_SECONDS = 15 * 60  # 15 minutes
 DEFAULT_VARIANT_COOLDOWN_DAYS = 7
 
 # Patterns in business names indicating closed/inactive businesses.
-# These appear in Google/Brave listings for businesses that no longer operate.
+# These appear in Google listings for businesses that no longer operate.
 # Avoids bare "closed" to prevent false positives like "Closed Loop HVAC".
 _CLOSED_NAME_PATTERNS = re.compile(
     r"\b(permanently\s+closed|temporarily\s+closed|out\s+of\s+business"
@@ -266,11 +263,6 @@ async def scrape_cycle():
             logger.debug("No active tenant config for scraper cycle")
             return
 
-        settings = get_settings()
-        if not settings.brave_api_key:
-            logger.warning("Brave API key not configured, skipping scrape")
-            return
-
         for config in configs:
             tenant_id = config.tenant_id
             locations = config.target_locations or []
@@ -330,7 +322,6 @@ async def scrape_cycle():
             await scrape_location_trade(
                 db,
                 config,
-                settings,
                 city,
                 state,
                 location_str,
@@ -347,7 +338,6 @@ async def scrape_cycle():
 async def scrape_location_trade(
     db: AsyncSession,
     config: SalesEngineConfig,
-    settings,
     city: str,
     state: str,
     location_str: str,
@@ -360,7 +350,7 @@ async def scrape_location_trade(
     # Create scrape job record
     job = ScrapeJob(
         tenant_id=config.tenant_id,
-        platform="brave",
+        platform="google_scrape",
         trade_type=trade,
         location_query=f"{query} in {location_str}",
         city=city,
@@ -379,10 +369,7 @@ async def scrape_location_trade(
     _prospects_to_research: list[str] = []
 
     try:
-        # Search via Brave - fetches ALL location IDs in batches of 20
-        search_results = await search_local_businesses(
-            query, location_str, settings.brave_api_key,
-        )
+        search_results = await search_local_businesses(query, location_str)
         total_cost += search_results.get("cost_usd", 0)
         all_results = search_results.get("results", [])
 
@@ -492,7 +479,7 @@ async def scrape_location_trade(
                 prospect_phone=phone,
                 prospect_trade_type=trade,
                 status="cold",
-                source="brave",
+                source="google_scrape",
                 source_place_id=place_id if place_id else None,
                 website=website,
                 google_rating=biz.get("rating"),

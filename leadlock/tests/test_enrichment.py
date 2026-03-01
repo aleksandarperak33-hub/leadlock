@@ -317,24 +317,24 @@ class TestEnrichProspectEmail:
         assert result["verified"] is True
 
     @pytest.mark.asyncio
-    async def test_brave_search_returns_unverified(self):
-        """Brave search with medium confidence → verified=False."""
+    async def test_enrichment_candidate_returns_unverified(self):
+        """Enrichment candidate with medium confidence -> verified=False."""
         with patch(
             "src.services.email_discovery.discover_email",
             new_callable=AsyncMock,
             return_value={
                 "email": "info@hvacpro.com",
-                "source": "brave_search",
+                "source": "enrichment_candidate",
                 "confidence": "medium",
-                "cost_usd": 0.005,
+                "cost_usd": 0.0,
             },
         ):
             result = await enrich_prospect_email("https://hvacpro.com", "HVAC Pro")
 
         assert result["email"] == "info@hvacpro.com"
-        assert result["source"] == "brave_search"
+        assert result["source"] == "enrichment_candidate"
         assert result["verified"] is False
-        assert result["cost_usd"] == 0.005
+        assert result["cost_usd"] == 0.0
 
     @pytest.mark.asyncio
     async def test_pattern_guess_returns_unverified(self):

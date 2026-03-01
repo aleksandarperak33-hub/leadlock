@@ -155,12 +155,6 @@ async def lifespan(app: FastAPI):
 
     # Sales engine workers - gated behind config flag
     if settings.sales_engine_enabled:
-        if not settings.brave_api_key:
-            logger.error(
-                "SALES_ENGINE_ENABLED=true but BRAVE_API_KEY is not set. "
-                "Scraper will not run until BRAVE_API_KEY is configured."
-            )
-
         # Ensure at least one SalesEngineConfig row exists (auto-seed if missing)
         try:
             from src.database import async_session_factory

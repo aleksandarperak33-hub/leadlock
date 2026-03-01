@@ -53,6 +53,7 @@ def _make_config(
     reply_to_email: str = "reply@leadlock.ai",
     company_address: str = "123 Main St",
     sequencer_paused: bool = False,
+    booking_url: str | None = None,
 ):
     """Create a mock SalesEngineConfig."""
     config = MagicMock()
@@ -70,6 +71,7 @@ def _make_config(
     config.reply_to_email = reply_to_email
     config.company_address = company_address
     config.sequencer_paused = sequencer_paused
+    config.booking_url = booking_url
     return config
 
 
@@ -3206,16 +3208,16 @@ class TestVerifyOrFindWorkingEmail:
             new_callable=AsyncMock,
             return_value={
                 "email": "found@acmehvac.com",
-                "source": "brave_search",
+                "source": "website_deep_scrape",
                 "confidence": "high",
-                "cost_usd": 0.005,
+                "cost_usd": 0.0,
             },
         ):
             result = await _verify_or_find_working_email(prospect)
 
         assert result == "found@acmehvac.com"
-        assert prospect.total_cost_usd == pytest.approx(0.015)
-        assert prospect.email_source == "brave_search"
+        assert prospect.total_cost_usd == pytest.approx(0.01)
+        assert prospect.email_source == "website_deep_scrape"
         assert prospect.email_verified is True
 
     async def test_accepts_medium_confidence(self):
@@ -3229,15 +3231,15 @@ class TestVerifyOrFindWorkingEmail:
             new_callable=AsyncMock,
             return_value={
                 "email": "found@acmehvac.com",
-                "source": "brave_search",
+                "source": "enrichment_candidate",
                 "confidence": "medium",
-                "cost_usd": 0.005,
+                "cost_usd": 0.0,
             },
         ):
             result = await _verify_or_find_working_email(prospect)
 
         assert result == "found@acmehvac.com"
-        assert prospect.email_source == "brave_search"
+        assert prospect.email_source == "enrichment_candidate"
         assert prospect.email_verified is True
 
 

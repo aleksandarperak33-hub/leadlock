@@ -1,18 +1,16 @@
 """
 GMB (Google Business Profile) lookup service.
 
-Parses Google Maps URLs to extract business info, then uses Brave Search
-POI data to return structured business details for onboarding pre-fill.
+Parses Google Maps URLs to extract business info, then uses Google Maps
+scraping to return structured business details for onboarding pre-fill.
 """
 import logging
 import re
-from typing import Optional
 from urllib.parse import unquote_plus, urlparse, parse_qs
 
 import httpx
 
 from src.services.scraping import (
-    search_local_businesses,
     normalize_biz_name,
     parse_address_components,
 )
@@ -187,111 +185,13 @@ async def resolve_short_url(url: str) -> str:
         return url
 
 
-def _parse_infobox_location(infobox: dict) -> Optional[dict]:
-    """Extract business data from a Brave infobox with location info."""
-    results = infobox.get("results") or []
-    for item in results:
-        if not isinstance(item, dict):
-            continue
-        # Check for location data in the infobox result
-        location = item.get("location") or {}
-        postal = location.get("postal_address") or item.get("postal_address") or {}
-        contact = location.get("contact") or item.get("contact") or {}
-        address = postal.get("displayAddress") or ""
-        phone = contact.get("telephone") or ""
-        name = item.get("title") or ""
-        website = item.get("website_url") or item.get("url") or ""
-
-        # Only use if we have at least a name and address or phone
-        if name and (address or phone):
-            return {
-                "name": name,
-                "address": address,
-                "phone": phone,
-                "website": website,
-                "rating": None,
-                "reviews": None,
-                "type": "",
-            }
-    return None
-
-
-async def _brave_web_search(query: str, api_key: str) -> list[dict]:
+async def lookup_business(url_or_name: str, api_key: str = "") -> dict:
     """
-    Broad Brave web search that extracts business data from either
-    location IDs or the infobox knowledge graph.
-
-    Brave's result_filter=locations misses specific business names,
-    but often returns an infobox with address/phone for branded queries.
-    """
-    from src.services.scraping import (
-        BRAVE_SEARCH_URL,
-        BRAVE_POI_URL,
-        POI_BATCH_SIZE,
-    )
-
-    headers = {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": api_key,
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                BRAVE_SEARCH_URL,
-                params={"q": query, "count": 10},
-                headers=headers,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            # Strategy 1: Extract location IDs if Brave included them
-            locations = (data.get("locations") or {}).get("results") or []
-            location_ids = [loc["id"] for loc in locations if loc.get("id")]
-            if location_ids:
-                poi_params = [("ids", lid) for lid in location_ids[:POI_BATCH_SIZE]]
-                poi_resp = await client.get(BRAVE_POI_URL, params=poi_params, headers=headers)
-                poi_resp.raise_for_status()
-                poi_results = poi_resp.json().get("results") or []
-                results = []
-                for poi in poi_results:
-                    if not poi:
-                        continue
-                    name = poi.get("title") or poi.get("name") or ""
-                    postal = poi.get("postal_address") or {}
-                    contact_info = poi.get("contact") or {}
-                    results.append({
-                        "name": name,
-                        "address": postal.get("displayAddress") or "",
-                        "phone": contact_info.get("telephone") or "",
-                        "website": poi.get("url") or "",
-                        "rating": None,
-                        "reviews": None,
-                        "type": ", ".join(poi.get("categories") or []),
-                    })
-                if results:
-                    return results
-
-            # Strategy 2: Extract from infobox (knowledge graph)
-            infobox = data.get("infobox") or {}
-            infobox_result = _parse_infobox_location(infobox)
-            if infobox_result:
-                return [infobox_result]
-
-            return []
-    except Exception as exc:
-        logger.warning("Brave web search failed for '%s': %s", query[:40], exc)
-        return []
-
-
-async def lookup_business(url_or_name: str, api_key: str) -> dict:
-    """
-    Full GMB lookup pipeline: parse URL → resolve redirects → Brave search → best match.
+    Full GMB lookup pipeline: parse URL → resolve redirects → Google scrape → best match.
 
     Args:
         url_or_name: Google Maps URL or plain business name
-        api_key: Brave Search API key
+        api_key: Unused (kept for backward compat)
 
     Returns:
         {"success": True, "business": {...}} or {"success": False, "error": "..."}
@@ -310,21 +210,9 @@ async def lookup_business(url_or_name: str, api_key: str) -> dict:
     if not business_name:
         return {"success": False, "error": "Could not extract business name from URL"}
 
-    # For single-business GMB lookups, use the broader search first (without
-    # result_filter=locations) since Brave's location filter often misses
-    # specific business names. The broad search checks both location IDs and
-    # the infobox knowledge graph. Fall back to location-filtered search only
-    # if the broad search finds nothing.
-    results = await _brave_web_search(business_name, api_key)
+    from src.services.google_scraper import search_google_maps_place
 
-    if not results:
-        search_result = await search_local_businesses(
-            query=business_name,
-            location="",
-            api_key=api_key,
-            max_poi_batches=1,
-        )
-        results = search_result.get("results") or []
+    results = await search_google_maps_place(business_name)
 
     if not results:
         return {"success": False, "error": f"No business found for '{business_name}'"}
