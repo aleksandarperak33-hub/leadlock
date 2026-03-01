@@ -21,6 +21,7 @@ from src.services.email_discovery import (
     _extract_json_ld_emails,
     _extract_footer_emails,
     _extract_internal_links,
+    _is_personal_email,
 )
 
 
@@ -381,6 +382,104 @@ class TestDeepScrapeWebsite:
         assert "owner@biz.com" in result
         checked = [call.args[0] for call in mock_safe.await_args_list[:2]]
         assert checked == ["https://www.biz.com", "https://biz.com"]
+
+
+class TestConfidenceDowngrades:
+    """Test confidence assignment for generic vs personal emails in Strategy 1."""
+
+    @pytest.mark.asyncio
+    async def test_generic_email_from_scrape_gets_medium(self):
+        """Generic email (info@) on non-catch-all domain gets 'medium', not 'high'."""
+        with patch(
+            "src.services.email_discovery.deep_scrape_website",
+            new_callable=AsyncMock,
+            return_value=["info@hvacpro.com"],
+        ):
+            result = await discover_email(
+                website="https://hvacpro.com",
+                company_name="HVAC Pro",
+            )
+
+        assert result["email"] == "info@hvacpro.com"
+        assert result["source"] == "website_deep_scrape"
+        assert result["confidence"] == "medium"
+
+    @pytest.mark.asyncio
+    async def test_personal_email_from_scrape_keeps_high(self):
+        """Personal email (john.smith@) on non-catch-all domain keeps 'high'."""
+        with patch(
+            "src.services.email_discovery.deep_scrape_website",
+            new_callable=AsyncMock,
+            return_value=["john.smith@hvacpro.com"],
+        ):
+            result = await discover_email(
+                website="https://hvacpro.com",
+                company_name="HVAC Pro",
+            )
+
+        assert result["email"] == "john.smith@hvacpro.com"
+        assert result["source"] == "website_deep_scrape"
+        assert result["confidence"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_catch_all_personal_gets_low(self):
+        """Personal email on catch-all domain gets 'low' (was 'medium')."""
+        with patch(
+            "src.services.email_discovery.deep_scrape_website",
+            new_callable=AsyncMock,
+            return_value=["john.smith@hvacpro.com"],
+        ), patch(
+            "src.utils.email_validation.is_likely_catch_all",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            result = await discover_email(
+                website="https://hvacpro.com",
+                company_name="HVAC Pro",
+            )
+
+        assert result["email"] == "john.smith@hvacpro.com"
+        assert result["confidence"] == "low"
+
+    @pytest.mark.asyncio
+    async def test_catch_all_generic_gets_none(self):
+        """Generic email on catch-all domain gets 'none' (was 'low')."""
+        with patch(
+            "src.services.email_discovery.deep_scrape_website",
+            new_callable=AsyncMock,
+            return_value=["info@hvacpro.com"],
+        ), patch(
+            "src.utils.email_validation.is_likely_catch_all",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            result = await discover_email(
+                website="https://hvacpro.com",
+                company_name="HVAC Pro",
+            )
+
+        assert result["email"] == "info@hvacpro.com"
+        assert result["confidence"] == "none"
+
+
+class TestIsPersonalEmail:
+    """Test personal vs generic email detection."""
+
+    def test_generic_prefixes_are_not_personal(self):
+        assert not _is_personal_email("info@domain.com")
+        assert not _is_personal_email("support@domain.com")
+        assert not _is_personal_email("admin@domain.com")
+
+    def test_first_last_is_personal(self):
+        assert _is_personal_email("john.smith@domain.com")
+        assert _is_personal_email("jane.doe@domain.com")
+
+    def test_short_alpha_is_personal(self):
+        assert _is_personal_email("john@domain.com")
+        assert _is_personal_email("alek@domain.com")
+
+    def test_very_short_is_not_personal(self):
+        assert not _is_personal_email("jd@domain.com")
 
 
 class TestCandidateBaseUrls:

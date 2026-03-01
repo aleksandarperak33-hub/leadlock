@@ -28,29 +28,21 @@ from src.services.enrichment import (
     guess_email_patterns,
 )
 
+from src.utils.email_constants import GENERIC_EMAIL_PREFIXES
+
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Personal email detection for catch-all domain confidence upgrade
-# ---------------------------------------------------------------------------
-_GENERIC_PREFIXES = frozenset({
-    "info", "contact", "office", "admin", "support", "help",
-    "service", "sales", "hello", "team", "general", "enquiry",
-    "inquiry", "mail", "email",
-})
 
 
 def _is_personal_email(email: str) -> bool:
     """Check if email looks like a personal address (first.last, fname, etc.) vs generic."""
     local = email.split("@")[0] if "@" in email else ""
-    if local in _GENERIC_PREFIXES:
+    if local in GENERIC_EMAIL_PREFIXES:
         return False
     # first.last pattern (e.g., john.smith@domain.com)
     if "." in local and len(local) >= 5:
         return True
     # Short unique local parts (e.g., john@, alek@) are likely personal
-    if 3 <= len(local) <= 12 and local.isalpha() and local not in _GENERIC_PREFIXES:
+    if 3 <= len(local) <= 12 and local.isalpha() and local not in GENERIC_EMAIL_PREFIXES:
         return True
     return False
 
@@ -206,10 +198,11 @@ async def discover_email(
             if scraped:
                 candidate = scraped[0]
                 if not await _is_blacklisted(candidate, db):
+                    is_personal = _is_personal_email(candidate)
                     if domain_is_catch_all:
-                        confidence = "medium" if _is_personal_email(candidate) else "low"
+                        confidence = "low" if is_personal else "none"
                     else:
-                        confidence = "high"
+                        confidence = "high" if is_personal else "medium"
                     return {
                         "email": candidate,
                         "source": "website_deep_scrape",

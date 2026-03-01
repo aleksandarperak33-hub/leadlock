@@ -789,6 +789,13 @@ async def email_events_webhook(
                         if prospect_id:
                             prospect = await db.get(Outreach, prospect_id)
                             if prospect:
+                                logger.warning(
+                                    "Hard bounce: prospect=%s email_source=%s email_verified=%s to=%s",
+                                    str(prospect.id)[:8],
+                                    prospect.email_source or "unknown",
+                                    prospect.email_verified,
+                                    (prospect.prospect_email or "")[:20] + "***",
+                                )
                                 prospect.email_verified = False
                                 prospect.status = "lost"
                                 prospect.updated_at = timestamp

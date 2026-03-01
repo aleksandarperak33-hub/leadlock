@@ -24,6 +24,7 @@ from src.services.cold_email import send_cold_email
 from src.services.sender_mailboxes import get_active_sender_mailboxes
 from src.services.outreach_timing import followup_readiness
 from src.utils.email_validation import validate_email
+from src.utils.email_constants import GENERIC_EMAIL_PREFIXES
 from src.services.email_quality_gate import MAX_SUBJECT_LENGTH
 
 logger = logging.getLogger(__name__)
@@ -325,15 +326,7 @@ async def _pre_send_checks(
     # on SMB domains (privacy@, accounts@, info@, etc.).
     if domain:
         local_part = email_lower.split("@")[0]
-        _non_contact_prefixes = frozenset({
-            "privacy", "legal", "compliance", "gdpr",
-            "webmaster", "hostmaster", "postmaster", "abuse",
-            "accounts", "accounting", "billing",
-            "info",
-            "sales", "marketing", "careers", "jobs", "hiring",
-            "recruiting", "recruitment", "noreply", "no-reply",
-        })
-        if local_part in _non_contact_prefixes:
+        if local_part in GENERIC_EMAIL_PREFIXES:
             prospect.status = "no_verified_email"
             return f"non-contact prefix ({local_part}@) blocked"
 
@@ -344,8 +337,8 @@ async def _pre_send_checks(
             risk = await get_domain_bounce_risk(domain)
             if risk == "blocked":
                 return f"domain bounce-blocked ({domain})"
-            if risk == "risky" and prospect.outreach_sequence_step == 0:
-                return f"domain risky for first-touch ({domain})"
+            if risk == "risky":
+                return f"domain risky ({domain})"
         except Exception as e:
             logger.debug("Domain risk check unavailable: %s", str(e))
 
