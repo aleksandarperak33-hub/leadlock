@@ -606,8 +606,7 @@ class TestFallbackTemplateEnhanced:
             sender_name="Alek",
         )
         assert "Hey Mike," in result["body_text"]
-        assert "$8,200" in result["body_text"]
-        assert "I work with hvac teams in Austin, TX" in result["body_text"]
+        assert "picks up" in result["body_text"] or "Speed wins" in result["body_text"]
         assert result["fallback_used"] is True
 
     def test_step_2_social_proof_angle(self):
@@ -625,7 +624,7 @@ class TestFallbackTemplateEnhanced:
         assert "hvac" in result["subject"].lower() or "austin" in result["subject"].lower()
 
     def test_step_3_short_farewell(self):
-        """Step 3 fallback should be short and final."""
+        """Step 3 fallback should be a final farewell with opt-out."""
         result = _build_fallback_outreach_email(
             prospect_name="Mike Johnson",
             company_name="Cool Air HVAC",
@@ -635,17 +634,8 @@ class TestFallbackTemplateEnhanced:
             sequence_step=3,
             sender_name="Alek",
         )
-        # Step 3 should be noticeably shorter than step 1
-        step1 = _build_fallback_outreach_email(
-            prospect_name="Mike Johnson",
-            company_name="Cool Air HVAC",
-            trade_type="hvac",
-            city="Austin",
-            state="TX",
-            sequence_step=1,
-            sender_name="Alek",
-        )
-        assert len(result["body_text"]) < len(step1["body_text"])
+        assert "Last note" in result["body_text"] or "no more emails" in result["body_text"]
+        assert "Either way" in result["body_text"]
 
     def test_steps_produce_different_subjects(self):
         """Each step should produce a different subject."""

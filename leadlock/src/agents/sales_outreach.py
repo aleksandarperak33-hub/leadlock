@@ -22,8 +22,8 @@ VOICE:
 
 IDENTITY:
 - {sender_name} works with home services contractors on their lead response.
-- Sound like you know their world. Use phrases like "I work with [trade] teams in [city/state]" or "I help a handful of [trade] shops in [area]."
-- One line of credibility is enough - don't oversell yourself.
+- Sound like you know their world. Don't announce credibility - demonstrate it by referencing specific details about their market, trade, or city.
+- If you need a credibility line, weave it naturally into an observation. Do NOT use stock phrases like "I help a handful of" or "I work with [trade] teams".
 
 CONTENT:
 - HOOK FIRST: Your first real sentence (after the greeting) should hit hard with a specific dollar amount or stat. Examples: "Most [trade] contractors lose about $8,000 a month in leads that go to whoever picks up first" or "78% of homeowners book with the first contractor who responds."
@@ -37,16 +37,17 @@ FORMATTING:
 - No emojis
 - NEVER use em dashes or en dashes. Use hyphens (-) or commas instead
 - NEVER use ellipsis (...)
-- Subject lines must be unique and specific - reference their company name, city, first name, or trade. NEVER reuse the same subject across prospects
-- In body_text, include "If this isn't relevant, just reply 'stop' and I won't reach out again." as the second-to-last line (before {sender_name}). This is NOT needed in body_html (the footer handles it).
+- NEVER put dollar amounts ($), percentages (%), or raw numbers in subject lines. These trigger spam filters. Subject must be conversational and specific - reference their company name, city, first name, or trade
+- Subject lines must be unique across prospects. NEVER reuse the same subject
 - body_text must have proper line breaks between paragraphs (use \\n\\n). Do NOT output a single blob of text.
 - Output valid JSON only
 
 ANTI-REPETITION (critical):
 - NEVER open with "I noticed", "I came across", "I found your", "I was looking at", "I saw that"
+- NEVER use "I help a handful of" or "I work with [trade] teams in [city]" - these sound templated
 - NEVER start two emails in the same sequence with the same sentence structure
 - NEVER reuse subject line angles across steps
-- Alternative openers: start with their name + a stat, a question, a dollar amount, or a direct observation
+- Alternative openers: start with their name + a question, a direct observation about their market, or a bold claim
 
 JSON format:
 {{"subject": "...", "body_html": "...", "body_text": "..."}}
@@ -217,23 +218,25 @@ HOOK (pick ONE — do NOT combine, vary across prospects):
   C) Direct observation: Reference their Google rating, review count, or city market directly. E.g. "You've got {review_count} reviews in {city} — that means a lot of leads coming in. Question is how fast they're getting a callback."
   D) Competitor frame: "{city} is a fast market for {trade}. The shops winning right now aren't the cheapest — they're the fastest to pick up the phone."
 Pick randomly. Do NOT always use the dollar stat.
-CREDIBILITY: ONE short line establishing local knowledge. Vary the phrasing — do NOT always say "I work with {trade} teams in {city}". Options: "I help a handful of {trade} shops with this", "I've been digging into lead response times in {city}", "I talk to {trade} contractors about this all the time".
-CTA: Ask a genuine question about their workflow. Examples: "How fast is your crew getting back to new leads right now?", "What happens to leads that come in after hours?", "Curious — are you tracking how fast your team responds to new inquiries?". If booking_url is provided, you may optionally include it as a second line: "Happy to show you the numbers — takes 10 min: {booking_url}". But the QUESTION must come first.
-SUBJECT: Must include their company name, city, or first name. Keep it conversational, not salesy.
+CREDIBILITY: Skip the intro line entirely. Jump straight from the hook to the CTA. If you must establish credibility, embed it in the hook itself (e.g. "I've been watching {city} {trade} response times") — do NOT announce who you are.
+CTA: Ask a genuine question about their workflow. Examples: "How fast is your crew getting back to new leads right now?", "What happens to leads that come in after hours?", "Curious - are you tracking how fast your team responds to new inquiries?". If booking_url is provided, you may optionally include it as a second line: "Happy to show you the numbers - takes 10 min: {booking_url}". But the QUESTION must come first.
+OPT-OUT: Do NOT include any opt-out or "reply stop" text in step 1. The email footer handles this.
+SUBJECT: Must include their company name, city, or first name. Keep it conversational, not salesy. NO dollar amounts, percentages, or stats in subjects.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
-BANNED PATTERNS: Do NOT use the phrase "slipping through" in any email. Do NOT use "exactly how much revenue" — too templated.
+BANNED PATTERNS: Do NOT use "slipping through", "exactly how much revenue", "I help a handful of", "I work with [trade] teams", or any variant of announcing who you are before delivering value.
 KEEP IT SHORT: Under 60 words total (excluding greeting and sign-off). Brevity = replies. Subject under 50 chars.""",
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
 GREETING: Follow the GREETING instruction in the prospect details exactly.
 HOOK (pick ONE based on VARIATION instruction below — do NOT combine):
   A) Speed gap: "Your competitors in {city} aren't better at {trade}. They just pick up the phone faster."
-  B) Revenue angle: "A {trade} contractor in {city} added $X,000/month just by cutting their callback time to under 60 seconds."
+  B) Concrete result: "A {trade} contractor cut their callback time to under 60 seconds. Their close rate went up 40% in two months."
   C) Loss frame: "Every hour your team takes to call back a lead, another {trade} crew in {city} closes it first."
 ANGLE: Do NOT rehash step 1. This email is about what their LOCAL COMPETITORS are doing — frame it as an observation, not a pitch.
 REFERENCE: Mention their city and trade. If Google rating/reviews available, use them: "With {review_count} reviews, the work speaks for itself — the gap is response speed."
 CTA: If a booking_url is provided, include it: "10 min to walk through it: {booking_url}". If no booking_url, ask one specific question about their workflow. If no booking_url, do NOT include any link at all.
-SUBJECT: Use a NEW subject line. MUST include their company name, first name, OR city. Do NOT reuse the step 1 subject. Do NOT prefix with "Re:".
+OPT-OUT: In body_text only, include "If this isn't relevant, just let me know and I'll stop reaching out." as the second-to-last line (before sign-off). Do NOT use the word "stop" on its own — it sounds like SMS spam.
+SUBJECT: Use a NEW subject line. MUST include their company name, first name, OR city. Do NOT reuse the step 1 subject. Do NOT prefix with "Re:". NO dollar amounts or stats in subjects.
 BANNED: Do NOT mention emailing before. Do NOT say "following up". Do NOT start with "A few {trade} shops in {city}..." — that's been overused.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 KEEP IT SHORT: Under 50 words total (excluding greeting and sign-off). Subject under 50 chars.""",
@@ -242,11 +245,12 @@ KEEP IT SHORT: Under 50 words total (excluding greeting and sign-off). Subject u
 GREETING: Follow the GREETING instruction in the prospect details exactly.
 TONE: Confident, direct, zero desperation. This is your last shot — deliver VALUE, not a goodbye.
 CONTENT: Lead with ONE specific insight they haven't heard yet. Options:
-  - A mini case study: "A {trade} shop in {city} similar to yours added $12K/month just by cutting their response time from 4 hours to 45 seconds."
+  - A concrete result: "A {trade} shop similar to yours cut their response time from 4 hours to 45 seconds. Their close rate jumped 40% in two months."
   - An objection killer: "Most {trade} contractors think they respond fast enough. Then they see their average is 4+ hours and their competitors are at 30 seconds."
   - A bold question: "What would it mean for {company} if you never lost another lead to a slower competitor?"
 End with a firm CTA: If booking_url provided, say "I've got one slot open this week if you want to see the numbers: {booking_url}". If no booking_url: "Reply with 'show me' and I'll send you the data."
-SUBJECT: Must include their name or company. Create urgency without being cheesy — reference something specific about their business.
+OPT-OUT: In body_text only, include "Either way, no more emails from me after this one." as the second-to-last line (before sign-off).
+SUBJECT: Must include their name or company. Create urgency without being cheesy — reference something specific. NO dollar amounts in subjects.
 BANNED: Do NOT say "last email", "closing the loop", "wrapping up", or "just checking in". Do NOT apologize for emailing. Do NOT say "no hard feelings" or "I understand if you're busy."
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 Under 50 words. Subject under 40 chars.""",
@@ -255,18 +259,18 @@ Under 50 words. Subject under 40 chars.""",
 STEP_SUBJECT_EXAMPLES = {
     1: [
         "{first_name}, quick question about {company}",
-        "{company} — how fast do your leads get a call back?",
-        "{trade} leads in {city} — who responds first wins",
+        "{company} - how fast do your leads get a callback?",
+        "{trade} leads in {city} - who picks up first",
         "{first_name}, something about your {city} market",
     ],
     2: [
         "{first_name}, what {city} {trade} shops do differently",
         "{company} vs faster competitors in {city}",
-        "your {city} competitors respond in 30 seconds",
+        "your {city} competitors are getting faster",
     ],
     3: [
         "{first_name}, one thing about {company}",
-        "{company} is leaving money on the table",
+        "{company} - last thought from me",
         "{first_name}, quick data point for you",
     ],
 }
@@ -450,12 +454,8 @@ def _build_fallback_outreach_email(
         subject_name = first_name or company
         subject = f"{subject_name}, quick question"[:60]
         hook_line = (
-            f"Most {trade} contractors lose about {monthly_loss} a month "
-            f"in leads that go to whoever picks up the phone first."
-        )
-        credibility_line = (
-            f"I work with {trade} teams in {location or 'your market'} "
-            f"on exactly this."
+            f"Most {trade} contractors lose leads to whoever picks up "
+            f"the phone first. Speed wins every time."
         )
         value_line = ""
         if rating and review_count:
@@ -468,9 +468,9 @@ def _build_fallback_outreach_email(
                 f"Your {rating}/5 Google rating tells me you do solid work "
                 f"- just a matter of getting to leads faster."
             )
-        step_line = f"{hook_line}\n\n{credibility_line}"
+        step_line = hook_line
         if value_line:
-            step_line = f"{hook_line} {value_line}\n\n{credibility_line}"
+            step_line = f"{hook_line} {value_line}"
         if booking_url:
             ask_line = (
                 f"Happy to show you the numbers - takes 10 min: {booking_url}"
@@ -505,7 +505,12 @@ def _build_fallback_outreach_email(
         value_line = ""
         ask_line = ""
 
-    stop_line = "If this isn't relevant, just reply 'stop' and I won't reach out again."
+    if step == 1:
+        stop_line = ""
+    elif step == 3:
+        stop_line = "Either way, no more emails from me after this one."
+    else:
+        stop_line = "If this isn't relevant, just let me know and I'll stop reaching out."
 
     body_parts = [p for p in [
         greeting,
