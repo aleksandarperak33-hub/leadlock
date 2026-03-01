@@ -17,7 +17,7 @@ SYSTEM_PROMPT = """You write cold outreach emails from {sender_name} at LeadLock
 VOICE:
 - You ARE {sender_name}. Write like a real person texting a colleague, not a marketer.
 - Casual, direct, zero fluff. Talk like you'd talk to a buddy in the trades.
-- GREETING RULE (non-negotiable): Follow the GREETING instruction in prospect details EXACTLY. If a first name is available, use "Hey [first_name],". If only a company name, use "Hey [Company] team,". If neither is available, use "Hey there,". NEVER use just "Hey," alone with nothing after it.
+- GREETING RULE (non-negotiable): Follow the GREETING instruction in prospect details EXACTLY. Copy it word-for-word. Do NOT substitute different names, words, or email prefixes. NEVER use just "Hey," alone with nothing after it.
 - ALWAYS sign off with just "{sender_name}" on its own line at the end. No "Best," or "Thanks," prefix - just the name.
 
 IDENTITY:
@@ -226,12 +226,15 @@ KEEP IT SHORT: Under 60 words total (excluding greeting and sign-off). Brevity =
 
     2: """STEP 2 — SOCIAL PROOF (follow-up, they didn't reply to step 1).
 GREETING: Follow the GREETING instruction in the prospect details exactly.
-HOOK: Lead with what similar contractors in their SPECIFIC CITY and TRADE are doing differently. Frame it as "a few {trade} shops in {city} already respond to leads in under 60 seconds — and they're closing 3x more jobs because of it." Make it about THEIR local competitors, not a generic stat.
-ANGLE: Do NOT rehash the pain point from step 1. Talk about the competitive advantage — contractors who respond faster win the job. Frame it as an observation about their market, not a sales pitch.
-REFERENCE: You MUST mention their city and trade in the body. Reference their Google rating or review count if available — e.g. "With {review_count} reviews and a {rating} rating, you're clearly doing the work — the leads just need faster follow-up."
-CTA: If a booking_url is provided, use a short nudge: "Happy to show you how it works — 10 min: {booking_url}". If no booking_url, ask a question about their specific workflow.
-SUBJECT: MUST include their company name, first name, OR city. Never use a generic stat as the subject line. Create curiosity about what their local competitors are doing.
-BANNED: Do NOT mention that you emailed before or "following up" — just lead with the new angle.
+HOOK (pick ONE based on VARIATION instruction below — do NOT combine):
+  A) Speed gap: "Your competitors in {city} aren't better at {trade}. They just pick up the phone faster."
+  B) Revenue angle: "A {trade} contractor in {city} added $X,000/month just by cutting their callback time to under 60 seconds."
+  C) Loss frame: "Every hour your team takes to call back a lead, another {trade} crew in {city} closes it first."
+ANGLE: Do NOT rehash step 1. This email is about what their LOCAL COMPETITORS are doing — frame it as an observation, not a pitch.
+REFERENCE: Mention their city and trade. If Google rating/reviews available, use them: "With {review_count} reviews, the work speaks for itself — the gap is response speed."
+CTA: If a booking_url is provided, include it: "10 min to walk through it: {booking_url}". If no booking_url, ask one specific question about their workflow. If no booking_url, do NOT include any link at all.
+SUBJECT: Use a NEW subject line. MUST include their company name, first name, OR city. Do NOT reuse the step 1 subject. Do NOT prefix with "Re:".
+BANNED: Do NOT mention emailing before. Do NOT say "following up". Do NOT start with "A few {trade} shops in {city}..." — that's been overused.
 BANNED OPENERS: Do NOT start with "I noticed", "I came across", "I found your", "I was looking at", or "I saw that".
 KEEP IT SHORT: Under 50 words total (excluding greeting and sign-off). Subject under 50 chars.""",
 
@@ -272,11 +275,7 @@ STEP_TEMPERATURE = {1: 0.7, 2: 0.7, 3: 0.8}
 
 # Hook variants for forced variation (indexed by hash of prospect identifier)
 _STEP1_HOOKS = ["A", "B", "C", "D"]
-_STEP2_ANGLES = [
-    "competitor speed advantage",
-    "local market data",
-    "review-to-revenue conversion",
-]
+_STEP2_HOOKS = ["A", "B", "C"]
 
 
 def _extract_first_name(full_name: str) -> str:
@@ -289,6 +288,17 @@ def _extract_first_name(full_name: str) -> str:
         "hvac", "plumbing", "roofing", "electrical", "solar",
         "construction", "mechanical", "systems", "contractors",
         "heating", "cooling", "air", "electric", "energy",
+        # Plural forms that _extract_first_name was missing
+        "electricians", "plumbers", "roofers", "installers",
+        "technicians", "experts", "specialists", "professionals",
+        "enterprises", "associates", "partners", "group", "company",
+        "restoration", "maintenance", "repair", "remodeling",
+        "lighting", "power", "contracting", "brothers",
+        # Geographic words that are not first names
+        "northeast", "northwest", "southeast", "southwest",
+        "north", "south", "east", "west", "central", "metro",
+        "dallas", "houston", "austin", "phoenix", "tucson",
+        "san", "las", "los", "fort", "cape", "cedar",
     ]
     name = full_name.strip()
     # If name looks like a company (contains company indicators), return empty
@@ -333,6 +343,11 @@ GENERIC_EMAIL_PREFIXES = frozenset({
     "electrical", "solar", "dispatch", "accounts", "bookings", "booking",
     "mail", "payments", "operations", "ops", "quotes", "estimate",
     "estimates", "scheduling", "repairs", "maintenance", "install",
+    # Compound generic prefixes (no separator)
+    "customerservice", "customercare", "customersupport",
+    "frontdesk", "helpdesk", "techsupport", "webadmin",
+    "servicedesk", "salesteam", "officemgr", "officemanager",
+    "appraisal", "usinfo",
 })
 
 
@@ -381,6 +396,17 @@ def _extract_name_from_email(email: str) -> str:
 
     # Must be all alpha (no digits, no special chars)
     if not candidate.isalpha():
+        return ""
+
+    # Reject concatenated names (e.g. "jbutler", "cmewis", "mgarcia")
+    # Real first names in emails either stand alone ("tracy@") or are
+    # separated by dots ("joe.ochoa@"). A single initial + surname
+    # concatenation like "jbutler" is not a usable first name.
+    # Heuristic: unseparated local parts > 7 chars are likely concatenated.
+    # For 6-7 char unseparated names, they could be real (e.g. "dennis",
+    # "becky") or concatenated (e.g. "cmewis"). Accept them as-is since
+    # most 6-7 char strings are real first names.
+    if len(parts) == 1 and len(candidate) > 7:
         return ""
 
     return candidate.capitalize()
@@ -566,12 +592,14 @@ async def generate_outreach_email(
     clean_company = _clean_company_name(company_name) if company_name else ""
 
     # Build greeting instruction with robust fallbacks
+    # Cap company name to avoid "Hey Alamo Plumbing Solutions drain & sewer experts team,"
+    greeting_company = clean_company[:30].rsplit(" ", 1)[0] if len(clean_company) > 30 else clean_company
     if first_name:
         greeting_instruction = f'Open with: "Hey {first_name},"'
-    elif clean_company:
-        greeting_instruction = f'Open with: "Hey {clean_company} team,"'
+    elif greeting_company:
+        greeting_instruction = f'Open with: "Hey {greeting_company} team,"'
     else:
-        greeting_instruction = 'Open with: "Hey there," — no name available'
+        greeting_instruction = 'Open with: "Quick question -" (no name available, do NOT use "Hey there")'
 
     prospect_details = f"""Prospect details:
 - First name: {first_name or '(unavailable)'}
@@ -633,8 +661,8 @@ async def generate_outreach_email(
         hook_idx = variation_seed % len(_STEP1_HOOKS)
         prospect_details += f"\n\nVARIATION (mandatory): Use hook {_STEP1_HOOKS[hook_idx]} from the HOOK options above. Do NOT use a different hook."
     elif step == 2:
-        angle_idx = variation_seed % len(_STEP2_ANGLES)
-        prospect_details += f"\n\nVARIATION (mandatory): Lead with the {_STEP2_ANGLES[angle_idx]} angle."
+        hook_idx = variation_seed % len(_STEP2_HOOKS)
+        prospect_details += f"\n\nVARIATION (mandatory): Use hook {_STEP2_HOOKS[hook_idx]} from the HOOK options above. Do NOT use a different hook."
 
     if extra_instructions:
         prospect_details += f"\n\nAdditional instructions: {extra_instructions}"

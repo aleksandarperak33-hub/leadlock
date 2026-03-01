@@ -107,8 +107,8 @@ class TestExtractNameFromEmail:
         assert _extract_name_from_email("mike-smith@company.com") == "Mike"
 
     def test_concatenated_firstlast(self):
-        """joeochoa@ — first segment is the full local part, 'joeochoa' is valid."""
-        assert _extract_name_from_email("joeochoa@ochoaroofing.com") == "Joeochoa"
+        """joeochoa@ — 8+ chars unseparated, likely concatenated name — reject it."""
+        assert _extract_name_from_email("joeochoa@ochoaroofing.com") == ""
 
     def test_single_initial_skip(self):
         """Single initial + last name — too ambiguous, skip."""
@@ -687,3 +687,85 @@ class TestPrescriptiveLearning:
     def test_zero_reply_rate_improve_cta(self):
         result = _prescriptive_reply_rate(0.0)
         assert "specific" in result.lower() or "response time" in result.lower()
+
+
+class TestExtractFirstNameBugFixes:
+    """Regression tests for greeting extraction bugs found in production."""
+
+    def test_northeast_dallas_electricians_is_company(self):
+        """'Northeast Dallas Electricians' should NOT extract 'Northeast' as a name."""
+        assert _extract_first_name("Northeast Dallas Electricians") == ""
+
+    def test_cedar_crest_is_company(self):
+        """'Cedar Crest Master Electrician' should NOT extract 'Cedar'."""
+        assert _extract_first_name("Cedar Crest Master Electrician") == ""
+
+    def test_real_first_name_still_works(self):
+        assert _extract_first_name("Kim Johnson") == "Kim"
+
+    def test_real_first_name_alone(self):
+        assert _extract_first_name("Tracy") == "Tracy"
+
+
+class TestExtractNameFromEmailBugFixes:
+    """Regression tests for email name extraction bugs found in production."""
+
+    def test_customerservice_is_generic(self):
+        """'customerservice@' should NOT extract a name."""
+        assert _extract_name_from_email("customerservice@csmechanical.co") == ""
+
+    def test_appraisal_is_generic(self):
+        assert _extract_name_from_email("appraisal@domain.com") == ""
+
+    def test_usinfo_is_generic(self):
+        assert _extract_name_from_email("usinfo@deltapowergroup.co") == ""
+
+    def test_long_concatenated_rejected(self):
+        """Long concatenated names like 'michaelj' (8+ chars) should be rejected."""
+        assert _extract_name_from_email("jbutlers@txensolar.com") == ""
+        assert _extract_name_from_email("cmewisba@company.com") == ""
+
+    def test_short_real_name_still_works(self):
+        """Short names like 'tracy@' should still work."""
+        assert _extract_name_from_email("tracy@domain.com") == "Tracy"
+
+    def test_dot_separated_first_name(self):
+        """'joe.smith@' should extract 'Joe'."""
+        assert _extract_name_from_email("joe.smith@domain.com") == "Joe"
+
+    def test_long_single_name_rejected(self):
+        """Long unseparated local parts are likely not first names."""
+        assert _extract_name_from_email("michaeljohnson@domain.com") == ""
+
+
+class TestStripHallucinatedUrls:
+    """Test the URL sanitizer that prevents CTA hallucination."""
+
+    def test_strips_all_urls_when_no_booking(self):
+        from src.workers.outreach_sending import strip_hallucinated_urls
+
+        html = '<p>Check this out: <a href="https://example.com">example.com</a></p>'
+        text = "Check this out: https://example.com"
+        cleaned_html, cleaned_text = strip_hallucinated_urls(html, text, booking_url=None)
+        assert "https://example.com" not in cleaned_text
+        assert "https://example.com" not in cleaned_html
+
+    def test_keeps_booking_url(self):
+        from src.workers.outreach_sending import strip_hallucinated_urls
+
+        text = "Book here: https://cal.com/alek/30min and visit https://prospect.com"
+        html = '<p>Book: <a href="https://cal.com/alek/30min">link</a> and <a href="https://prospect.com">site</a></p>'
+        cleaned_html, cleaned_text = strip_hallucinated_urls(
+            html, text, booking_url="https://cal.com/alek/30min"
+        )
+        assert "cal.com" in cleaned_text
+        assert "prospect.com" not in cleaned_text
+        assert "cal.com" in cleaned_html
+        assert "prospect.com" not in cleaned_html
+
+    def test_empty_inputs(self):
+        from src.workers.outreach_sending import strip_hallucinated_urls
+
+        html, text = strip_hallucinated_urls("", "", booking_url=None)
+        assert html == ""
+        assert text == ""

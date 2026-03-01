@@ -94,6 +94,63 @@ def auto_link_urls(html: str) -> str:
     )
 
 
+_URL_PATTERN = re.compile(r'https?://[^\s<>")\]]+', re.IGNORECASE)
+_ANCHOR_PATTERN = re.compile(r'<a\s[^>]*href=["\']https?://[^"\']*["\'][^>]*>.*?</a>', re.IGNORECASE | re.DOTALL)
+
+
+def strip_hallucinated_urls(
+    body_html: str,
+    body_text: str,
+    booking_url: str | None,
+) -> tuple[str, str]:
+    """
+    Remove any URL from the email that isn't the booking_url.
+
+    AI models hallucinate prospect website URLs as CTAs despite explicit
+    prompt instructions. This post-generation sanitizer is the only
+    reliable defense.
+
+    Returns:
+        (cleaned_body_html, cleaned_body_text) — new strings, originals unchanged.
+    """
+    if not booking_url:
+        # No booking URL → strip ALL URLs from body
+        cleaned_text = _URL_PATTERN.sub("", body_text) if body_text else body_text
+        cleaned_html = _ANCHOR_PATTERN.sub("", body_html) if body_html else body_html
+        cleaned_html = _URL_PATTERN.sub("", cleaned_html) if cleaned_html else cleaned_html
+    else:
+        # Keep only the booking URL, strip everything else
+        booking_domain = booking_url.split("/")[2] if booking_url.count("/") >= 2 else ""
+
+        def _keep_if_booking(match: re.Match) -> str:
+            url = match.group(0)
+            if booking_domain and booking_domain in url:
+                return url
+            return ""
+
+        def _keep_anchor_if_booking(match: re.Match) -> str:
+            anchor = match.group(0)
+            if booking_domain and booking_domain in anchor:
+                return anchor
+            return ""
+
+        cleaned_text = _URL_PATTERN.sub(_keep_if_booking, body_text) if body_text else body_text
+        cleaned_html = _ANCHOR_PATTERN.sub(_keep_anchor_if_booking, body_html) if body_html else body_html
+        cleaned_html = _URL_PATTERN.sub(_keep_if_booking, cleaned_html) if cleaned_html else cleaned_html
+
+    # Clean up leftover artifacts: double spaces, empty lines, dangling punctuation
+    if cleaned_text:
+        cleaned_text = re.sub(r'  +', ' ', cleaned_text)
+        cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+    if cleaned_html:
+        cleaned_html = re.sub(r'<p>\s*</p>', '', cleaned_html)
+        cleaned_html = re.sub(r'  +', ' ', cleaned_html)
+        cleaned_html = cleaned_html.strip()
+
+    return cleaned_html, cleaned_text
+
+
 def normalize_email(raw_email: str) -> str:
     """Normalize noisy email strings from scraping/enrichment sources."""
     if not raw_email:
@@ -590,12 +647,19 @@ async def send_sequence_email(
             )
         return
 
+    # Strip hallucinated URLs before any other processing
+    sanitized_html, sanitized_text = strip_hallucinated_urls(
+        body_html=email_result.get("body_html", ""),
+        body_text=email_result.get("body_text", ""),
+        booking_url=effective_booking_url,
+    )
+
     # Sanitize dashes, auto-link bare URLs, and attach CTA variant for tracking
     email_result = {
         **email_result,
         "subject": normalize_subject(email_result.get("subject", "")),
-        "body_html": auto_link_urls(sanitize_dashes(email_result.get("body_html", ""))),
-        "body_text": sanitize_dashes(email_result.get("body_text", "")),
+        "body_html": auto_link_urls(sanitize_dashes(sanitized_html)),
+        "body_text": sanitize_dashes(sanitized_text),
         "cta_variant": cta_variant,
     }
 
@@ -767,11 +831,16 @@ async def _run_quality_gate(
                 booking_url=config.booking_url,
             )
             if not retry_result.get("error"):
+                retry_html, retry_text = strip_hallucinated_urls(
+                    body_html=retry_result.get("body_html", ""),
+                    body_text=retry_result.get("body_text", ""),
+                    booking_url=config.booking_url,
+                )
                 retry_result = {
                     **retry_result,
                     "subject": normalize_subject(retry_result.get("subject", "")),
-                    "body_html": auto_link_urls(sanitize_dashes(retry_result.get("body_html", ""))),
-                    "body_text": sanitize_dashes(retry_result.get("body_text", "")),
+                    "body_html": auto_link_urls(sanitize_dashes(retry_html)),
+                    "body_text": sanitize_dashes(retry_text),
                     "cta_variant": email_result.get("cta_variant"),
                 }
                 retry_quality = check_email_quality(
@@ -844,20 +913,10 @@ async def _resolve_threading(
             in_reply_to = prev_email.sendgrid_message_id
             references = f"<{prev_email.sendgrid_message_id}>"
 
-        # Reuse step 1 subject with "Re:" for Gmail threading
-        if in_reply_to:
-            step1_result = await db.execute(
-                select(OutreachEmail.subject).where(
-                    and_(
-                        OutreachEmail.outreach_id == prospect.id,
-                        OutreachEmail.direction == "outbound",
-                        OutreachEmail.sequence_step == 1,
-                    )
-                ).limit(1)
-            )
-            step1_subject = await _result_scalar(step1_result)
-            if step1_subject:
-                send_subject = f"Re: {step1_subject}"
+        # Use the AI-generated subject for each step (no "Re:" prefix).
+        # Faking thread replies is a spam signal — each step gets its own subject.
+        # Threading headers (In-Reply-To, References) are still set above
+        # for email clients that support them.
 
     return in_reply_to, references, send_subject
 
