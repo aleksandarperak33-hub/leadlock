@@ -1,11 +1,11 @@
 """
 Tests for src/services/scraping.py and src/services/google_scraper.py.
 Covers: normalize_biz_name, search_local_businesses (delegation),
-parse_address_components, and google_scraper internals.
+parse_address_components, and google_scraper internals (DDG Places).
 All external HTTP calls are mocked via curl_cffi.
 """
 
-import hashlib
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,9 +17,9 @@ from src.services.scraping import (
 )
 from src.services.google_scraper import (
     _generate_place_id,
-    _clean_text,
-    _extract_from_html_fallback,
-    _extract_businesses_from_app_state,
+    _normalize_phone,
+    _format_phone,
+    _parse_ddg_result,
 )
 
 
@@ -110,31 +110,75 @@ class TestGeneratePlaceId:
         assert pid1 == pid2
 
 
-class TestCleanText:
-    def test_strips_html_entities(self):
-        assert _clean_text("Acme &amp; Sons") == "Acme & Sons"
+class TestNormalizePhone:
+    def test_international_format(self):
+        assert _normalize_phone("+15122668522") == "15122668522"
+
+    def test_ten_digit_gets_country_code(self):
+        assert _normalize_phone("5122668522") == "15122668522"
 
     def test_empty_returns_empty(self):
-        assert _clean_text("") == ""
+        assert _normalize_phone("") == ""
 
     def test_none_returns_empty(self):
-        assert _clean_text(None) == ""
+        assert _normalize_phone(None) == ""
+
+    def test_strips_formatting(self):
+        assert _normalize_phone("(512) 266-8522") == "15122668522"
 
 
-class TestExtractFromAppState:
-    def test_returns_empty_for_invalid_json(self):
-        assert _extract_businesses_from_app_state("{invalid}") == []
+class TestFormatPhone:
+    def test_eleven_digit_us(self):
+        assert _format_phone("15122668522") == "(512) 266-8522"
 
-    def test_returns_empty_for_empty_array(self):
-        assert _extract_businesses_from_app_state("[]") == []
+    def test_ten_digit(self):
+        assert _format_phone("5122668522") == "(512) 266-8522"
+
+    def test_other_length_passthrough(self):
+        assert _format_phone("123") == "123"
 
 
-class TestExtractFromHtmlFallback:
-    def test_returns_empty_for_empty_html(self):
-        assert _extract_from_html_fallback("") == []
+class TestParseDdgResult:
+    def test_parses_full_result(self):
+        raw = {
+            "name": "Cool Air HVAC",
+            "phone": "+15125551234",
+            "website": "https://coolair.com",
+            "address": "123 Main St, Austin, TX",
+            "rating": 4.8,
+            "reviews": 120,
+            "ddg_category": "Heating & air conditioning/hvac",
+        }
+        result = _parse_ddg_result(raw)
+        assert result["name"] == "Cool Air HVAC"
+        assert result["phone"] == "(512) 555-1234"
+        assert result["website"] == "https://coolair.com"
+        assert result["rating"] == 4.8
+        assert result["reviews"] == 120
+        assert "Heating" in result["categories"][0]
 
-    def test_returns_empty_for_non_html(self):
-        assert _extract_from_html_fallback("just plain text") == []
+    def test_missing_name_returns_none(self):
+        assert _parse_ddg_result({"phone": "123"}) is None
+
+    def test_empty_name_returns_none(self):
+        assert _parse_ddg_result({"name": ""}) is None
+
+    def test_missing_optional_fields(self):
+        result = _parse_ddg_result({"name": "Test Biz"})
+        assert result["name"] == "Test Biz"
+        assert result["phone"] == ""
+        assert result["website"] == ""
+        assert result["rating"] is None
+        assert result["reviews"] is None
+        assert result["categories"] == []
+
+    def test_invalid_rating_ignored(self):
+        result = _parse_ddg_result({"name": "Test", "rating": "N/A"})
+        assert result["rating"] is None
+
+    def test_invalid_reviews_ignored(self):
+        result = _parse_ddg_result({"name": "Test", "reviews": "many"})
+        assert result["reviews"] is None
 
 
 # ---------------------------------------------------------------------------
