@@ -21,8 +21,12 @@ BANNED_WORDS = (
     "realm, harness, spearhead, underscore, commendable, shed light, "
     "navigating, holistic, synergy, endeavor, resonate, empower, "
     "comprehensive, facilitate, optimize, utilize, solution, platform, "
-    "opportunity, pain point, I noticed, I came across, I found your, "
-    "I help a handful of, I work with [trade] teams"
+    "opportunity, pain point, revenue, ROI, game-changer, transform, "
+    "unlock, competitive edge, cutting-edge, industry-leading, "
+    "I noticed, I came across, I found your, "
+    "I help a handful of, I work with, we help, happy to show you, "
+    "show you the numbers, most contractors, 78% of homeowners, "
+    "the shops winning, speed wins"
 )
 
 

@@ -14,6 +14,7 @@ from src.agents.sales_outreach import (
     _build_fallback_outreach_email,
     _prescriptive_open_rate,
     _prescriptive_reply_rate,
+    SYSTEM_PROMPT,
     STEP_INSTRUCTIONS,
     STEP_SUBJECT_EXAMPLES,
     STEP_TEMPERATURE,
@@ -180,38 +181,35 @@ class TestStepInstructions:
 
     def test_step_1_is_curiosity_pain(self):
         assert "STEP 1" in STEP_INSTRUCTIONS[1]
-        assert "CURIOSITY" in STEP_INSTRUCTIONS[1]
-        assert "60 words" in STEP_INSTRUCTIONS[1]
+        assert "curiosity" in STEP_INSTRUCTIONS[1].lower()
+        assert "no selling" in STEP_INSTRUCTIONS[1].lower() or "2-3 sentences" in STEP_INSTRUCTIONS[1]
 
-    def test_step_2_is_social_proof(self):
+    def test_step_2_is_follow_up(self):
         assert "STEP 2" in STEP_INSTRUCTIONS[2]
-        assert "SOCIAL PROOF" in STEP_INSTRUCTIONS[2]
-        assert "50 words" in STEP_INSTRUCTIONS[2]
+        assert "follow-up" in STEP_INSTRUCTIONS[2].lower() or "Follow-up" in STEP_INSTRUCTIONS[2]
+        assert "2-3 sentences" in STEP_INSTRUCTIONS[2]
 
-    def test_step_3_is_farewell(self):
+    def test_step_3_is_last_email(self):
         assert "STEP 3" in STEP_INSTRUCTIONS[3]
-        assert "FAREWELL" in STEP_INSTRUCTIONS[3]
-        assert "50 words" in STEP_INSTRUCTIONS[3]
+        assert "last" in STEP_INSTRUCTIONS[3].lower()
+        assert "2-3 sentences" in STEP_INSTRUCTIONS[3]
 
     def test_each_step_has_distinct_angle(self):
         """Each step should have a unique angle keyword."""
         s1 = STEP_INSTRUCTIONS[1].lower()
         s2 = STEP_INSTRUCTIONS[2].lower()
         s3 = STEP_INSTRUCTIONS[3].lower()
-        # Step 1 focuses on pain/curiosity
-        assert "curiosity" in s1 or "pain" in s1
-        # Step 2 focuses on social proof
-        assert "social proof" in s2
-        # Step 3 focuses on farewell
-        assert "farewell" in s3 or "final" in s3
+        # Step 1 focuses on curiosity / first contact
+        assert "curiosity" in s1 or "first contact" in s1
+        # Step 2 focuses on follow-up
+        assert "follow-up" in s2 or "follow up" in s2
+        # Step 3 focuses on last email
+        assert "last" in s3
 
-    def test_anti_repetition_in_all_steps(self):
-        """Each step should explicitly ban common AI openers."""
-        for step_num in [1, 2, 3]:
-            text = STEP_INSTRUCTIONS[step_num]
-            assert "I noticed" in text
-            assert "I came across" in text
-            assert "I found your" in text
+    def test_no_stats_in_system_prompt(self):
+        """System prompt should ban stats and dollar amounts."""
+        assert "stats" in SYSTEM_PROMPT.lower() or "dollar" in SYSTEM_PROMPT.lower()
+        assert "NEVER use stats" in SYSTEM_PROMPT or "dollar amounts" in SYSTEM_PROMPT
 
 
 class TestGenerateOutreachEmail:
@@ -595,7 +593,7 @@ class TestFallbackTemplateEnhanced:
         assert result["ai_cost_usd"] == 0.0
 
     def test_step_1_without_rating(self):
-        """Step 1 fallback without rating should use hook and credibility line."""
+        """Step 1 fallback without rating should ask a question."""
         result = _build_fallback_outreach_email(
             prospect_name="Mike Johnson",
             company_name="Cool Air HVAC",
@@ -606,11 +604,11 @@ class TestFallbackTemplateEnhanced:
             sender_name="Alek",
         )
         assert "Hey Mike," in result["body_text"]
-        assert "picks up" in result["body_text"] or "Speed wins" in result["body_text"]
+        assert "?" in result["body_text"]  # Should ask a question
         assert result["fallback_used"] is True
 
-    def test_step_2_social_proof_angle(self):
-        """Step 2 fallback should use social proof (not rehash step 1)."""
+    def test_step_2_different_angle(self):
+        """Step 2 fallback should use a different angle from step 1."""
         result = _build_fallback_outreach_email(
             prospect_name="Mike Johnson",
             company_name="Cool Air HVAC",
@@ -620,8 +618,8 @@ class TestFallbackTemplateEnhanced:
             sequence_step=2,
             sender_name="Alek",
         )
-        assert "78%" in result["body_text"]
-        assert "hvac" in result["subject"].lower() or "austin" in result["subject"].lower()
+        assert "back off" in result["body_text"] or "word" in result["body_text"]
+        assert "mike" in result["subject"].lower() or "hvac" in result["subject"].lower()
 
     def test_step_3_short_farewell(self):
         """Step 3 fallback should be a final farewell with opt-out."""
@@ -634,7 +632,7 @@ class TestFallbackTemplateEnhanced:
             sequence_step=3,
             sender_name="Alek",
         )
-        assert "Last note" in result["body_text"] or "no more emails" in result["body_text"]
+        assert "Last one" in result["body_text"] or "no more emails" in result["body_text"]
         assert "Either way" in result["body_text"]
 
     def test_steps_produce_different_subjects(self):
