@@ -15,15 +15,22 @@ GENERIC_EMAIL_PREFIXES: frozenset[str] = frozenset({
     "info", "contact", "hello", "service", "support",
     "office", "team", "admin", "help", "general",
     "enquiry", "inquiry", "mail", "email",
+    # Compound contact aliases (no separator)
+    "contactus", "information", "connect",
+    "customerservice", "customercare", "customersupport",
+    "frontdesk", "helpdesk", "techsupport", "servicedesk",
     # Sales / marketing roles
     "sales", "marketing", "careers", "jobs", "hiring",
-    "recruiting", "recruitment",
+    "recruiting", "recruitment", "media",
+    # Operations / scheduling roles
+    "dispatch", "operations", "scheduling", "estimating",
+    "estimates", "quote", "quotes", "bookings", "booking",
     # Legal / compliance roles
     "privacy", "legal", "compliance", "gdpr",
     # Technical / infrastructure roles
     "webmaster", "hostmaster", "postmaster", "abuse",
-    # Finance roles
-    "accounts", "accounting", "billing",
+    # Finance / HR roles
+    "accounts", "accounting", "billing", "hr",
     # No-reply addresses
     "noreply", "no-reply",
 })

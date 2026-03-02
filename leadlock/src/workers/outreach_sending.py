@@ -326,7 +326,9 @@ async def _pre_send_checks(
     # on SMB domains (privacy@, accounts@, info@, etc.).
     if domain:
         local_part = email_lower.split("@")[0]
-        if local_part in GENERIC_EMAIL_PREFIXES:
+        # Also check with dots/hyphens/underscores stripped (customer.support → customersupport)
+        normalized = local_part.replace(".", "").replace("-", "").replace("_", "")
+        if local_part in GENERIC_EMAIL_PREFIXES or normalized in GENERIC_EMAIL_PREFIXES:
             prospect.status = "no_verified_email"
             return f"non-contact prefix ({local_part}@) blocked"
 

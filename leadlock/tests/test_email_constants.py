@@ -43,6 +43,17 @@ class TestGenericEmailPrefixes:
         overlap = personal & GENERIC_EMAIL_PREFIXES
         assert not overlap, f"Personal names in generic list: {overlap}"
 
+    def test_contains_compound_prefixes(self):
+        """Compound prefixes (no separator) should be in the list."""
+        compound = {"customerservice", "customercare", "contactus", "frontdesk", "helpdesk"}
+        missing = compound - GENERIC_EMAIL_PREFIXES
+        assert not missing, f"Missing compound prefixes: {missing}"
+
+    def test_contains_operations_prefixes(self):
+        operations = {"dispatch", "operations", "estimating", "estimates", "scheduling"}
+        missing = operations - GENERIC_EMAIL_PREFIXES
+        assert not missing, f"Missing operations prefixes: {missing}"
+
     def test_minimum_size(self):
-        """Should contain at least 25 prefixes (union of all previous lists)."""
-        assert len(GENERIC_EMAIL_PREFIXES) >= 25
+        """Should contain at least 40 prefixes (expanded list)."""
+        assert len(GENERIC_EMAIL_PREFIXES) >= 40
