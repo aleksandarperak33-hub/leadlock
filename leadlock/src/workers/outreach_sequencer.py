@@ -44,12 +44,12 @@ POLL_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 # Format: (day_range_start, day_range_end, max_daily_emails)
 # day_range_end of None means "and beyond"; max_daily of None means "use configured limit"
 EMAIL_WARMUP_SCHEDULE = [
-    (0, 3, 10),        # Days 0-3: 10 emails/day
-    (4, 7, 20),        # Days 4-7: 20 emails/day
-    (8, 14, 40),       # Days 8-14: 40 emails/day
-    (15, 21, 75),      # Days 15-21: 75 emails/day
-    (22, 28, 120),     # Days 22-28: 120 emails/day
-    (29, None, None),  # Day 29+: use configured limit
+    (0, 2, 10),        # Days 0-2: 10 emails/day
+    (3, 5, 25),        # Days 3-5: 25 emails/day
+    (6, 9, 50),        # Days 6-9: 50 emails/day
+    (10, 14, 80),      # Days 10-14: 80 emails/day
+    (15, 19, 120),     # Days 15-19: 120 emails/day
+    (20, None, None),  # Day 20+: use configured limit
 ]
 
 

@@ -641,9 +641,9 @@ class TestGetWarmupLimit:
 
         assert result == 5
 
-    async def test_day_3_returns_10(self):
-        """Day 3 is still in range (0-3), should return warmup limit of 10."""
-        started = datetime.now(timezone.utc) - timedelta(days=3)
+    async def test_day_1_returns_10(self):
+        """Day 1 is in range (0-2), should return warmup limit of 10."""
+        started = datetime.now(timezone.utc) - timedelta(days=1)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
@@ -652,42 +652,42 @@ class TestGetWarmupLimit:
 
         assert result == 10
 
-    async def test_day_6_returns_20(self):
-        """Day 6 is in range (4-7), should return warmup limit of 20."""
-        started = datetime.now(timezone.utc) - timedelta(days=6)
+    async def test_day_4_returns_25(self):
+        """Day 4 is in range (3-5), should return warmup limit of 25."""
+        started = datetime.now(timezone.utc) - timedelta(days=4)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
             result = await _get_warmup_limit(150, "sales@leadlock.ai")
 
-        assert result == 20
+        assert result == 25
 
-    async def test_day_10_returns_40(self):
-        """Day 10 (week 2) is in range (8-14), should return warmup limit of 40."""
-        started = datetime.now(timezone.utc) - timedelta(days=10)
+    async def test_day_8_returns_50(self):
+        """Day 8 is in range (6-9), should return warmup limit of 50."""
+        started = datetime.now(timezone.utc) - timedelta(days=8)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
             result = await _get_warmup_limit(150, "sales@leadlock.ai")
 
-        assert result == 40
+        assert result == 50
 
-    async def test_day_18_returns_75(self):
-        """Day 18 (week 3) is in range (15-21), should return warmup limit of 75."""
-        started = datetime.now(timezone.utc) - timedelta(days=18)
+    async def test_day_12_returns_80(self):
+        """Day 12 is in range (10-14), should return warmup limit of 80."""
+        started = datetime.now(timezone.utc) - timedelta(days=12)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
             result = await _get_warmup_limit(200, "sales@leadlock.ai")
 
-        assert result == 75
+        assert result == 80
 
-    async def test_day_25_returns_120(self):
-        """Day 25 is in range (22-28), should return warmup limit of 120."""
-        started = datetime.now(timezone.utc) - timedelta(days=25)
+    async def test_day_17_returns_120(self):
+        """Day 17 is in range (15-19), should return warmup limit of 120."""
+        started = datetime.now(timezone.utc) - timedelta(days=17)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
@@ -696,9 +696,9 @@ class TestGetWarmupLimit:
 
         assert result == 120
 
-    async def test_day_30_returns_configured_limit(self):
-        """After 29 days, returns the configured limit."""
-        started = datetime.now(timezone.utc) - timedelta(days=30)
+    async def test_day_22_returns_configured_limit(self):
+        """After day 20, returns the configured limit."""
+        started = datetime.now(timezone.utc) - timedelta(days=22)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
@@ -709,12 +709,12 @@ class TestGetWarmupLimit:
 
     async def test_warmup_limit_respects_min_of_configured(self):
         """Warmup limit never exceeds configured limit."""
-        started = datetime.now(timezone.utc) - timedelta(days=18)
+        started = datetime.now(timezone.utc) - timedelta(days=12)
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=started.isoformat().encode())
 
         with patch("src.utils.dedup.get_redis", new_callable=AsyncMock, return_value=mock_redis):
-            # Configured limit = 30, warmup at day 18 = 75, min = 30
+            # Configured limit = 30, warmup at day 12 = 80, min = 30
             result = await _get_warmup_limit(30, "sales@leadlock.ai")
 
         assert result == 30
@@ -794,7 +794,7 @@ class TestGetWarmupLimit:
 
     async def test_string_value_from_redis(self):
         """Handles non-bytes value from Redis (string)."""
-        started = datetime.now(timezone.utc) - timedelta(days=6)
+        started = datetime.now(timezone.utc) - timedelta(days=4)
         mock_redis = AsyncMock()
         # Return string, not bytes
         mock_redis.get = AsyncMock(return_value=started.isoformat())
@@ -806,7 +806,7 @@ class TestGetWarmupLimit:
         ):
             result = await _get_warmup_limit(150, "sales@leadlock.ai")
 
-        assert result == 20
+        assert result == 25
 
 
 # ---------------------------------------------------------------------------
