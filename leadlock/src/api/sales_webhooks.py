@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -964,26 +964,45 @@ async def email_events_webhook(
         raise HTTPException(status_code=500, detail="Email event processing error")
 
 
+async def _do_unsubscribe(prospect_id: str, db: AsyncSession) -> None:
+    """Shared unsubscribe logic for GET (browser click) and POST (RFC 8058 one-click)."""
+    pid = _safe_uuid(prospect_id)
+    if not pid:
+        logger.info("Unsubscribe called with invalid prospect id: %s", prospect_id[:16])
+        return
+    prospect = await db.get(Outreach, pid)
+    if prospect:
+        prospect.email_unsubscribed = True
+        prospect.unsubscribed_at = datetime.now(timezone.utc)
+        prospect.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        logger.info("Prospect %s unsubscribed", str(pid)[:8])
+
+
+@router.post("/unsubscribe/{prospect_id}")
+async def unsubscribe_post(
+    prospect_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """RFC 8058 one-click unsubscribe via POST (required by Gmail since Feb 2024)."""
+    try:
+        await _do_unsubscribe(prospect_id, db)
+    except Exception as e:
+        logger.error("Unsubscribe POST error: %s", str(e))
+    # RFC 8058 expects 200 with no specific body
+    return Response(status_code=200)
+
+
 @router.get("/unsubscribe/{prospect_id}", response_class=HTMLResponse)
 async def unsubscribe(
     prospect_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """CAN-SPAM one-click unsubscribe. Public endpoint."""
+    """CAN-SPAM unsubscribe via browser click (GET). Shows confirmation page."""
     try:
-        pid = _safe_uuid(prospect_id)
-        if not pid:
-            logger.info("Unsubscribe called with invalid prospect id: %s", prospect_id[:16])
-        else:
-            prospect = await db.get(Outreach, pid)
-            if prospect:
-                prospect.email_unsubscribed = True
-                prospect.unsubscribed_at = datetime.now(timezone.utc)
-                prospect.updated_at = datetime.now(timezone.utc)
-                await db.commit()
-                logger.info("Prospect %s unsubscribed", str(pid)[:8])
+        await _do_unsubscribe(prospect_id, db)
     except Exception as e:
-        logger.error("Unsubscribe error: %s", str(e))
+        logger.error("Unsubscribe GET error: %s", str(e))
 
     return HTMLResponse(
         content="""<!DOCTYPE html>
