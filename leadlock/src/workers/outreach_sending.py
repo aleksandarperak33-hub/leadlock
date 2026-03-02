@@ -331,6 +331,12 @@ async def _pre_send_checks(
         if local_part in GENERIC_EMAIL_PREFIXES or normalized in GENERIC_EMAIL_PREFIXES:
             prospect.status = "no_verified_email"
             return f"non-contact prefix ({local_part}@) blocked"
+        # Block fake pattern-guess placeholders (janedoe@, jdoe@, etc.)
+        _FAKE_PATTERNS = frozenset({"janedoe", "jdoe", "johndoe", "firstlast", "lastfirst", "last"})
+        if local_part in _FAKE_PATTERNS or normalized in _FAKE_PATTERNS:
+            prospect.status = "no_verified_email"
+            prospect.email_verified = False
+            return f"fake pattern placeholder ({local_part}@) blocked"
 
     # Check domain bounce risk score (blocks high-bounce domains)
     if domain:

@@ -11,7 +11,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
-from sqlalchemy import select, and_, or_, not_, func
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import async_session_factory
@@ -857,13 +857,10 @@ async def _sequence_cycle_for_tenant(
             Outreach.prospect_email.isnot(None),
             Outreach.prospect_email != "",
             Outreach.email_unsubscribed == False,
+            Outreach.email_verified == True,  # noqa: E712
             Outreach.status.in_(["cold", "contacted"]),
             Outreach.last_email_replied_at.is_(None),
             Outreach.last_email_sent_at <= delay_cutoff,
-            not_(and_(
-                Outreach.email_source == "pattern_guess",
-                Outreach.email_verified == False,  # noqa: E712
-            )),
         )
     ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
@@ -1040,14 +1037,10 @@ async def _process_campaign_prospects(
                     Outreach.prospect_email.isnot(None),
                     Outreach.prospect_email != "",
                     Outreach.email_unsubscribed == False,
+                    Outreach.email_verified == True,  # noqa: E712
                     Outreach.status.in_(["cold", "contacted"]),
                     Outreach.last_email_replied_at.is_(None),
                     Outreach.last_email_sent_at <= delay_cutoff,
-                    # Skip unverified pattern guesses — wait for email_finder
-                    not_(and_(
-                        Outreach.email_source == "pattern_guess",
-                        Outreach.email_verified == False,  # noqa: E712
-                    )),
                 )
             ).order_by(Outreach.last_email_sent_at).limit(remaining).with_for_update(skip_locked=True)
 
