@@ -204,13 +204,18 @@ async def _get_warmup_limit(
     """
     Calculate the effective daily email limit based on domain warmup schedule.
 
-    Uses Redis to cache the warmup start date, but falls back to the DB
-    (first outbound email sent_at) if the Redis key is missing. This prevents
-    warmup resets when containers restart and Redis data is lost.
+    Source of truth hierarchy:
+    1. DB column `SalesEngineConfig.warmup_started_at` (persists across restarts)
+    2. Redis cache (fast reads, may be lost on restart)
+    3. Recovery from earliest outbound email (last resort)
+
+    If the DB field is NULL, falls back to Redis/recovery and persists the
+    result to DB so it survives future container restarts.
 
     Args:
         configured_limit: The user-configured daily email limit.
         from_email: The sender email address used to key warmup by domain.
+        tenant_id: Tenant UUID to scope the warmup.
 
     Returns:
         The minimum of the warmup limit and configured limit.
@@ -222,22 +227,39 @@ async def _get_warmup_limit(
         domain = from_email.split("@")[1].lower() if "@" in from_email else "default"
         tenant_part = str(tenant_id) if tenant_id else "global"
         warmup_key = f"leadlock:email_warmup:{tenant_part}:{domain}"
-        started_at_raw = await redis.get(warmup_key)
 
-        if started_at_raw is None:
-            # Redis key missing — recover from DB to avoid resetting warmup
-            started_at = await _recover_warmup_start_from_db(tenant_id=tenant_id)
-            if started_at is not None:
-                await redis.set(warmup_key, started_at.isoformat())
-                logger.info("Recovered warmup start from DB: %s", started_at.isoformat())
-            else:
-                # Truly first email ever — start warmup now
-                started_at = datetime.now(timezone.utc)
-                await redis.set(warmup_key, started_at.isoformat())
-                logger.info("Email warmup started - day 0, limit=10")
+        # Step 1: Check DB field (source of truth)
+        started_at = await _read_warmup_started_at_from_db(tenant_id)
+
+        if started_at is not None:
+            # DB has the value — cache in Redis for fast reads
+            await redis.set(warmup_key, started_at.isoformat())
         else:
-            started_at_str = started_at_raw.decode() if isinstance(started_at_raw, bytes) else str(started_at_raw)
-            started_at = datetime.fromisoformat(started_at_str)
+            # Step 2: DB field is NULL — try Redis cache
+            started_at_raw = await redis.get(warmup_key)
+            if started_at_raw is not None:
+                started_at_str = (
+                    started_at_raw.decode()
+                    if isinstance(started_at_raw, bytes)
+                    else str(started_at_raw)
+                )
+                started_at = datetime.fromisoformat(started_at_str)
+                # Persist Redis value to DB
+                await _persist_warmup_started_at(tenant_id, started_at)
+                logger.info("Persisted warmup start from Redis to DB: %s", started_at.isoformat())
+            else:
+                # Step 3: Neither DB nor Redis — recover from earliest email
+                started_at = await _recover_warmup_start_from_db(tenant_id=tenant_id)
+                if started_at is not None:
+                    await redis.set(warmup_key, started_at.isoformat())
+                    await _persist_warmup_started_at(tenant_id, started_at)
+                    logger.info("Recovered warmup start from email history: %s", started_at.isoformat())
+                else:
+                    # Truly first email ever — start warmup now
+                    started_at = datetime.now(timezone.utc)
+                    await redis.set(warmup_key, started_at.isoformat())
+                    await _persist_warmup_started_at(tenant_id, started_at)
+                    logger.info("Email warmup started - day 0, limit=10")
 
         days_since_start = (datetime.now(timezone.utc) - started_at).days
 
@@ -254,6 +276,46 @@ async def _get_warmup_limit(
     except Exception as e:
         logger.warning("Warmup limit check failed: %s - using configured limit", str(e))
         return configured_limit
+
+
+async def _read_warmup_started_at_from_db(tenant_id) -> Optional[datetime]:
+    """Read warmup_started_at from SalesEngineConfig for this tenant."""
+    if not tenant_id:
+        return None
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(SalesEngineConfig.warmup_started_at).where(
+                    SalesEngineConfig.tenant_id == tenant_id,
+                    SalesEngineConfig.is_active == True,  # noqa: E712
+                    SalesEngineConfig.warmup_started_at.isnot(None),
+                )
+            )
+            return result.scalar()
+    except Exception as e:
+        logger.debug("Failed to read warmup_started_at from DB: %s", str(e))
+        return None
+
+
+async def _persist_warmup_started_at(tenant_id, started_at: datetime) -> None:
+    """Write warmup_started_at to SalesEngineConfig for this tenant."""
+    if not tenant_id:
+        return
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(SalesEngineConfig).where(
+                    SalesEngineConfig.tenant_id == tenant_id,
+                    SalesEngineConfig.is_active == True,  # noqa: E712
+                )
+            )
+            config = result.scalar()
+            if config and config.warmup_started_at is None:
+                config.warmup_started_at = started_at
+                await db.commit()
+                logger.debug("Persisted warmup_started_at=%s for tenant=%s", started_at.isoformat(), str(tenant_id)[:8])
+    except Exception as e:
+        logger.debug("Failed to persist warmup_started_at: %s", str(e))
 
 
 async def _recover_warmup_start_from_db(tenant_id=None) -> Optional[datetime]:

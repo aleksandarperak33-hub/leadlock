@@ -77,6 +77,11 @@ class SalesEngineConfig(Base):
     monthly_budget_usd: Mapped[Optional[float]] = mapped_column(Float)
     budget_alert_threshold: Mapped[float] = mapped_column(Float, default=0.8)
 
+    # Warmup tracking — persisted to survive Redis flushes / container restarts
+    warmup_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
