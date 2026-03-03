@@ -298,22 +298,30 @@ async def _read_warmup_started_at_from_db(tenant_id) -> Optional[datetime]:
 
 
 async def _persist_warmup_started_at(tenant_id, started_at: datetime) -> None:
-    """Write warmup_started_at to SalesEngineConfig for this tenant."""
+    """
+    Atomically write warmup_started_at to SalesEngineConfig for this tenant.
+    Uses UPDATE ... WHERE warmup_started_at IS NULL to avoid TOCTOU races
+    when multiple workers start concurrently.
+    """
     if not tenant_id:
         return
     try:
+        from sqlalchemy import update
         async with async_session_factory() as db:
             result = await db.execute(
-                select(SalesEngineConfig).where(
+                update(SalesEngineConfig)
+                .where(
                     SalesEngineConfig.tenant_id == tenant_id,
                     SalesEngineConfig.is_active == True,  # noqa: E712
+                    SalesEngineConfig.warmup_started_at.is_(None),
                 )
+                .values(warmup_started_at=started_at)
             )
-            config = result.scalar()
-            if config and config.warmup_started_at is None:
-                config.warmup_started_at = started_at
+            if result.rowcount > 0:
                 await db.commit()
                 logger.debug("Persisted warmup_started_at=%s for tenant=%s", started_at.isoformat(), str(tenant_id)[:8])
+            else:
+                await db.rollback()
     except Exception as e:
         logger.debug("Failed to persist warmup_started_at: %s", str(e))
 
